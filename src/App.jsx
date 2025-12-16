@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import BusinessBuilder from './BusinessBuilder'
+import FindContracts from './FindContracts'
 
 // Contract Ready Brand Colors
 const colors = {
@@ -297,6 +298,16 @@ function App() {
     )
   }
 
+  // Find Contracts Page
+  if (currentPage === 'find-contracts') {
+    return (
+      <FindContracts 
+        session={session} 
+        onBack={() => setCurrentPage('dashboard')} 
+      />
+    )
+  }
+
   // Main Dashboard
   return (
     <div style={{
@@ -365,8 +376,8 @@ function App() {
           <div style={{ color: colors.gray, fontSize: '12px' }}>Readiness</div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.gold, fontSize: '28px', fontWeight: '700' }}>0</div>
-          <div style={{ color: colors.gray, fontSize: '12px' }}>Closing Soon</div>
+          <div style={{ color: colors.gold, fontSize: '28px', fontWeight: '700' }}>5</div>
+          <div style={{ color: colors.gray, fontSize: '12px' }}>Opportunities</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ color: colors.white, fontSize: '28px', fontWeight: '700' }}>0/2</div>
