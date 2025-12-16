@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { generateMission, generateVision, generateElevatorPitch, improveTex } from './craiHelper'
 
 const colors = {
   primary: '#00FF00',
@@ -10,76 +11,71 @@ const colors = {
   gray: '#888888',
 }
 
+// Get API key from environment or prompt user
+const getApiKey = () => {
+  return localStorage.getItem('anthropic_api_key') || ''
+}
+
 const sections = [
   {
     id: 1,
     title: 'Company Basics',
     icon: '🏢',
     description: 'Legal name, DBA, address, contact info',
-    fields: ['company_name', 'dba', 'address', 'city', 'state', 'zip', 'phone', 'email', 'website', 'entity_type', 'is_nonprofit', 'team_size', 'year_established', 'revenue_range']
   },
   {
     id: 2,
     title: 'Mission, Vision & Elevator Pitch',
     icon: '🎯',
     description: 'Your company story and value proposition',
-    fields: ['mission', 'vision', 'elevator_pitch']
   },
   {
     id: 3,
     title: 'Services',
     icon: '⚙️',
     description: 'What you offer (up to 10 services)',
-    fields: ['services']
   },
   {
     id: 4,
     title: 'NAICS Codes',
     icon: '🔢',
     description: 'Industry classification codes (up to 10)',
-    fields: ['naics_codes']
   },
   {
     id: 5,
     title: 'Certifications',
     icon: '📜',
     description: 'MBE, WBE, DVBE, SBE, 8(a), HUBZone, etc.',
-    fields: ['certifications']
   },
   {
     id: 6,
     title: 'SAM.gov Registration',
     icon: '✅',
     description: 'Federal registration status, UEI, CAGE code',
-    fields: ['sam_registered', 'uei_number', 'cage_code']
   },
   {
     id: 7,
     title: 'Pricing Snapshot',
     icon: '💰',
     description: 'Hourly rates by role',
-    fields: ['hourly_rates']
   },
   {
     id: 8,
     title: 'Past Performance',
     icon: '📊',
     description: 'Previous contracts and projects (up to 5)',
-    fields: ['past_performance']
   },
   {
     id: 9,
     title: 'Team',
     icon: '👥',
     description: 'Key personnel and their qualifications',
-    fields: ['team_members']
   },
   {
     id: 10,
     title: 'Documents',
     icon: '📁',
     description: 'Capability statement, W-9, resumes, certifications',
-    fields: ['documents']
   },
 ]
 
@@ -89,6 +85,9 @@ function BusinessBuilder({ session, onBack }) {
   const [activeSection, setActiveSection] = useState(null)
   const [saving, setSaving] = useState(false)
   const [completionPercentage, setCompletionPercentage] = useState(0)
+  const [aiLoading, setAiLoading] = useState({})
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
+  const [tempApiKey, setTempApiKey] = useState('')
 
   // Form states for Company Basics
   const [companyName, setCompanyName] = useState('')
@@ -166,7 +165,7 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 14 // Total key fields we're tracking
+    let total = 14
 
     if (companyName) filled++
     if (address) filled++
@@ -217,7 +216,6 @@ function BusinessBuilder({ session, onBack }) {
 
     try {
       if (profile) {
-        // Update existing
         const { error } = await supabase
           .from('business_profiles')
           .update(profileData)
@@ -225,7 +223,6 @@ function BusinessBuilder({ session, onBack }) {
 
         if (error) throw error
       } else {
-        // Create new
         const { error } = await supabase
           .from('business_profiles')
           .insert(profileData)
@@ -244,11 +241,86 @@ function BusinessBuilder({ session, onBack }) {
     }
   }
 
+  const handleAIGenerate = async (type) => {
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      setShowApiKeyModal(true)
+      return
+    }
+
+    setAiLoading({ ...aiLoading, [type]: true })
+
+    try {
+      const context = `Company: ${companyName || 'Not specified'}
+City: ${city || 'Not specified'}, ${state || ''}
+Entity Type: ${entityType || 'Not specified'}
+Team Size: ${teamSize || 'Not specified'}
+Year Established: ${yearEstablished || 'Not specified'}`
+
+      let result = ''
+
+      if (type === 'mission') {
+        result = await generateMission(companyName, '', context, apiKey)
+        setMission(result)
+      } else if (type === 'vision') {
+        result = await generateVision(companyName, context, apiKey)
+        setVision(result)
+      } else if (type === 'pitch') {
+        result = await generateElevatorPitch(companyName, '', mission, context, apiKey)
+        setElevatorPitch(result)
+      }
+    } catch (err) {
+      console.error('AI Error:', err)
+      alert('Error generating suggestion. Please check your API key and try again.')
+    } finally {
+      setAiLoading({ ...aiLoading, [type]: false })
+    }
+  }
+
+  const handleAIImprove = async (type) => {
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      setShowApiKeyModal(true)
+      return
+    }
+
+    let currentText = ''
+    if (type === 'mission') currentText = mission
+    else if (type === 'vision') currentText = vision
+    else if (type === 'pitch') currentText = elevatorPitch
+
+    if (!currentText.trim()) {
+      alert('Please write something first, then click Improve.')
+      return
+    }
+
+    setAiLoading({ ...aiLoading, [type]: true })
+
+    try {
+      const result = await improveTex(currentText, type, apiKey)
+
+      if (type === 'mission') setMission(result)
+      else if (type === 'vision') setVision(result)
+      else if (type === 'pitch') setElevatorPitch(result)
+    } catch (err) {
+      console.error('AI Error:', err)
+      alert('Error improving text. Please try again.')
+    } finally {
+      setAiLoading({ ...aiLoading, [type]: false })
+    }
+  }
+
+  const saveApiKey = () => {
+    localStorage.setItem('anthropic_api_key', tempApiKey)
+    setShowApiKeyModal(false)
+    setTempApiKey('')
+  }
+
   const getSectionCompletion = (sectionId) => {
     if (!profile) return 0
-    
-    switch(sectionId) {
-      case 1: // Company Basics
+
+    switch (sectionId) {
+      case 1:
         let basics = 0
         if (profile.company_name) basics += 20
         if (profile.address && profile.city && profile.state) basics += 20
@@ -256,13 +328,13 @@ function BusinessBuilder({ session, onBack }) {
         if (profile.email) basics += 20
         if (profile.entity_type) basics += 20
         return basics
-      case 2: // Mission/Vision/Pitch
+      case 2:
         let mvp = 0
         if (profile.mission) mvp += 33
         if (profile.vision) mvp += 33
         if (profile.elevator_pitch) mvp += 34
         return mvp
-      case 6: // SAM.gov
+      case 6:
         if (profile.sam_registered && profile.uei_number) return 100
         if (profile.sam_registered || profile.uei_number) return 50
         return 0
@@ -271,28 +343,49 @@ function BusinessBuilder({ session, onBack }) {
     }
   }
 
+  const inputStyle = {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '8px',
+    border: `1px solid ${colors.gray}`,
+    backgroundColor: '#1a1a1a',
+    color: colors.white,
+    fontSize: '16px',
+    boxSizing: 'border-box'
+  }
+
+  const aiButtonStyle = {
+    padding: '8px 16px',
+    borderRadius: '6px',
+    border: 'none',
+    fontSize: '13px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px'
+  }
+
   if (loading) {
     return (
-      <div style={{ 
-        minHeight: '100vh', 
-        backgroundColor: colors.background, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center' 
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: colors.background,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
         <div style={{ color: colors.primary, fontSize: '24px' }}>Loading...</div>
       </div>
     )
   }
 
-  // Render Section Form
   const renderSectionForm = () => {
-    switch(activeSection) {
+    switch (activeSection) {
       case 1:
         return (
           <div style={{ display: 'grid', gap: '20px' }}>
             <h3 style={{ color: colors.white, margin: 0 }}>Company Basics</h3>
-            
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Legal Company Name *</label>
@@ -471,14 +564,43 @@ function BusinessBuilder({ session, onBack }) {
 
       case 2:
         return (
-          <div style={{ display: 'grid', gap: '20px' }}>
+          <div style={{ display: 'grid', gap: '25px' }}>
             <h3 style={{ color: colors.white, margin: 0 }}>Mission, Vision & Elevator Pitch</h3>
-            
+
+            {/* Mission */}
             <div>
-              <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                Mission Statement *
-                <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>Why does your company exist?</span>
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ color: colors.gray, fontSize: '14px' }}>
+                  Mission Statement *
+                  <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>Why does your company exist?</span>
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => handleAIGenerate('mission')}
+                    disabled={aiLoading.mission}
+                    style={{
+                      ...aiButtonStyle,
+                      backgroundColor: colors.primary,
+                      color: colors.background
+                    }}
+                  >
+                    {aiLoading.mission ? '⏳ Generating...' : '✨ Generate with CR-AI'}
+                  </button>
+                  {mission && (
+                    <button
+                      onClick={() => handleAIImprove('mission')}
+                      disabled={aiLoading.mission}
+                      style={{
+                        ...aiButtonStyle,
+                        backgroundColor: colors.gold,
+                        color: colors.background
+                      }}
+                    >
+                      {aiLoading.mission ? '⏳' : '🔧 Improve'}
+                    </button>
+                  )}
+                </div>
+              </div>
               <textarea
                 value={mission}
                 onChange={(e) => setMission(e.target.value)}
@@ -488,11 +610,40 @@ function BusinessBuilder({ session, onBack }) {
               />
             </div>
 
+            {/* Vision */}
             <div>
-              <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                Vision Statement *
-                <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>Where is your company going?</span>
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ color: colors.gray, fontSize: '14px' }}>
+                  Vision Statement *
+                  <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>Where is your company going?</span>
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => handleAIGenerate('vision')}
+                    disabled={aiLoading.vision}
+                    style={{
+                      ...aiButtonStyle,
+                      backgroundColor: colors.primary,
+                      color: colors.background
+                    }}
+                  >
+                    {aiLoading.vision ? '⏳ Generating...' : '✨ Generate with CR-AI'}
+                  </button>
+                  {vision && (
+                    <button
+                      onClick={() => handleAIImprove('vision')}
+                      disabled={aiLoading.vision}
+                      style={{
+                        ...aiButtonStyle,
+                        backgroundColor: colors.gold,
+                        color: colors.background
+                      }}
+                    >
+                      {aiLoading.vision ? '⏳' : '🔧 Improve'}
+                    </button>
+                  )}
+                </div>
+              </div>
               <textarea
                 value={vision}
                 onChange={(e) => setVision(e.target.value)}
@@ -502,11 +653,40 @@ function BusinessBuilder({ session, onBack }) {
               />
             </div>
 
+            {/* Elevator Pitch */}
             <div>
-              <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                Elevator Pitch *
-                <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>30-second company description</span>
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ color: colors.gray, fontSize: '14px' }}>
+                  Elevator Pitch *
+                  <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>30-second company description</span>
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => handleAIGenerate('pitch')}
+                    disabled={aiLoading.pitch}
+                    style={{
+                      ...aiButtonStyle,
+                      backgroundColor: colors.primary,
+                      color: colors.background
+                    }}
+                  >
+                    {aiLoading.pitch ? '⏳ Generating...' : '✨ Generate with CR-AI'}
+                  </button>
+                  {elevatorPitch && (
+                    <button
+                      onClick={() => handleAIImprove('pitch')}
+                      disabled={aiLoading.pitch}
+                      style={{
+                        ...aiButtonStyle,
+                        backgroundColor: colors.gold,
+                        color: colors.background
+                      }}
+                    >
+                      {aiLoading.pitch ? '⏳' : '🔧 Improve'}
+                    </button>
+                  )}
+                </div>
+              </div>
               <textarea
                 value={elevatorPitch}
                 onChange={(e) => setElevatorPitch(e.target.value)}
@@ -515,6 +695,18 @@ function BusinessBuilder({ session, onBack }) {
                 style={{ ...inputStyle, resize: 'vertical' }}
               />
             </div>
+
+            {/* Tip Box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '8px',
+              padding: '15px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.primary, margin: 0, fontSize: '13px' }}>
+                💡 <strong>Tip:</strong> Fill out Company Basics first, then use "Generate with CR-AI" for personalized suggestions. You can always edit the results or click "Improve" to make them better!
+              </p>
+            </div>
           </div>
         )
 
@@ -522,7 +714,7 @@ function BusinessBuilder({ session, onBack }) {
         return (
           <div style={{ display: 'grid', gap: '20px' }}>
             <h3 style={{ color: colors.white, margin: 0 }}>SAM.gov Registration</h3>
-            
+
             <div>
               <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '10px' }}>
                 Are you registered on SAM.gov? *
@@ -597,7 +789,7 @@ function BusinessBuilder({ session, onBack }) {
                 border: `1px solid ${colors.gold}30`
               }}>
                 <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
-                  💡 <strong>Tip:</strong> SAM.gov registration is required for federal contracts. 
+                  💡 <strong>Tip:</strong> SAM.gov registration is required for federal contracts.
                   Visit <a href="https://sam.gov" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>sam.gov</a> to register for free.
                 </p>
               </div>
@@ -619,23 +811,78 @@ function BusinessBuilder({ session, onBack }) {
     }
   }
 
-  const inputStyle = {
-    width: '100%',
-    padding: '12px',
-    borderRadius: '8px',
-    border: `1px solid ${colors.gray}`,
-    backgroundColor: '#1a1a1a',
-    color: colors.white,
-    fontSize: '16px',
-    boxSizing: 'border-box'
-  }
-
   return (
     <div style={{
       minHeight: '100vh',
       backgroundColor: colors.background,
       fontFamily: 'Inter, system-ui, sans-serif'
     }}>
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '90%',
+            border: `2px solid ${colors.primary}`
+          }}>
+            <h3 style={{ color: colors.white, margin: '0 0 15px 0' }}>🔑 Enter CR-AI API Key</h3>
+            <p style={{ color: colors.gray, fontSize: '14px', marginBottom: '20px' }}>
+              To use AI features, enter your Anthropic API key. This is stored locally on your device.
+            </p>
+            <input
+              type="password"
+              value={tempApiKey}
+              onChange={(e) => setTempApiKey(e.target.value)}
+              placeholder="sk-ant-api03-..."
+              style={{ ...inputStyle, marginBottom: '20px' }}
+            />
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowApiKeyModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: `1px solid ${colors.gray}`,
+                  backgroundColor: 'transparent',
+                  color: colors.white,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveApiKey}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: colors.primary,
+                  color: colors.background,
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Save Key
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{
         backgroundColor: colors.card,
@@ -666,7 +913,6 @@ function BusinessBuilder({ session, onBack }) {
           </h1>
         </div>
 
-        {/* Completion Badge */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -678,9 +924,9 @@ function BusinessBuilder({ session, onBack }) {
             borderRadius: '20px',
             border: `1px solid ${completionPercentage >= 90 ? colors.primary : colors.gold}`
           }}>
-            <span style={{ 
-              color: completionPercentage >= 90 ? colors.primary : colors.gold, 
-              fontWeight: '600' 
+            <span style={{
+              color: completionPercentage >= 90 ? colors.primary : colors.gold,
+              fontWeight: '600'
             }}>
               {completionPercentage}% Complete
             </span>
@@ -694,7 +940,6 @@ function BusinessBuilder({ session, onBack }) {
       {/* Main Content */}
       <div style={{ padding: '30px', maxWidth: '1000px', margin: '0 auto' }}>
         {activeSection ? (
-          /* Section Form */
           <div style={{
             backgroundColor: colors.card,
             borderRadius: '16px',
@@ -703,7 +948,6 @@ function BusinessBuilder({ session, onBack }) {
           }}>
             {renderSectionForm()}
 
-            {/* Action Buttons */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -745,7 +989,6 @@ function BusinessBuilder({ session, onBack }) {
             </div>
           </div>
         ) : (
-          /* Section Cards */
           <div style={{ display: 'grid', gap: '15px' }}>
             {sections.map((section) => {
               const completion = getSectionCompletion(section.id)
@@ -799,7 +1042,6 @@ function BusinessBuilder({ session, onBack }) {
           </div>
         )}
 
-        {/* Help Box */}
         {!activeSection && (
           <div style={{
             marginTop: '30px',
