@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import BusinessBuilder from './BusinessBuilder'
 
 // Contract Ready Brand Colors
 const colors = {
@@ -21,21 +22,40 @@ function App() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
+  const [profileCompletion, setProfileCompletion] = useState(0)
 
   useEffect(() => {
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
+      if (session) {
+        fetchProfileCompletion(session.user.id)
+      }
     })
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      if (session) {
+        fetchProfileCompletion(session.user.id)
+      }
     })
 
     return () => subscription.unsubscribe()
   }, [])
+
+  const fetchProfileCompletion = async (userId) => {
+    const { data } = await supabase
+      .from('business_profiles')
+      .select('completion_percentage')
+      .eq('user_id', userId)
+      .single()
+    
+    if (data) {
+      setProfileCompletion(data.completion_percentage || 0)
+    }
+  }
 
   const handleSignUp = async (e) => {
     e.preventDefault()
@@ -81,6 +101,7 @@ function App() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
+    setCurrentPage('dashboard')
   }
 
   // Loading state
@@ -263,6 +284,19 @@ function App() {
     )
   }
 
+  // Business Builder Page
+  if (currentPage === 'business-builder') {
+    return (
+      <BusinessBuilder 
+        session={session} 
+        onBack={() => {
+          setCurrentPage('dashboard')
+          fetchProfileCompletion(session.user.id)
+        }} 
+      />
+    )
+  }
+
   // Main Dashboard
   return (
     <div style={{
@@ -327,7 +361,7 @@ function App() {
         borderBottom: `1px solid ${colors.primary}30`
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.primary, fontSize: '28px', fontWeight: '700' }}>0%</div>
+          <div style={{ color: colors.primary, fontSize: '28px', fontWeight: '700' }}>{profileCompletion}%</div>
           <div style={{ color: colors.gray, fontSize: '12px' }}>Readiness</div>
         </div>
         <div style={{ textAlign: 'center' }}>
@@ -401,7 +435,7 @@ function App() {
               fontSize: '12px',
               fontWeight: '600'
             }}>
-              START HERE
+              {profileCompletion > 0 ? `${profileCompletion}% COMPLETE` : 'START HERE'}
             </div>
             <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏗️</div>
             <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Business Builder</h3>
