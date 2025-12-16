@@ -11,72 +11,21 @@ const colors = {
   gray: '#888888',
 }
 
-// Get API key from environment or prompt user
 const getApiKey = () => {
   return localStorage.getItem('anthropic_api_key') || ''
 }
 
 const sections = [
-  {
-    id: 1,
-    title: 'Company Basics',
-    icon: '🏢',
-    description: 'Legal name, DBA, address, contact info',
-  },
-  {
-    id: 2,
-    title: 'Mission, Vision & Elevator Pitch',
-    icon: '🎯',
-    description: 'Your company story and value proposition',
-  },
-  {
-    id: 3,
-    title: 'Services',
-    icon: '⚙️',
-    description: 'What you offer (up to 10 services)',
-  },
-  {
-    id: 4,
-    title: 'NAICS Codes',
-    icon: '🔢',
-    description: 'Industry classification codes (up to 10)',
-  },
-  {
-    id: 5,
-    title: 'Certifications',
-    icon: '📜',
-    description: 'MBE, WBE, DVBE, SBE, 8(a), HUBZone, etc.',
-  },
-  {
-    id: 6,
-    title: 'SAM.gov Registration',
-    icon: '✅',
-    description: 'Federal registration status, UEI, CAGE code',
-  },
-  {
-    id: 7,
-    title: 'Pricing Snapshot',
-    icon: '💰',
-    description: 'Hourly rates by role',
-  },
-  {
-    id: 8,
-    title: 'Past Performance',
-    icon: '📊',
-    description: 'Previous contracts and projects (up to 5)',
-  },
-  {
-    id: 9,
-    title: 'Team',
-    icon: '👥',
-    description: 'Key personnel and their qualifications',
-  },
-  {
-    id: 10,
-    title: 'Documents',
-    icon: '📁',
-    description: 'Capability statement, W-9, resumes, certifications',
-  },
+  { id: 1, title: 'Company Basics', icon: '🏢', description: 'Legal name, DBA, address, contact info' },
+  { id: 2, title: 'Mission, Vision & Elevator Pitch', icon: '🎯', description: 'Your company story and value proposition' },
+  { id: 3, title: 'Services', icon: '⚙️', description: 'What you offer (up to 10 services)' },
+  { id: 4, title: 'NAICS Codes', icon: '🔢', description: 'Industry classification codes (up to 10)' },
+  { id: 5, title: 'Certifications', icon: '📜', description: 'MBE, WBE, DVBE, SBE, 8(a), HUBZone, etc.' },
+  { id: 6, title: 'SAM.gov Registration', icon: '✅', description: 'Federal registration status, UEI, CAGE code' },
+  { id: 7, title: 'Pricing Snapshot', icon: '💰', description: 'Hourly rates by role' },
+  { id: 8, title: 'Past Performance', icon: '📊', description: 'Previous contracts and projects (up to 5)' },
+  { id: 9, title: 'Team', icon: '👥', description: 'Key personnel and their qualifications' },
+  { id: 10, title: 'Documents', icon: '📁', description: 'Capability statement, W-9, resumes, certifications' },
 ]
 
 function BusinessBuilder({ session, onBack }) {
@@ -89,7 +38,7 @@ function BusinessBuilder({ session, onBack }) {
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [tempApiKey, setTempApiKey] = useState('')
 
-  // Form states for Company Basics
+  // Company Basics
   const [companyName, setCompanyName] = useState('')
   const [dba, setDba] = useState('')
   const [address, setAddress] = useState('')
@@ -105,12 +54,17 @@ function BusinessBuilder({ session, onBack }) {
   const [yearEstablished, setYearEstablished] = useState('')
   const [revenueRange, setRevenueRange] = useState('')
 
-  // Form states for Mission/Vision/Pitch
+  // Mission/Vision/Pitch
   const [mission, setMission] = useState('')
   const [vision, setVision] = useState('')
   const [elevatorPitch, setElevatorPitch] = useState('')
+  
+  // NEW: Extra context questions for CR-AI
+  const [whatMakesYouDifferent, setWhatMakesYouDifferent] = useState('')
+  const [resultsAchieved, setResultsAchieved] = useState('')
+  const [anythingElse, setAnythingElse] = useState('')
 
-  // Form states for SAM.gov
+  // SAM.gov
   const [samRegistered, setSamRegistered] = useState(false)
   const [ueiNumber, setUeiNumber] = useState('')
   const [cageCode, setCageCode] = useState('')
@@ -133,7 +87,6 @@ function BusinessBuilder({ session, onBack }) {
 
       if (data) {
         setProfile(data)
-        // Populate form fields
         setCompanyName(data.company_name || '')
         setDba(data.dba || '')
         setAddress(data.address || '')
@@ -155,6 +108,10 @@ function BusinessBuilder({ session, onBack }) {
         setUeiNumber(data.uei_number || '')
         setCageCode(data.cage_code || '')
         setCompletionPercentage(data.completion_percentage || 0)
+        // Load extra context if saved
+        setWhatMakesYouDifferent(data.what_makes_you_different || '')
+        setResultsAchieved(data.results_achieved || '')
+        setAnythingElse(data.anything_else || '')
       }
     } catch (err) {
       console.error('Error:', err)
@@ -212,6 +169,9 @@ function BusinessBuilder({ session, onBack }) {
       uei_number: ueiNumber,
       cage_code: cageCode,
       completion_percentage: completion,
+      what_makes_you_different: whatMakesYouDifferent,
+      results_achieved: resultsAchieved,
+      anything_else: anythingElse,
     }
 
     try {
@@ -220,13 +180,11 @@ function BusinessBuilder({ session, onBack }) {
           .from('business_profiles')
           .update(profileData)
           .eq('id', profile.id)
-
         if (error) throw error
       } else {
         const { error } = await supabase
           .from('business_profiles')
           .insert(profileData)
-
         if (error) throw error
       }
 
@@ -241,6 +199,33 @@ function BusinessBuilder({ session, onBack }) {
     }
   }
 
+  // Build full context from all data
+  const buildFullContext = () => {
+    return `
+COMPANY INFORMATION:
+- Company Name: ${companyName || 'Not provided'}
+- DBA: ${dba || 'Same as company name'}
+- Location: ${city || 'Not provided'}, ${state || ''}
+- Year Established: ${yearEstablished || 'Not provided'}
+- Entity Type: ${entityType || 'Not provided'}
+- Team Size: ${teamSize || 'Not provided'}
+- Annual Revenue: ${revenueRange || 'Not provided'}
+- Nonprofit: ${isNonprofit ? 'Yes' : 'No'}
+
+WHAT MAKES THEM DIFFERENT:
+${whatMakesYouDifferent || 'Not provided yet'}
+
+RESULTS/IMPACT ACHIEVED:
+${resultsAchieved || 'Not provided yet'}
+
+ADDITIONAL CONTEXT:
+${anythingElse || 'None provided'}
+
+EXISTING MISSION (if any): ${mission || 'None yet'}
+EXISTING VISION (if any): ${vision || 'None yet'}
+    `.trim()
+  }
+
   const handleAIGenerate = async (type) => {
     const apiKey = getApiKey()
     if (!apiKey) {
@@ -248,30 +233,87 @@ function BusinessBuilder({ session, onBack }) {
       return
     }
 
+    // Check if Company Basics is filled
+    if (!companyName) {
+      alert('Please fill out Company Basics first so CR-AI has information to work with.')
+      return
+    }
+
     setAiLoading({ ...aiLoading, [type]: true })
 
     try {
-      const context = `Company: ${companyName || 'Not specified'}
-City: ${city || 'Not specified'}, ${state || ''}
-Entity Type: ${entityType || 'Not specified'}
-Team Size: ${teamSize || 'Not specified'}
-Year Established: ${yearEstablished || 'Not specified'}`
-
+      const fullContext = buildFullContext()
       let result = ''
+      let prompt = ''
 
       if (type === 'mission') {
-        result = await generateMission(companyName, '', context, apiKey)
-        setMission(result)
+        prompt = `Write a compelling 2-3 sentence mission statement for "${companyName}".
+
+Use this context to make it specific and authentic:
+${fullContext}
+
+The mission should:
+- Explain WHY the company exists
+- Mention WHO they serve
+- Highlight what makes them unique
+- Use language that appeals to government contract evaluators
+
+Return ONLY the mission statement, no explanations.`
       } else if (type === 'vision') {
-        result = await generateVision(companyName, context, apiKey)
-        setVision(result)
+        prompt = `Write an inspiring 2-3 sentence vision statement for "${companyName}".
+
+Use this context:
+${fullContext}
+
+The vision should:
+- Describe WHERE the company is heading
+- Be ambitious but believable
+- Align with government/community impact goals
+
+Return ONLY the vision statement, no explanations.`
       } else if (type === 'pitch') {
-        result = await generateElevatorPitch(companyName, '', mission, context, apiKey)
-        setElevatorPitch(result)
+        prompt = `Write a powerful 30-second elevator pitch for "${companyName}".
+
+Use this context:
+${fullContext}
+
+Format: "We help [specific audience] achieve [specific outcome] by [unique approach]. [Proof point or result]."
+
+Make it:
+- Memorable and specific
+- Include a concrete result if provided
+- Sound professional for government audiences
+
+Return ONLY the elevator pitch (3-4 sentences max), no explanations.`
       }
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+
+      if (!response.ok) throw new Error(`API error: ${response.status}`)
+      
+      const data = await response.json()
+      result = data.content[0].text
+
+      if (type === 'mission') setMission(result)
+      else if (type === 'vision') setVision(result)
+      else if (type === 'pitch') setElevatorPitch(result)
+
     } catch (err) {
       console.error('AI Error:', err)
-      alert('Error generating suggestion. Please check your API key and try again.')
+      alert('Error generating. Please check your API key and try again.')
     } finally {
       setAiLoading({ ...aiLoading, [type]: false })
     }
@@ -297,11 +339,39 @@ Year Established: ${yearEstablished || 'Not specified'}`
     setAiLoading({ ...aiLoading, [type]: true })
 
     try {
-      const result = await improveTex(currentText, type, apiKey)
+      const prompt = `Improve this ${type} statement for a government contractor. Make it more professional, compelling, and concise while keeping the core message:
+
+"${currentText}"
+
+Context about the company:
+${buildFullContext()}
+
+Return ONLY the improved text, no explanations.`
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+
+      if (!response.ok) throw new Error(`API error: ${response.status}`)
+      
+      const data = await response.json()
+      const result = data.content[0].text
 
       if (type === 'mission') setMission(result)
       else if (type === 'vision') setVision(result)
       else if (type === 'pitch') setElevatorPitch(result)
+
     } catch (err) {
       console.error('AI Error:', err)
       alert('Error improving text. Please try again.')
@@ -318,7 +388,6 @@ Year Established: ${yearEstablished || 'Not specified'}`
 
   const getSectionCompletion = (sectionId) => {
     if (!profile) return 0
-
     switch (sectionId) {
       case 1:
         let basics = 0
@@ -367,13 +436,7 @@ Year Established: ${yearEstablished || 'Not specified'}`
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: colors.background,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
+      <div style={{ minHeight: '100vh', backgroundColor: colors.background, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ color: colors.primary, fontSize: '24px' }}>Loading...</div>
       </div>
     )
@@ -389,112 +452,54 @@ Year Established: ${yearEstablished || 'Not specified'}`
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Legal Company Name *</label>
-                <input
-                  type="text"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="Enter legal company name"
-                  style={inputStyle}
-                />
+                <input type="text" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Enter legal company name" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>DBA (Doing Business As)</label>
-                <input
-                  type="text"
-                  value={dba}
-                  onChange={(e) => setDba(e.target.value)}
-                  placeholder="Enter DBA if different"
-                  style={inputStyle}
-                />
+                <input type="text" value={dba} onChange={(e) => setDba(e.target.value)} placeholder="Enter DBA if different" style={inputStyle} />
               </div>
             </div>
 
             <div>
               <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Street Address *</label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Enter street address"
-                style={inputStyle}
-              />
+              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter street address" style={inputStyle} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>City *</label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="City"
-                  style={inputStyle}
-                />
+                <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>State *</label>
-                <input
-                  type="text"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  placeholder="CA"
-                  style={inputStyle}
-                />
+                <input type="text" value={state} onChange={(e) => setState(e.target.value)} placeholder="CA" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>ZIP Code</label>
-                <input
-                  type="text"
-                  value={zip}
-                  onChange={(e) => setZip(e.target.value)}
-                  placeholder="90001"
-                  style={inputStyle}
-                />
+                <input type="text" value={zip} onChange={(e) => setZip(e.target.value)} placeholder="90001" style={inputStyle} />
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Phone *</label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(555) 555-5555"
-                  style={inputStyle}
-                />
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 555-5555" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Email *</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contact@company.com"
-                  style={inputStyle}
-                />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contact@company.com" style={inputStyle} />
               </div>
             </div>
 
             <div>
               <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Website</label>
-              <input
-                type="url"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                placeholder="https://www.yourcompany.com"
-                style={inputStyle}
-              />
+              <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://www.yourcompany.com" style={inputStyle} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Entity Type *</label>
-                <select
-                  value={entityType}
-                  onChange={(e) => setEntityType(e.target.value)}
-                  style={inputStyle}
-                >
+                <select value={entityType} onChange={(e) => setEntityType(e.target.value)} style={inputStyle}>
                   <option value="">Select entity type</option>
                   <option value="sole_proprietorship">Sole Proprietorship</option>
                   <option value="llc">LLC</option>
@@ -505,11 +510,7 @@ Year Established: ${yearEstablished || 'Not specified'}`
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Nonprofit or For-Profit?</label>
-                <select
-                  value={isNonprofit ? 'nonprofit' : 'forprofit'}
-                  onChange={(e) => setIsNonprofit(e.target.value === 'nonprofit')}
-                  style={inputStyle}
-                >
+                <select value={isNonprofit ? 'nonprofit' : 'forprofit'} onChange={(e) => setIsNonprofit(e.target.value === 'nonprofit')} style={inputStyle}>
                   <option value="forprofit">For-Profit</option>
                   <option value="nonprofit">Nonprofit</option>
                 </select>
@@ -519,11 +520,7 @@ Year Established: ${yearEstablished || 'Not specified'}`
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Team Size</label>
-                <select
-                  value={teamSize}
-                  onChange={(e) => setTeamSize(e.target.value)}
-                  style={inputStyle}
-                >
+                <select value={teamSize} onChange={(e) => setTeamSize(e.target.value)} style={inputStyle}>
                   <option value="">Select size</option>
                   <option value="1">Just me</option>
                   <option value="2-5">2-5 employees</option>
@@ -535,21 +532,11 @@ Year Established: ${yearEstablished || 'Not specified'}`
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Year Established</label>
-                <input
-                  type="text"
-                  value={yearEstablished}
-                  onChange={(e) => setYearEstablished(e.target.value)}
-                  placeholder="2015"
-                  style={inputStyle}
-                />
+                <input type="text" value={yearEstablished} onChange={(e) => setYearEstablished(e.target.value)} placeholder="2015" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Annual Revenue</label>
-                <select
-                  value={revenueRange}
-                  onChange={(e) => setRevenueRange(e.target.value)}
-                  style={inputStyle}
-                >
+                <select value={revenueRange} onChange={(e) => setRevenueRange(e.target.value)} style={inputStyle}>
                   <option value="">Select range</option>
                   <option value="0-100k">$0 - $100K</option>
                   <option value="100k-500k">$100K - $500K</option>
@@ -567,22 +554,105 @@ Year Established: ${yearEstablished || 'Not specified'}`
           <div style={{ display: 'grid', gap: '25px' }}>
             <h3 style={{ color: colors.white, margin: 0 }}>Mission, Vision & Elevator Pitch</h3>
 
+            {/* Show data being pulled from Company Basics */}
+            {companyName && (
+              <div style={{
+                backgroundColor: '#1a1a1a',
+                borderRadius: '12px',
+                padding: '20px',
+                border: `1px solid ${colors.primary}30`
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                  <span style={{ fontSize: '20px' }}>📋</span>
+                  <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>
+                    CR-AI is pulling from your Company Basics:
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div style={{ color: colors.gray, fontSize: '13px' }}>
+                    <strong style={{ color: colors.white }}>Company:</strong> {companyName}
+                  </div>
+                  <div style={{ color: colors.gray, fontSize: '13px' }}>
+                    <strong style={{ color: colors.white }}>Location:</strong> {city}, {state}
+                  </div>
+                  <div style={{ color: colors.gray, fontSize: '13px' }}>
+                    <strong style={{ color: colors.white }}>Established:</strong> {yearEstablished || 'Not set'}
+                  </div>
+                  <div style={{ color: colors.gray, fontSize: '13px' }}>
+                    <strong style={{ color: colors.white }}>Type:</strong> {entityType || 'Not set'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Extra questions for CR-AI */}
+            <div style={{
+              backgroundColor: `${colors.gold}10`,
+              borderRadius: '12px',
+              padding: '20px',
+              border: `1px solid ${colors.gold}30`
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                <span style={{ fontSize: '20px' }}>✨</span>
+                <span style={{ color: colors.gold, fontWeight: '600', fontSize: '14px' }}>
+                  Help CR-AI write better content for you:
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gap: '15px' }}>
+                <div>
+                  <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                    🌟 What makes you different from competitors?
+                  </label>
+                  <textarea
+                    value={whatMakesYouDifferent}
+                    onChange={(e) => setWhatMakesYouDifferent(e.target.value)}
+                    placeholder="Example: We're the only company that combines mental health services with entertainment events..."
+                    rows={2}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                    📊 What results or impact have you achieved?
+                  </label>
+                  <textarea
+                    value={resultsAchieved}
+                    onChange={(e) => setResultsAchieved(e.target.value)}
+                    placeholder="Example: Served 50,000 students, operated 25 mobile health units, 15 years in LA County..."
+                    rows={2}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                    💬 Anything else CR-AI should know? (optional)
+                  </label>
+                  <textarea
+                    value={anythingElse}
+                    onChange={(e) => setAnythingElse(e.target.value)}
+                    placeholder="Example: We focus on underserved communities, specialize in youth programs..."
+                    rows={2}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Mission */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label style={{ color: colors.gray, fontSize: '14px' }}>
                   Mission Statement *
-                  <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>Why does your company exist?</span>
+                  <span style={{ fontSize: '12px', marginLeft: '10px' }}>Why does your company exist?</span>
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => handleAIGenerate('mission')}
                     disabled={aiLoading.mission}
-                    style={{
-                      ...aiButtonStyle,
-                      backgroundColor: colors.primary,
-                      color: colors.background
-                    }}
+                    style={{ ...aiButtonStyle, backgroundColor: colors.primary, color: colors.background }}
                   >
                     {aiLoading.mission ? '⏳ Generating...' : '✨ Generate with CR-AI'}
                   </button>
@@ -590,11 +660,7 @@ Year Established: ${yearEstablished || 'Not specified'}`
                     <button
                       onClick={() => handleAIImprove('mission')}
                       disabled={aiLoading.mission}
-                      style={{
-                        ...aiButtonStyle,
-                        backgroundColor: colors.gold,
-                        color: colors.background
-                      }}
+                      style={{ ...aiButtonStyle, backgroundColor: colors.gold, color: colors.background }}
                     >
                       {aiLoading.mission ? '⏳' : '🔧 Improve'}
                     </button>
@@ -615,17 +681,13 @@ Year Established: ${yearEstablished || 'Not specified'}`
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label style={{ color: colors.gray, fontSize: '14px' }}>
                   Vision Statement *
-                  <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>Where is your company going?</span>
+                  <span style={{ fontSize: '12px', marginLeft: '10px' }}>Where is your company going?</span>
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => handleAIGenerate('vision')}
                     disabled={aiLoading.vision}
-                    style={{
-                      ...aiButtonStyle,
-                      backgroundColor: colors.primary,
-                      color: colors.background
-                    }}
+                    style={{ ...aiButtonStyle, backgroundColor: colors.primary, color: colors.background }}
                   >
                     {aiLoading.vision ? '⏳ Generating...' : '✨ Generate with CR-AI'}
                   </button>
@@ -633,11 +695,7 @@ Year Established: ${yearEstablished || 'Not specified'}`
                     <button
                       onClick={() => handleAIImprove('vision')}
                       disabled={aiLoading.vision}
-                      style={{
-                        ...aiButtonStyle,
-                        backgroundColor: colors.gold,
-                        color: colors.background
-                      }}
+                      style={{ ...aiButtonStyle, backgroundColor: colors.gold, color: colors.background }}
                     >
                       {aiLoading.vision ? '⏳' : '🔧 Improve'}
                     </button>
@@ -658,17 +716,13 @@ Year Established: ${yearEstablished || 'Not specified'}`
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label style={{ color: colors.gray, fontSize: '14px' }}>
                   Elevator Pitch *
-                  <span style={{ color: colors.gray, fontSize: '12px', marginLeft: '10px' }}>30-second company description</span>
+                  <span style={{ fontSize: '12px', marginLeft: '10px' }}>30-second company description</span>
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => handleAIGenerate('pitch')}
                     disabled={aiLoading.pitch}
-                    style={{
-                      ...aiButtonStyle,
-                      backgroundColor: colors.primary,
-                      color: colors.background
-                    }}
+                    style={{ ...aiButtonStyle, backgroundColor: colors.primary, color: colors.background }}
                   >
                     {aiLoading.pitch ? '⏳ Generating...' : '✨ Generate with CR-AI'}
                   </button>
@@ -676,11 +730,7 @@ Year Established: ${yearEstablished || 'Not specified'}`
                     <button
                       onClick={() => handleAIImprove('pitch')}
                       disabled={aiLoading.pitch}
-                      style={{
-                        ...aiButtonStyle,
-                        backgroundColor: colors.gold,
-                        color: colors.background
-                      }}
+                      style={{ ...aiButtonStyle, backgroundColor: colors.gold, color: colors.background }}
                     >
                       {aiLoading.pitch ? '⏳' : '🔧 Improve'}
                     </button>
@@ -694,18 +744,6 @@ Year Established: ${yearEstablished || 'Not specified'}`
                 rows={4}
                 style={{ ...inputStyle, resize: 'vertical' }}
               />
-            </div>
-
-            {/* Tip Box */}
-            <div style={{
-              backgroundColor: `${colors.primary}10`,
-              borderRadius: '8px',
-              padding: '15px',
-              border: `1px solid ${colors.primary}30`
-            }}>
-              <p style={{ color: colors.primary, margin: 0, fontSize: '13px' }}>
-                💡 <strong>Tip:</strong> Fill out Company Basics first, then use "Generate with CR-AI" for personalized suggestions. You can always edit the results or click "Improve" to make them better!
-              </p>
             </div>
           </div>
         )
@@ -754,43 +792,20 @@ Year Established: ${yearEstablished || 'Not specified'}`
             {samRegistered && (
               <>
                 <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    UEI Number (Unique Entity ID)
-                  </label>
-                  <input
-                    type="text"
-                    value={ueiNumber}
-                    onChange={(e) => setUeiNumber(e.target.value)}
-                    placeholder="Enter your 12-character UEI"
-                    style={inputStyle}
-                  />
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>UEI Number (Unique Entity ID)</label>
+                  <input type="text" value={ueiNumber} onChange={(e) => setUeiNumber(e.target.value)} placeholder="Enter your 12-character UEI" style={inputStyle} />
                 </div>
-
                 <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    CAGE Code
-                  </label>
-                  <input
-                    type="text"
-                    value={cageCode}
-                    onChange={(e) => setCageCode(e.target.value)}
-                    placeholder="Enter your 5-character CAGE code"
-                    style={inputStyle}
-                  />
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>CAGE Code</label>
+                  <input type="text" value={cageCode} onChange={(e) => setCageCode(e.target.value)} placeholder="Enter your 5-character CAGE code" style={inputStyle} />
                 </div>
               </>
             )}
 
             {!samRegistered && (
-              <div style={{
-                backgroundColor: `${colors.gold}20`,
-                borderRadius: '8px',
-                padding: '15px',
-                border: `1px solid ${colors.gold}30`
-              }}>
+              <div style={{ backgroundColor: `${colors.gold}20`, borderRadius: '8px', padding: '15px', border: `1px solid ${colors.gold}30` }}>
                 <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
-                  💡 <strong>Tip:</strong> SAM.gov registration is required for federal contracts.
-                  Visit <a href="https://sam.gov" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>sam.gov</a> to register for free.
+                  💡 <strong>Tip:</strong> SAM.gov registration is required for federal contracts. Visit <a href="https://sam.gov" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>sam.gov</a> to register for free.
                 </p>
               </div>
             )}
@@ -800,192 +815,50 @@ Year Established: ${yearEstablished || 'Not specified'}`
       default:
         return (
           <div style={{ textAlign: 'center', padding: '40px' }}>
-            <p style={{ color: colors.gray, fontSize: '18px' }}>
-              🚧 This section is coming soon!
-            </p>
-            <p style={{ color: colors.gray, fontSize: '14px', marginTop: '10px' }}>
-              We're building out the {sections.find(s => s.id === activeSection)?.title} section.
-            </p>
+            <p style={{ color: colors.gray, fontSize: '18px' }}>🚧 This section is coming soon!</p>
           </div>
         )
     }
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: colors.background,
-      fontFamily: 'Inter, system-ui, sans-serif'
-    }}>
+    <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* API Key Modal */}
       {showApiKeyModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: colors.card,
-            borderRadius: '16px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '90%',
-            border: `2px solid ${colors.primary}`
-          }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '500px', width: '90%', border: `2px solid ${colors.primary}` }}>
             <h3 style={{ color: colors.white, margin: '0 0 15px 0' }}>🔑 Enter CR-AI API Key</h3>
-            <p style={{ color: colors.gray, fontSize: '14px', marginBottom: '20px' }}>
-              To use AI features, enter your Anthropic API key. This is stored locally on your device.
-            </p>
-            <input
-              type="password"
-              value={tempApiKey}
-              onChange={(e) => setTempApiKey(e.target.value)}
-              placeholder="sk-ant-api03-..."
-              style={{ ...inputStyle, marginBottom: '20px' }}
-            />
+            <p style={{ color: colors.gray, fontSize: '14px', marginBottom: '20px' }}>To use AI features, enter your Anthropic API key. This is stored locally on your device.</p>
+            <input type="password" value={tempApiKey} onChange={(e) => setTempApiKey(e.target.value)} placeholder="sk-ant-api03-..." style={{ ...inputStyle, marginBottom: '20px' }} />
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowApiKeyModal(false)}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  border: `1px solid ${colors.gray}`,
-                  backgroundColor: 'transparent',
-                  color: colors.white,
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveApiKey}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: colors.primary,
-                  color: colors.background,
-                  cursor: 'pointer',
-                  fontWeight: '600'
-                }}
-              >
-                Save Key
-              </button>
+              <button onClick={() => setShowApiKeyModal(false)} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveApiKey} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: 'pointer', fontWeight: '600' }}>Save Key</button>
             </div>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div style={{
-        backgroundColor: colors.card,
-        padding: '20px 30px',
-        borderBottom: `1px solid ${colors.primary}30`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
+      <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <button
-            onClick={onBack}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: colors.gray,
-              cursor: 'pointer',
-              fontSize: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}
-          >
-            ← Back
-          </button>
-          <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>
-            🏗️ Business Builder
-          </h1>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
+          <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🏗️ Business Builder</h1>
         </div>
-
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '15px'
-        }}>
-          <div style={{
-            backgroundColor: completionPercentage >= 90 ? `${colors.primary}20` : `${colors.gold}20`,
-            padding: '8px 16px',
-            borderRadius: '20px',
-            border: `1px solid ${completionPercentage >= 90 ? colors.primary : colors.gold}`
-          }}>
-            <span style={{
-              color: completionPercentage >= 90 ? colors.primary : colors.gold,
-              fontWeight: '600'
-            }}>
-              {completionPercentage}% Complete
-            </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{ backgroundColor: completionPercentage >= 90 ? `${colors.primary}20` : `${colors.gold}20`, padding: '8px 16px', borderRadius: '20px', border: `1px solid ${completionPercentage >= 90 ? colors.primary : colors.gold}` }}>
+            <span style={{ color: completionPercentage >= 90 ? colors.primary : colors.gold, fontWeight: '600' }}>{completionPercentage}% Complete</span>
           </div>
-          {completionPercentage >= 90 && (
-            <span style={{ fontSize: '24px' }}>🏆</span>
-          )}
         </div>
       </div>
 
       {/* Main Content */}
       <div style={{ padding: '30px', maxWidth: '1000px', margin: '0 auto' }}>
         {activeSection ? (
-          <div style={{
-            backgroundColor: colors.card,
-            borderRadius: '16px',
-            padding: '30px',
-            border: `1px solid ${colors.primary}30`
-          }}>
+          <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', border: `1px solid ${colors.primary}30` }}>
             {renderSectionForm()}
-
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginTop: '30px',
-              paddingTop: '20px',
-              borderTop: `1px solid ${colors.gray}30`
-            }}>
-              <button
-                onClick={() => setActiveSection(null)}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '8px',
-                  border: `1px solid ${colors.gray}`,
-                  backgroundColor: 'transparent',
-                  color: colors.white,
-                  cursor: 'pointer',
-                  fontSize: '16px'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveProfile}
-                disabled={saving}
-                style={{
-                  padding: '12px 30px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: colors.primary,
-                  color: colors.background,
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  opacity: saving ? 0.7 : 1
-                }}
-              >
-                {saving ? 'Saving...' : 'Save & Continue'}
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', paddingTop: '20px', borderTop: `1px solid ${colors.gray}30` }}>
+              <button onClick={() => setActiveSection(null)} style={{ padding: '12px 24px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer', fontSize: '16px' }}>Cancel</button>
+              <button onClick={saveProfile} disabled={saving} style={{ padding: '12px 30px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '16px', fontWeight: '600', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save & Continue'}</button>
             </div>
           </div>
         ) : (
@@ -996,63 +869,24 @@ Year Established: ${yearEstablished || 'Not specified'}`
                 <div
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
-                  style={{
-                    backgroundColor: colors.card,
-                    borderRadius: '12px',
-                    padding: '20px',
-                    border: `1px solid ${completion === 100 ? colors.primary : colors.gray}30`,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = colors.primary
-                    e.currentTarget.style.transform = 'translateX(5px)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = `${completion === 100 ? colors.primary : colors.gray}30`
-                    e.currentTarget.style.transform = 'translateX(0)'
-                  }}
+                  style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${completion === 100 ? colors.primary : colors.gray}30`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s ease' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.primary; e.currentTarget.style.transform = 'translateX(5px)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = `${completion === 100 ? colors.primary : colors.gray}30`; e.currentTarget.style.transform = 'translateX(0)' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                     <span style={{ fontSize: '28px' }}>{section.icon}</span>
                     <div>
-                      <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px' }}>
-                        {section.title}
-                      </h3>
-                      <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                        {section.description}
-                      </p>
+                      <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px' }}>{section.title}</h3>
+                      <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{section.description}</p>
                     </div>
                   </div>
-
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    {completion === 100 ? (
-                      <span style={{ color: colors.primary, fontSize: '20px' }}>✓</span>
-                    ) : completion > 0 ? (
-                      <span style={{ color: colors.gold, fontSize: '14px' }}>{completion}%</span>
-                    ) : null}
+                    {completion === 100 ? <span style={{ color: colors.primary, fontSize: '20px' }}>✓</span> : completion > 0 ? <span style={{ color: colors.gold, fontSize: '14px' }}>{completion}%</span> : null}
                     <span style={{ color: colors.gray, fontSize: '20px' }}>→</span>
                   </div>
                 </div>
               )
             })}
-          </div>
-        )}
-
-        {!activeSection && (
-          <div style={{
-            marginTop: '30px',
-            backgroundColor: `${colors.primary}10`,
-            borderRadius: '12px',
-            padding: '20px',
-            border: `1px solid ${colors.primary}30`
-          }}>
-            <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
-              💡 <strong>Tip:</strong> Complete at least 90% of your profile to unlock the profile badge and get better contract matches!
-            </p>
           </div>
         )}
       </div>
