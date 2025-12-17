@@ -166,29 +166,42 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 22
+    let total = 40  // New base total
 
-    // CORE - What you need to get started (1 point each)
-    if (companyName) filled++
-    if (address) filled++
-    if (city) filled++
-    if (state) filled++
-    if (phone) filled++
-    if (email) filled++
-    if (entityType) filled++
-    if (mission) filled++
-    if (elevatorPitch) filled++
-    if (samRegistered || ueiNumber) filled += 2
+    // FOUNDATION - Company basics (10 points)
+    if (companyName) filled += 2
+    if (address) filled += 1
+    if (city) filled += 1
+    if (state) filled += 1
+    if (phone) filled += 2
+    if (email) filled += 2
+    if (entityType) filled += 1
 
-    // CRITICAL SECTIONS (2 points each)
-    if (services.length > 0) filled += 2
-    if (naicsCodes.length > 0) filled += 2
+    // YOUR STORY (5 points)
+    if (mission) filled += 3
+    if (elevatorPitch) filled += 2
 
-    // GROWS OVER TIME as they submit (1 point each)
-    if (pastPerformance.length > 0) filled += 2
-    if (teamMembers.length > 0) filled += 1
+    // WHAT YOU DO (10 points)
+    if (services.length > 0) filled += 5
+    if (naicsCodes.length > 0) filled += 5
+
+    // FEDERAL READY (5 points)
+    if (samRegistered || ueiNumber) filled += 5
+
+    // EXPERIENCE - This grows! (weighted higher)
+    // Past performance from profile (5 points base)
+    if (pastPerformance.length > 0) filled += 3
+    if (pastPerformance.length >= 3) filled += 2  // Bonus for more experience
+
+    // Team (3 points)
+    if (teamMembers.length > 0) filled += 2
+    if (teamMembers.length >= 3) filled += 1  // Bonus for full team
+
+    // Rates (1 point) - nice to have
     if (pricing.length > 0) filled += 1
-    if (certifications.length > 0) filled += 3
+
+    // Certifications (1 point) - nice to have, NOT essential
+    if (certifications.length > 0) filled += 1
 
     return Math.round((filled / total) * 100)
   }
@@ -196,22 +209,22 @@ function BusinessBuilder({ session, onBack }) {
   // Breakdown for visibility
   const getCompletionBreakdown = () => {
     return [
-      { label: 'Company Name', has: !!companyName, pts: 1 },
+      { label: 'Company Name', has: !!companyName, pts: 2 },
       { label: 'Address', has: !!address, pts: 1 },
       { label: 'City', has: !!city, pts: 1 },
       { label: 'State', has: !!state, pts: 1 },
-      { label: 'Phone', has: !!phone, pts: 1 },
-      { label: 'Email', has: !!email, pts: 1 },
+      { label: 'Phone', has: !!phone, pts: 2 },
+      { label: 'Email', has: !!email, pts: 2 },
       { label: 'Entity Type', has: !!entityType, pts: 1 },
-      { label: 'Mission', has: !!mission, pts: 1 },
-      { label: 'Elevator Pitch', has: !!elevatorPitch, pts: 1 },
-      { label: 'SAM / UEI', has: !!(samRegistered || ueiNumber), pts: 2 },
-      { label: 'Services', has: services.length > 0, pts: 2 },
-      { label: 'NAICS Codes', has: naicsCodes.length > 0, pts: 2 },
-      { label: 'Past Work', has: pastPerformance.length > 0, pts: 2 },
-      { label: 'Team Members', has: teamMembers.length > 0, pts: 1 },
+      { label: 'Mission', has: !!mission, pts: 3 },
+      { label: 'Elevator Pitch', has: !!elevatorPitch, pts: 2 },
+      { label: 'SAM / UEI', has: !!(samRegistered || ueiNumber), pts: 5 },
+      { label: 'Services', has: services.length > 0, pts: 5 },
+      { label: 'NAICS Codes', has: naicsCodes.length > 0, pts: 5 },
+      { label: 'Past Work', has: pastPerformance.length > 0, pts: 5 },
+      { label: 'Team Members', has: teamMembers.length > 0, pts: 3 },
       { label: 'Rates', has: pricing.length > 0, pts: 1 },
-      { label: 'Certifications', has: certifications.length > 0, pts: 3 },
+      { label: 'Certifications', has: certifications.length > 0, pts: 1 },
     ]
   }
 
