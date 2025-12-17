@@ -91,6 +91,9 @@ function BusinessBuilder({ session, onBack }) {
   // Past Performance
   const [pastPerformance, setPastPerformance] = useState([])
 
+  // NAICS Codes
+  const [naicsCodes, setNaicsCodes] = useState([])
+
   // SAM.gov
   const [samRegistered, setSamRegistered] = useState(false)
   const [ueiNumber, setUeiNumber] = useState('')
@@ -140,6 +143,7 @@ function BusinessBuilder({ session, onBack }) {
         setAnythingElse(data.anything_else || '')
         setServices(data.services || [])
         setPastPerformance(data.past_performance || [])
+        setNaicsCodes(data.naics_codes || [])
       }
     } catch (err) {
       console.error('Error:', err)
@@ -150,7 +154,7 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 18
+    let total = 20
 
     if (companyName) filled++
     if (address) filled++
@@ -168,6 +172,7 @@ function BusinessBuilder({ session, onBack }) {
     if (revenueRange) filled++
     if (services.length > 0) filled += 2
     if (pastPerformance.length > 0) filled += 2
+    if (naicsCodes.length > 0) filled += 2
 
     return Math.round((filled / total) * 100)
   }
@@ -204,6 +209,7 @@ function BusinessBuilder({ session, onBack }) {
       anything_else: anythingElse,
       services: services,
       past_performance: pastPerformance,
+      naics_codes: naicsCodes,
     }
 
     try {
@@ -520,6 +526,35 @@ Return ONLY the service description, no explanations.`
     setPastPerformance(updated)
   }
 
+  // NAICS Code functions
+  const addNaicsCode = () => {
+    if (naicsCodes.length >= 10) {
+      alert('Maximum 10 NAICS codes allowed')
+      return
+    }
+    setNaicsCodes([...naicsCodes, { code: '', description: '', isPrimary: naicsCodes.length === 0 }])
+  }
+
+  const removeNaicsCode = (index) => {
+    const updated = naicsCodes.filter((_, i) => i !== index)
+    // If we removed the primary, make the first one primary
+    if (updated.length > 0 && !updated.some(n => n.isPrimary)) {
+      updated[0].isPrimary = true
+    }
+    setNaicsCodes(updated)
+  }
+
+  const updateNaicsCode = (index, field, value) => {
+    const updated = [...naicsCodes]
+    if (field === 'isPrimary' && value === true) {
+      // Only one can be primary
+      updated.forEach((n, i) => n.isPrimary = i === index)
+    } else {
+      updated[index][field] = value
+    }
+    setNaicsCodes(updated)
+  }
+
   const saveApiKey = () => {
     localStorage.setItem('anthropic_api_key', tempApiKey)
     setShowApiKeyModal(false)
@@ -546,6 +581,11 @@ Return ONLY the service description, no explanations.`
       case 3:
         if (profile.services && profile.services.length > 0) {
           return Math.min(100, profile.services.length * 20)
+        }
+        return 0
+      case 4:
+        if (profile.naics_codes && profile.naics_codes.length > 0) {
+          return Math.min(100, profile.naics_codes.length * 20)
         }
         return 0
       case 8:
@@ -1013,6 +1053,178 @@ Return ONLY the service description, no explanations.`
                 <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Click "Add Another Service Area" to get started.</p>
               </div>
             )}
+          </div>
+        )
+
+      case 4:
+        return (
+          <div style={{ display: 'grid', gap: '25px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ color: colors.white, margin: 0 }}>NAICS Codes</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{naicsCodes.length}/10 codes</span>
+            </div>
+
+            {/* Info box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                💡 <strong style={{ color: colors.white }}>NAICS codes tell agencies what you do.</strong> Every contract lists required codes. Add yours so CR-AI can match you with the right opportunities. Don't know your codes? <a href="https://www.naics.com/search/" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>Look them up here</a>
+              </p>
+            </div>
+
+            {/* Existing NAICS Codes */}
+            {naicsCodes.map((naics, index) => (
+              <div
+                key={index}
+                style={{
+                  backgroundColor: '#1a1a1a',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: `1px solid ${naics.isPrimary ? colors.primary : colors.gray}30`
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ color: naics.isPrimary ? colors.primary : colors.gray, fontWeight: '600', fontSize: '14px' }}>
+                      {naics.isPrimary ? '⭐ Primary Code' : `Code #${index + 1}`}
+                    </span>
+                    {!naics.isPrimary && (
+                      <button
+                        onClick={() => updateNaicsCode(index, 'isPrimary', true)}
+                        style={{
+                          background: 'none',
+                          border: `1px solid ${colors.gray}`,
+                          borderRadius: '4px',
+                          color: colors.gray,
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          padding: '2px 8px'
+                        }}
+                      >
+                        Make Primary
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeNaicsCode(index)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ff4444',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🗑️ Remove
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '15px' }}>
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Code *
+                    </label>
+                    <input
+                      type="text"
+                      value={naics.code}
+                      onChange={(e) => updateNaicsCode(index, 'code', e.target.value)}
+                      placeholder="e.g., 541611"
+                      style={inputStyle}
+                      maxLength={6}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      What does this code cover?
+                    </label>
+                    <input
+                      type="text"
+                      value={naics.description}
+                      onChange={(e) => updateNaicsCode(index, 'description', e.target.value)}
+                      placeholder="e.g., Administrative Management Consulting Services"
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Add NAICS Button */}
+            {naicsCodes.length < 10 && (
+              <button
+                onClick={addNaicsCode}
+                style={{
+                  padding: '15px',
+                  borderRadius: '12px',
+                  border: `2px dashed ${colors.gray}`,
+                  backgroundColor: 'transparent',
+                  color: colors.gray,
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                ➕ Add NAICS Code
+              </button>
+            )}
+
+            {naicsCodes.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
+                <p style={{ fontSize: '16px', margin: 0 }}>No NAICS codes added yet.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>These help contracts find YOU. Add at least your primary code.</p>
+              </div>
+            )}
+
+            {/* Common codes helper */}
+            <div style={{
+              backgroundColor: `${colors.gold}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.gold}30`
+            }}>
+              <p style={{ color: colors.gold, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>
+                Common NAICS Codes:
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {[
+                  { code: '541611', desc: 'Management Consulting' },
+                  { code: '541810', desc: 'Advertising Agencies' },
+                  { code: '621330', desc: 'Mental Health Services' },
+                  { code: '611430', desc: 'Professional Training' },
+                  { code: '561720', desc: 'Janitorial Services' },
+                  { code: '236220', desc: 'Commercial Construction' },
+                  { code: '541512', desc: 'Computer Systems Design' },
+                  { code: '561320', desc: 'Temporary Staffing' },
+                ].map((item) => (
+                  <button
+                    key={item.code}
+                    onClick={() => {
+                      if (naicsCodes.length < 10) {
+                        setNaicsCodes([...naicsCodes, { code: item.code, description: item.desc, isPrimary: naicsCodes.length === 0 }])
+                      }
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      border: `1px solid ${colors.gold}50`,
+                      backgroundColor: 'transparent',
+                      color: colors.gray,
+                      cursor: 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {item.code} - {item.desc}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )
 
