@@ -100,7 +100,7 @@ function MyCart({ session, onBack, profileData }) {
   }
 
   const calculateBucketMatch = (profile) => {
-    if (!profile) return { percentage: 0, hasItems: [], craiHelps: [] }
+    if (!profile) return { percentage: 0, hasItems: [] }
     
     const hasItems = []
     let score = 0
@@ -186,7 +186,7 @@ function MyCart({ session, onBack, profileData }) {
               cartItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
                   <p style={{ color: colors.gray, fontSize: '18px', margin: '0 0 10px 0' }}>No opportunities yet</p>
-                  <p style={{ color: colors.gray, fontSize: '14px', margin: '0 0 20px 0' }}>Add contracts you're considering</p>
+                  <p style={{ color: colors.gray, fontSize: '14px', margin: '0 0 20px 0' }}>Add contracts you are considering</p>
                   <button onClick={() => setShowAddManual(true)} style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>+ Add Opportunity</button>
                 </div>
               ) : (
@@ -196,7 +196,7 @@ function MyCart({ session, onBack, profileData }) {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
-                          <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
+                          <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency specified'}</p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ color: colors.gold, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>Due: {new Date(item.due_date).toLocaleDateString()}</p>
@@ -213,7 +213,7 @@ function MyCart({ session, onBack, profileData }) {
               inProgressItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
                   <p style={{ color: colors.gray, fontSize: '18px', margin: '0 0 10px 0' }}>Nothing in progress</p>
-                  <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>Click "Go After This" on an opportunity to start</p>
+                  <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>Click Go After This on an opportunity to start</p>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: '15px' }}>
@@ -227,7 +227,7 @@ function MyCart({ session, onBack, profileData }) {
                           <div>
                             <span style={{ fontSize: '11px', backgroundColor: `${colors.primary}20`, color: colors.primary, padding: '2px 8px', borderRadius: '4px', marginBottom: '5px', display: 'inline-block' }}>{percent}% complete</span>
                             <h3 style={{ color: colors.white, margin: '5px 0', fontSize: '16px' }}>{item.title}</h3>
-                            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
+                            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency specified'}</p>
                           </div>
                           <div style={{ textAlign: 'right' }}>
                             <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>{answered} of {total}</p>
@@ -255,7 +255,7 @@ function MyCart({ session, onBack, profileData }) {
                         <div>
                           <span style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>SUBMITTED</span>
                           <h3 style={{ color: colors.white, margin: '5px 0', fontSize: '16px' }}>{item.title}</h3>
-                          <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
+                          <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency specified'}</p>
                         </div>
                         <p style={{ color: colors.gray, margin: '0', fontSize: '12px' }}>{item.questions?.length || 0} responses</p>
                       </div>
@@ -291,8 +291,8 @@ function MyCart({ session, onBack, profileData }) {
                 <input type="text" value={manualEntry.estimatedValue} onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })} placeholder="e.g., $50,000 - $100,000" style={inputStyle} />
               </div>
               <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Description</label>
-                <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="What is this contract asking for?" rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>What is this contract asking for?</label>
+                <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="Describe what the agency is looking for, the scope of work, key requirements..." rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
@@ -344,6 +344,15 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
   // Save status
   const [saveStatus, setSaveStatus] = useState('saved')
 
+  // Edit Details modal
+  const [showEditDetails, setShowEditDetails] = useState(false)
+  const [editDetails, setEditDetails] = useState({
+    title: opportunity.title || '',
+    agency: opportunity.agency || '',
+    estimatedValue: opportunity.estimated_value || '',
+    description: opportunity.description || ''
+  })
+
   // Strategy state
   const [generatingStrategy, setGeneratingStrategy] = useState(false)
   const [programTitle, setProgramTitle] = useState(opportunity.strategy_plan?.title || '')
@@ -386,10 +395,23 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
     try {
       await supabase.from('submissions').update(updates).eq('id', localOpportunity.id)
       setSaveStatus('saved')
+      // Update local state
+      setLocalOpportunity(prev => ({ ...prev, ...updates }))
     } catch (err) {
       console.error('Error saving:', err)
       setSaveStatus('error')
     }
+  }
+
+  // Save edited details
+  const handleSaveDetails = async () => {
+    await saveToDatabase({
+      title: editDetails.title,
+      agency: editDetails.agency,
+      estimated_value: editDetails.estimatedValue,
+      description: editDetails.description
+    })
+    setShowEditDetails(false)
   }
 
   // Auto-save questions
@@ -411,7 +433,6 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
       .replace(/^#+\s/gm, '')
       .replace(/^[-•]\s/gm, '')
       .replace(/^\d+\.\s/gm, '')
-      .replace(/[^\w\s.,;:'"!?()-]/g, '') // Remove emojis and special chars
       .trim()
   }
 
@@ -486,6 +507,7 @@ Program Title: ${programTitle}
 Approach: ${approach}
 Contract: ${localOpportunity.title}
 Agency: ${localOpportunity.agency || 'Not specified'}
+${localOpportunity.description ? `Contract Description: ${localOpportunity.description}` : ''}
 
 IMPORTANT: 
 - Plain text only, no asterisks, no bullets, no markdown, no emojis
@@ -683,8 +705,6 @@ ${question.response}`,
   }
 
   const handleAddToBucket = async () => {
-    // Here you would save responses to the profile for future use
-    // For now, just close and go back
     alert('Responses saved to your BUCKET for future bids!')
     setShowAddToBucket(false)
     onBack()
@@ -711,6 +731,8 @@ ${question.response}`,
 
   // ==========================================
   // PHASE 1: OVERVIEW
+  // Small business owner clicks here to decide: Should I pursue this?
+  // They need to see: What is this contract? Who is it from? What do they want?
   // ==========================================
   if (phase === 'overview') {
     return (
@@ -721,32 +743,56 @@ ${question.response}`,
         </div>
 
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
-          {/* Contract Details */}
-          <h1 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '22px' }}>{localOpportunity.title}</h1>
-          {localOpportunity.agency && (
-            <p style={{ color: colors.primary, margin: '0 0 15px 0', fontSize: '16px' }}>{localOpportunity.agency}</p>
-          )}
           
-          <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          {/* Contract Title */}
+          <h1 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '22px' }}>{localOpportunity.title}</h1>
+          
+          {/* Agency */}
+          <p style={{ color: colors.primary, margin: '0 0 20px 0', fontSize: '16px' }}>
+            {localOpportunity.agency || 'No agency specified'}
+          </p>
+          
+          {/* Key Details Row */}
+          <div style={{ display: 'flex', gap: '25px', marginBottom: '25px', flexWrap: 'wrap' }}>
             <div>
-              <p style={{ color: colors.gray, margin: '0 0 2px 0', fontSize: '12px' }}>Due</p>
-              <p style={{ color: colors.gold, margin: 0, fontSize: '16px', fontWeight: '600' }}>{daysLeft} days left</p>
+              <p style={{ color: colors.gray, margin: '0 0 4px 0', fontSize: '12px' }}>DUE DATE</p>
+              <p style={{ color: colors.gold, margin: 0, fontSize: '18px', fontWeight: '600' }}>{daysLeft} days left</p>
             </div>
-            {localOpportunity.estimated_value && (
+            <div>
+              <p style={{ color: colors.gray, margin: '0 0 4px 0', fontSize: '12px' }}>VALUE</p>
+              <p style={{ color: colors.white, margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                {localOpportunity.estimated_value || 'Not specified'}
+              </p>
+            </div>
+          </div>
+
+          {/* ABOUT THIS OPPORTUNITY - Always visible */}
+          <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '12px', fontWeight: '600' }}>ABOUT THIS OPPORTUNITY</p>
+              <button 
+                onClick={() => setShowEditDetails(true)} 
+                style={{ background: 'none', border: 'none', color: colors.primary, cursor: 'pointer', fontSize: '13px' }}
+              >
+                Edit
+              </button>
+            </div>
+            {localOpportunity.description ? (
+              <p style={{ color: colors.white, margin: 0, fontSize: '15px', lineHeight: '1.6' }}>{localOpportunity.description}</p>
+            ) : (
               <div>
-                <p style={{ color: colors.gray, margin: '0 0 2px 0', fontSize: '12px' }}>Value</p>
-                <p style={{ color: colors.white, margin: 0, fontSize: '16px', fontWeight: '600' }}>{localOpportunity.estimated_value}</p>
+                <p style={{ color: colors.gray, margin: '0 0 12px 0', fontSize: '14px', fontStyle: 'italic' }}>
+                  No description added yet. Add details about what this contract is asking for to help BUCKET + CR-AI generate better responses.
+                </p>
+                <button 
+                  onClick={() => setShowEditDetails(true)} 
+                  style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${colors.primary}`, backgroundColor: 'transparent', color: colors.primary, cursor: 'pointer', fontSize: '14px' }}
+                >
+                  + Add Description
+                </button>
               </div>
             )}
           </div>
-
-          {/* Description */}
-          {localOpportunity.description && (
-            <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.gray}30`, marginBottom: '20px' }}>
-              <p style={{ color: colors.gray, margin: '0 0 8px 0', fontSize: '12px' }}>ABOUT THIS CONTRACT</p>
-              <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>{localOpportunity.description}</p>
-            </div>
-          )}
 
           {/* BUCKET Match */}
           <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '25px' }}>
@@ -764,7 +810,10 @@ ${question.response}`,
           </div>
 
           {/* Actions */}
-          <button onClick={() => { setPhase('strategy'); if (!programTitle) handleGenerateStrategy() }} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '700', cursor: 'pointer', marginBottom: '10px' }}>
+          <button 
+            onClick={() => { setPhase('strategy'); if (!programTitle) handleGenerateStrategy() }} 
+            style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '700', cursor: 'pointer', marginBottom: '10px' }}
+          >
             Go After This
           </button>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -772,12 +821,67 @@ ${question.response}`,
             <button onClick={onBack} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${colors.gold}50`, backgroundColor: 'transparent', color: colors.gold, fontSize: '13px', cursor: 'pointer' }}>Save for Later</button>
           </div>
         </div>
+
+        {/* Edit Details Modal */}
+        {showEditDetails && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '500px', width: '100%', border: `2px solid ${colors.primary}`, maxHeight: '90vh', overflowY: 'auto' }}>
+              <h2 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '20px' }}>Edit Opportunity Details</h2>
+              <div style={{ display: 'grid', gap: '15px' }}>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Title</label>
+                  <input 
+                    type="text" 
+                    value={editDetails.title} 
+                    onChange={(e) => setEditDetails({ ...editDetails, title: e.target.value })} 
+                    style={inputStyle} 
+                  />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency / Organization</label>
+                  <input 
+                    type="text" 
+                    value={editDetails.agency} 
+                    onChange={(e) => setEditDetails({ ...editDetails, agency: e.target.value })} 
+                    placeholder="e.g., LA County DMH"
+                    style={inputStyle} 
+                  />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Estimated Value</label>
+                  <input 
+                    type="text" 
+                    value={editDetails.estimatedValue} 
+                    onChange={(e) => setEditDetails({ ...editDetails, estimatedValue: e.target.value })} 
+                    placeholder="e.g., $50,000 - $100,000"
+                    style={inputStyle} 
+                  />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>What is this contract asking for?</label>
+                  <textarea 
+                    value={editDetails.description} 
+                    onChange={(e) => setEditDetails({ ...editDetails, description: e.target.value })} 
+                    placeholder="Describe the scope of work, key requirements, what the agency is looking for..."
+                    rows={5} 
+                    style={{ ...inputStyle, resize: 'vertical' }} 
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
+                <button onClick={() => setShowEditDetails(false)} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveDetails} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Save</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
   // ==========================================
   // PHASE 2: STRATEGY
+  // BUCKET + CR-AI generates a title and approach based on their BUCKET and the contract
   // ==========================================
   if (phase === 'strategy') {
     return (
@@ -857,6 +961,7 @@ ${question.response}`,
 
   // ==========================================
   // PHASE 2B: CHANGE APPROACH
+  // User wants a different direction - they tell us what they want
   // ==========================================
   if (phase === 'change-approach') {
     return (
@@ -907,6 +1012,7 @@ ${question.response}`,
 
   // ==========================================
   // PHASE 3: ANSWERS
+  // User answers each question with BUCKET + CR-AI assistance
   // ==========================================
   if (phase === 'answers') {
     return (
@@ -1009,6 +1115,7 @@ ${question.response}`,
 
   // ==========================================
   // PHASE 4: REVIEW
+  // Final check before submission
   // ==========================================
   if (phase === 'review') {
     return (
