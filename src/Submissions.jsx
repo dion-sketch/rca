@@ -608,6 +608,30 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   const [saving, setSaving] = useState(false)
   const [scopeItems, setScopeItems] = useState(opportunity.scope_items || [])
   const [newScopeItem, setNewScopeItem] = useState('')
+  const [profile, setProfile] = useState(profileData || null)
+
+  // Fetch profile if not passed
+  useEffect(() => {
+    if (!profile && session?.user?.id) {
+      fetchProfile()
+    }
+  }, [session])
+
+  const fetchProfile = async () => {
+    try {
+      const { data } = await supabase
+        .from('business_profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single()
+      
+      if (data) {
+        setProfile(data)
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err)
+    }
+  }
 
   // Calculate CR Match Grade based on profile completeness
   const getCRMatchGrade = () => {
@@ -703,17 +727,40 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
     setGenerating({ ...generating, [questionId]: true })
 
     try {
-      // For now, generate a placeholder response
-      // In production, this would call Claude API with the user's profile data
-      const mockResponse = `Based on your profile, here's a suggested response for: "${question.text}"\n\n[This is where RCA will generate a tailored response using your Business Builder profile. The response will pull from your mission, services, past work, and team information to create a compelling answer.]`
+      // Call the CR-AI API to generate response
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: question.text,
+          profile: profile,
+          scopeItems: scopeItems,
+          opportunityTitle: opportunity.title
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate response')
+      }
+
+      const data = await response.json()
       
       const updated = questions.map(q => 
-        q.id === questionId ? { ...q, response: mockResponse } : q
+        q.id === questionId ? { ...q, response: data.response } : q
       )
       setQuestions(updated)
       saveQuestions(updated)
     } catch (err) {
       console.error('Error generating:', err)
+      // Fallback to a helpful message if API fails
+      const fallbackResponse = `[CR-AI is having trouble connecting. Please try again or write your response manually.]\n\nTip: Use your company's mission, past work, and team experience to answer this question.`
+      
+      const updated = questions.map(q => 
+        q.id === questionId ? { ...q, response: fallbackResponse } : q
+      )
+      setQuestions(updated)
     } finally {
       setGenerating({ ...generating, [questionId]: false })
     }
