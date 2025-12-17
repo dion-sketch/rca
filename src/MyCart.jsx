@@ -33,6 +33,12 @@ function MyCart({ session, onBack, profileData }) {
     description: ''
   })
 
+  // Smart Search Flow States
+  const [searchMode, setSearchMode] = useState('input') // 'input' | 'searching' | 'results' | 'notfound' | 'manual'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState(null)
+  const [searchError, setSearchError] = useState(null)
+
   useEffect(() => {
     fetchSubmissions()
   }, [])
@@ -53,6 +59,108 @@ function MyCart({ session, onBack, profileData }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Smart Search: Find contract details from public sources
+  const handleSmartSearch = async () => {
+    if (!searchQuery.trim()) return
+    
+    setSearchMode('searching')
+    setSearchError(null)
+    
+    try {
+      const response = await fetch('https://rca-pi-drab.vercel.app/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Search for this government contract or grant opportunity and return ONLY a JSON object with these exact fields (no markdown, no explanation):
+{
+  "found": true/false,
+  "title": "exact official title",
+  "agency": "issuing agency name",
+  "estimatedValue": "dollar range or amount",
+  "dueDate": "YYYY-MM-DD format if known, otherwise null",
+  "description": "2-3 sentence summary of what they're looking for",
+  "source": "where you found this (e.g., SAM.gov, Grants.gov, agency website)",
+  "rfpNumber": "solicitation number if available",
+  "confidence": "high/medium/low"
+}
+
+Search for: "${searchQuery}"
+
+Search SAM.gov, Grants.gov, state grant portals, and agency websites. If you find it, return the details. If not found, set found: false.`,
+          profile: {}
+        })
+      })
+      
+      const data = await response.json()
+      
+      // Parse the AI response - it should be JSON
+      let parsed
+      try {
+        // Clean up any markdown formatting
+        const cleanResponse = data.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+        parsed = JSON.parse(cleanResponse)
+      } catch (parseErr) {
+        // AI didn't return valid JSON, treat as not found
+        parsed = { found: false }
+      }
+      
+      if (parsed.found) {
+        setSearchResults(parsed)
+        setSearchMode('results')
+      } else {
+        setSearchMode('notfound')
+      }
+    } catch (err) {
+      console.error('Search error:', err)
+      setSearchError('Search failed. You can enter details manually.')
+      setSearchMode('notfound')
+    }
+  }
+
+  // Accept the search result and populate the form
+  const handleAcceptResult = () => {
+    setManualEntry({
+      title: searchResults.title || searchQuery,
+      rfpNumber: searchResults.rfpNumber || '',
+      agency: searchResults.agency || '',
+      dueDate: searchResults.dueDate || '',
+      source: searchResults.source || 'Auto-detected',
+      estimatedValue: searchResults.estimatedValue || '',
+      description: searchResults.description || ''
+    })
+    setShowConfirm(true)
+    setSearchMode('input')
+    setSearchResults(null)
+    setSearchQuery('')
+  }
+
+  // Reset search and try again
+  const handleSearchAgain = () => {
+    setSearchMode('input')
+    setSearchResults(null)
+    setSearchError(null)
+  }
+
+  // Switch to full manual entry
+  const handleGoManual = () => {
+    setManualEntry({
+      ...manualEntry,
+      title: searchQuery || manualEntry.title
+    })
+    setSearchMode('manual')
+    setSearchResults(null)
+  }
+
+  // Close the add modal completely
+  const handleCloseAddModal = () => {
+    setShowAddManual(false)
+    setSearchMode('input')
+    setSearchQuery('')
+    setSearchResults(null)
+    setSearchError(null)
+    setManualEntry({ title: '', rfpNumber: '', agency: '', dueDate: '', source: '', estimatedValue: '', description: '' })
   }
 
   const cartItems = allSubmissions.filter(s => s.status === 'draft' && (!s.strategy_plan))
@@ -100,25 +208,66 @@ function MyCart({ session, onBack, profileData }) {
   }
 
   const calculateBucketMatch = (profile) => {
-    if (!profile) return { percentage: 0, hasItems: [] }
+    if (!profile) return { percentage: 0, hasItems: [], submissionCount: 0 }
     
     const hasItems = []
     let score = 0
-    const maxScore = 10
+    const baseMax = 40  // Base score from profile
 
-    if (profile.company_name) { hasItems.push(profile.company_name); score += 1 }
-    if (profile.naics_codes?.length > 0) { hasItems.push(`NAICS codes on file`); score += 1 }
-    if (profile.certifications?.length > 0) { hasItems.push(`${profile.certifications.length} certification(s)`); score += 1 }
-    if (profile.year_established) { hasItems.push(`${new Date().getFullYear() - parseInt(profile.year_established)}+ years in business`); score += 1 }
-    if (profile.city && profile.state) { hasItems.push(`Based in ${profile.city}, ${profile.state}`); score += 0.5 }
-    if (profile.sam_registered) { hasItems.push('SAM.gov Registered'); score += 1 }
-    if (profile.past_performance?.length > 0) { hasItems.push(`${profile.past_performance.length} past performance record(s)`); score += 1.5 }
-    if (profile.team_members?.length > 0) { hasItems.push(`${profile.team_members.length} key personnel`); score += 1 }
-    if (profile.services?.length > 0) { hasItems.push(`${profile.services.length} service area(s)`); score += 1 }
-    if (profile.mission) score += 0.5
-    if (profile.elevator_pitch) score += 0.5
+    // FOUNDATION (10 points)
+    if (profile.company_name) { hasItems.push(profile.company_name); score += 2 }
+    if (profile.city && profile.state) { hasItems.push(`Based in ${profile.city}, ${profile.state}`); score += 2 }
+    if (profile.phone && profile.email) { score += 2 }
+    
+    // YOUR STORY (5 points)
+    if (profile.mission) { score += 3 }
+    if (profile.elevator_pitch) { score += 2 }
 
-    return { percentage: Math.min(Math.round((score / maxScore) * 100), 100), hasItems }
+    // WHAT YOU DO (10 points)
+    if (profile.services?.length > 0) { hasItems.push(`${profile.services.length} service area(s)`); score += 5 }
+    if (profile.naics_codes?.length > 0) { hasItems.push(`NAICS codes on file`); score += 5 }
+
+    // FEDERAL READY (5 points)
+    if (profile.sam_registered) { hasItems.push('SAM.gov Registered'); score += 5 }
+
+    // EXPERIENCE - Weighted higher! (8 points)
+    if (profile.past_performance?.length > 0) { 
+      hasItems.push(`${profile.past_performance.length} past performance record(s)`)
+      score += 3
+      if (profile.past_performance.length >= 3) score += 2  // Bonus
+    }
+    if (profile.year_established) { 
+      const years = new Date().getFullYear() - parseInt(profile.year_established)
+      if (years > 0) {
+        hasItems.push(`${years}+ years in business`)
+        score += 3
+      }
+    }
+
+    // TEAM (3 points)
+    if (profile.team_members?.length > 0) { 
+      hasItems.push(`${profile.team_members.length} key personnel`)
+      score += 2
+      if (profile.team_members.length >= 3) score += 1
+    }
+
+    // CERTIFICATIONS - Nice to have (1 point)
+    if (profile.certifications?.length > 0) { 
+      hasItems.push(`${profile.certifications.length} certification(s)`)
+      score += 1 
+    }
+
+    // SUBMISSION BONUS - Grows with every submission!
+    const submissionCount = profile.submission_count || 0
+    if (submissionCount > 0) {
+      hasItems.push(`${submissionCount} submission(s) completed`)
+      score += submissionCount * 3  // +3 per submission
+    }
+
+    // Calculate percentage (can exceed 100% for active users)
+    const percentage = Math.round((score / baseMax) * 100)
+
+    return { percentage, hasItems, submissionCount }
   }
 
   const openResponseBuilder = (opp) => {
@@ -268,37 +417,169 @@ function MyCart({ session, onBack, profileData }) {
         )}
       </div>
 
-      {/* Add Manual Modal */}
+      {/* Smart Add Opportunity Modal */}
       {showAddManual && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '500px', width: '100%', border: `2px solid ${colors.primary}`, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '22px' }}>Add Opportunity</h2>
-            <div style={{ display: 'grid', gap: '15px' }}>
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Title / Contract Name *</label>
-                <input type="text" value={manualEntry.title} onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })} placeholder="e.g., Mental Health Services RFP" style={inputStyle} />
+          <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '550px', width: '100%', border: `2px solid ${colors.primary}`, maxHeight: '90vh', overflowY: 'auto' }}>
+            
+            {/* STEP 1: Search Input */}
+            {searchMode === 'input' && (
+              <>
+                <h2 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '22px' }}>🔍 Find Opportunity</h2>
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>Enter the contract or grant name — we'll find the details for you</p>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <input 
+                    type="text" 
+                    value={searchQuery} 
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSmartSearch()}
+                    placeholder="e.g., LA County ARISE Community Grant Program" 
+                    style={{ ...inputStyle, fontSize: '16px', padding: '16px' }}
+                    autoFocus
+                  />
+                </div>
+                
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={handleCloseAddModal} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleSmartSearch} disabled={!searchQuery.trim()} style={{ flex: 2, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: searchQuery.trim() ? colors.primary : colors.gray, color: colors.background, fontWeight: '600', cursor: searchQuery.trim() ? 'pointer' : 'not-allowed' }}>Search Public Sources</button>
+                </div>
+                
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: `1px solid ${colors.gray}30` }}>
+                  <button onClick={handleGoManual} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `1px dashed ${colors.gray}50`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer', fontSize: '13px' }}>
+                    Or enter details manually →
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* STEP 2: Searching... */}
+            {searchMode === 'searching' && (
+              <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔍</div>
+                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Searching...</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>Checking SAM.gov, Grants.gov, and agency websites</p>
+                <div style={{ marginTop: '20px' }}>
+                  <div style={{ width: '200px', height: '4px', backgroundColor: colors.gray + '30', borderRadius: '2px', margin: '0 auto', overflow: 'hidden' }}>
+                    <div style={{ width: '50%', height: '100%', backgroundColor: colors.primary, animation: 'pulse 1.5s infinite', borderRadius: '2px' }} />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Due Date *</label>
-                <input type="date" value={manualEntry.dueDate} onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })} style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency / Organization</label>
-                <input type="text" value={manualEntry.agency} onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })} placeholder="e.g., LA County DMH" style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Estimated Value</label>
-                <input type="text" value={manualEntry.estimatedValue} onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })} placeholder="e.g., $50,000 - $100,000" style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>What is this contract asking for?</label>
-                <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="Describe what the agency is looking for, the scope of work, key requirements..." rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
-              <button onClick={() => setShowAddManual(false)} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleShowConfirm} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Add to Cart</button>
-            </div>
+            )}
+
+            {/* STEP 3: Results Found - Confirm */}
+            {searchMode === 'results' && searchResults && (
+              <>
+                <h2 style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '20px' }}>✓ Found It!</h2>
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>Is this the opportunity you're looking for?</p>
+                
+                <div style={{ backgroundColor: colors.background, borderRadius: '12px', padding: '20px', marginBottom: '20px', border: `1px solid ${colors.primary}50` }}>
+                  <h3 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '18px' }}>{searchResults.title}</h3>
+                  
+                  <div style={{ display: 'grid', gap: '12px' }}>
+                    {searchResults.agency && (
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span style={{ color: colors.gray, minWidth: '80px', fontSize: '13px' }}>Agency:</span>
+                        <span style={{ color: colors.white, fontSize: '14px' }}>{searchResults.agency}</span>
+                      </div>
+                    )}
+                    {searchResults.estimatedValue && (
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span style={{ color: colors.gray, minWidth: '80px', fontSize: '13px' }}>Value:</span>
+                        <span style={{ color: colors.gold, fontSize: '14px', fontWeight: '600' }}>{searchResults.estimatedValue}</span>
+                      </div>
+                    )}
+                    {searchResults.dueDate && (
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span style={{ color: colors.gray, minWidth: '80px', fontSize: '13px' }}>Due Date:</span>
+                        <span style={{ color: colors.white, fontSize: '14px' }}>{searchResults.dueDate}</span>
+                      </div>
+                    )}
+                    {searchResults.rfpNumber && (
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span style={{ color: colors.gray, minWidth: '80px', fontSize: '13px' }}>RFP #:</span>
+                        <span style={{ color: colors.white, fontSize: '14px' }}>{searchResults.rfpNumber}</span>
+                      </div>
+                    )}
+                    {searchResults.description && (
+                      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${colors.gray}30` }}>
+                        <span style={{ color: colors.gray, fontSize: '13px', display: 'block', marginBottom: '5px' }}>Description:</span>
+                        <p style={{ color: colors.white, fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{searchResults.description}</p>
+                      </div>
+                    )}
+                    {searchResults.source && (
+                      <div style={{ marginTop: '5px' }}>
+                        <span style={{ color: colors.gray, fontSize: '11px' }}>Source: {searchResults.source}</span>
+                        {searchResults.confidence && <span style={{ color: searchResults.confidence === 'high' ? colors.primary : colors.gold, fontSize: '11px', marginLeft: '10px' }}>({searchResults.confidence} confidence)</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={handleSearchAgain} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>No, Search Again</button>
+                  <button onClick={handleAcceptResult} style={{ flex: 2, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Yes, This Is It</button>
+                </div>
+              </>
+            )}
+
+            {/* STEP 4: Not Found */}
+            {searchMode === 'notfound' && (
+              <>
+                <h2 style={{ color: colors.gold, margin: '0 0 8px 0', fontSize: '20px' }}>⚠️ Not Found</h2>
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>
+                  We couldn't find "{searchQuery}" in public databases. This might be a new posting, agency-specific, or spelled differently.
+                </p>
+                
+                {searchError && (
+                  <p style={{ color: colors.red, fontSize: '13px', marginBottom: '15px' }}>{searchError}</p>
+                )}
+                
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  <button onClick={handleSearchAgain} style={{ padding: '14px', borderRadius: '8px', border: `1px solid ${colors.primary}`, backgroundColor: 'transparent', color: colors.primary, cursor: 'pointer' }}>🔍 Try Different Search</button>
+                  <button onClick={handleGoManual} style={{ padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Enter Details Manually</button>
+                  <button onClick={handleCloseAddModal} style={{ padding: '12px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer', fontSize: '13px' }}>Cancel</button>
+                </div>
+              </>
+            )}
+
+            {/* STEP 5: Manual Entry (fallback) */}
+            {searchMode === 'manual' && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h2 style={{ color: colors.white, margin: 0, fontSize: '22px' }}>Add Opportunity</h2>
+                  <button onClick={handleSearchAgain} style={{ padding: '6px 12px', borderRadius: '6px', border: `1px solid ${colors.gray}50`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer', fontSize: '12px' }}>← Back to Search</button>
+                </div>
+                
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Title / Contract Name *</label>
+                    <input type="text" value={manualEntry.title} onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })} placeholder="e.g., Mental Health Services RFP" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Due Date *</label>
+                    <input type="date" value={manualEntry.dueDate} onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency / Organization</label>
+                    <input type="text" value={manualEntry.agency} onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })} placeholder="e.g., LA County DMH" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Estimated Value</label>
+                    <input type="text" value={manualEntry.estimatedValue} onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })} placeholder="e.g., $50,000 - $100,000" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>What is this contract asking for?</label>
+                    <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="Describe what the agency is looking for, the scope of work, key requirements..." rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
+                  <button onClick={handleCloseAddModal} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleShowConfirm} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Add to Cart</button>
+                </div>
+              </>
+            )}
+            
           </div>
         </div>
       )}
@@ -323,8 +604,8 @@ function MyCart({ session, onBack, profileData }) {
             <h3 style={{ color: colors.primary, margin: '0 0 10px 0' }}>Added to Cart</h3>
             <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>{savedOpportunity?.title}</p>
             <div style={{ display: 'grid', gap: '10px' }}>
-              <button onClick={() => { setSaveSuccess(false); setShowAddManual(false); if (savedOpportunity) openResponseBuilder(savedOpportunity) }} style={{ padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Start Working on It</button>
-              <button onClick={() => { setSaveSuccess(false); setShowAddManual(false) }} style={{ padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer' }}>Add Another</button>
+              <button onClick={() => { setSaveSuccess(false); handleCloseAddModal(); if (savedOpportunity) openResponseBuilder(savedOpportunity) }} style={{ padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Start Working on It</button>
+              <button onClick={() => { setSaveSuccess(false); handleCloseAddModal() }} style={{ padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer' }}>Add Another</button>
             </div>
           </div>
         </div>
@@ -338,8 +619,19 @@ function MyCart({ session, onBack, profileData }) {
 // RESPONSE BUILDER
 // ==========================================
 function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucketMatch }) {
-  const [phase, setPhase] = useState(opportunity.strategy_plan ? 'answers' : 'overview')
+  // Determine starting phase based on what's already done
+  const getStartingPhase = () => {
+    if (opportunity.questions?.length > 0) return 'answers'
+    if (opportunity.strategy_plan) return 'questions'
+    return 'overview'
+  }
+  
+  const [phase, setPhase] = useState(getStartingPhase())
   const [localOpportunity, setLocalOpportunity] = useState(opportunity)
+  
+  // New question entry state
+  const [newQuestionText, setNewQuestionText] = useState('')
+  const [newQuestionLimit, setNewQuestionLimit] = useState('2000')
   
   // Save status
   const [saveStatus, setSaveStatus] = useState('saved')
@@ -495,13 +787,26 @@ APPROACH: [1-2 sentence approach here]`,
 
   // Generate All Answers
   const handleGenerateAllAnswers = async () => {
+    if (questions.length === 0) {
+      alert('Add at least one question first')
+      return
+    }
+    
     setGeneratingAnswers(true)
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: `Generate 6-8 typical RFP questions and answers for this contract.
+      // Generate answers for each question the user entered
+      const updatedQuestions = [...questions]
+      
+      for (let i = 0; i < updatedQuestions.length; i++) {
+        const q = updatedQuestions[i]
+        
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: `Answer this question in plain text, no formatting, no asterisks, no emojis.
+
+QUESTION: ${q.text}
 
 Program Title: ${programTitle}
 Approach: ${approach}
@@ -509,68 +814,34 @@ Contract: ${localOpportunity.title}
 Agency: ${localOpportunity.agency || 'Not specified'}
 ${localOpportunity.description ? `Contract Description: ${localOpportunity.description}` : ''}
 
-IMPORTANT: 
-- Plain text only, no asterisks, no bullets, no markdown, no emojis
-- Each answer should be professional
-- Keep answers under 500 characters each
+CRITICAL: Stay under ${q.charLimit} characters. Aim for ${Math.floor(q.charLimit * 0.9)} characters.`,
+            profile: profile,
+            opportunity: { title: localOpportunity.title, agency: localOpportunity.agency },
+            strategyPlan: `Title: ${programTitle}\nApproach: ${approach}`,
+            charLimit: q.charLimit,
+            previousResponses: updatedQuestions.slice(0, i).filter(prev => prev.response)
+          }),
+        })
 
-Format each as:
-Q1: [Question]
-A1: [Answer in plain text]
-
-Q2: [Question]
-A2: [Answer in plain text]
-
-Continue for all questions.`,
-          profile: profile,
-          opportunity: { title: localOpportunity.title, agency: localOpportunity.agency },
-          isQAGeneration: true
-        }),
-      })
-
-      if (!response.ok) throw new Error('Failed to generate')
-      const data = await response.json()
+        if (response.ok) {
+          const data = await response.json()
+          updatedQuestions[i] = { 
+            ...q, 
+            response: cleanText(data.response), 
+            source: 'bucket-crai' 
+          }
+        }
+      }
       
-      const parsedQuestions = parseQuestionsFromResponse(data.response)
-      setQuestions(parsedQuestions)
+      setQuestions(updatedQuestions)
+      saveToDatabase({ questions: updatedQuestions })
       
     } catch (err) {
       console.error('Error generating answers:', err)
-      alert('BUCKET + CR-AI had trouble. Please try again.')
+      alert('CR-AI had trouble. Please try again.')
     } finally {
       setGeneratingAnswers(false)
     }
-  }
-
-  const parseQuestionsFromResponse = (text) => {
-    const questions = []
-    const regex = /Q(\d+):\s*(.*?)\nA\1:\s*([\s\S]*?)(?=Q\d+:|$)/gi
-    let match
-    
-    while ((match = regex.exec(text)) !== null) {
-      let answer = cleanText(match[3])
-      if (answer.length > 500) answer = answer.substring(0, 497) + '...'
-      
-      questions.push({
-        id: Date.now() + questions.length,
-        text: cleanText(match[2]),
-        response: answer,
-        charLimit: 500,
-        source: 'bucket-crai'
-      })
-    }
-    
-    if (questions.length === 0) {
-      questions.push({
-        id: Date.now(),
-        text: 'Describe your organizations experience and qualifications.',
-        response: cleanText(text).substring(0, 497) + '...',
-        charLimit: 500,
-        source: 'bucket-crai'
-      })
-    }
-    
-    return questions
   }
 
   // Regenerate single answer
@@ -705,9 +976,62 @@ ${question.response}`,
   }
 
   const handleAddToBucket = async () => {
-    alert('Responses saved to your BUCKET for future bids!')
-    setShowAddToBucket(false)
-    onBack()
+    try {
+      // 1. Save each answer to saved_answers table for reuse
+      const savedAnswers = questions.map(q => ({
+        user_id: session.user.id,
+        question_text: q.text,
+        answer_text: q.response,
+        char_limit: q.charLimit,
+        source_submission_id: localOpportunity.id,
+        source_contract_title: localOpportunity.title,
+        source_agency: localOpportunity.agency,
+        program_title: programTitle,
+        created_at: new Date().toISOString()
+      }))
+
+      // Insert saved answers (will create table if using Supabase)
+      const { error: answersError } = await supabase
+        .from('saved_answers')
+        .insert(savedAnswers)
+
+      if (answersError) {
+        console.log('Note: saved_answers table may not exist yet:', answersError.message)
+      }
+
+      // 2. Update submission count in business_profiles
+      const { data: profileData } = await supabase
+        .from('business_profiles')
+        .select('submission_count')
+        .eq('user_id', session.user.id)
+        .single()
+
+      const currentCount = profileData?.submission_count || 0
+
+      await supabase
+        .from('business_profiles')
+        .update({ 
+          submission_count: currentCount + 1,
+          last_submission_at: new Date().toISOString()
+        })
+        .eq('user_id', session.user.id)
+
+      // 3. Mark the submission as added to bucket
+      await supabase
+        .from('submissions')
+        .update({ added_to_bucket: true })
+        .eq('id', localOpportunity.id)
+
+      // Success!
+      setShowAddToBucket(false)
+      onBack()
+      
+    } catch (err) {
+      console.error('Error saving to BUCKET:', err)
+      // Still close and go back even if save fails
+      setShowAddToBucket(false)
+      onBack()
+    }
   }
 
   const handleSkipAddToBucket = () => {
@@ -719,6 +1043,89 @@ ${question.response}`,
   const totalQuestions = questions.length
   const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0
   const issueCount = questions.filter(q => q.response?.length > q.charLimit).length
+
+  // Progress Stepper Component
+  const ProgressStepper = () => {
+    const steps = [
+      { id: 'overview', label: 'Overview', num: 1 },
+      { id: 'strategy', label: 'Strategy', num: 2 },
+      { id: 'questions', label: 'Questions', num: 3 },
+      { id: 'answers', label: 'Answers', num: 4 },
+      { id: 'review', label: 'Review', num: 5 }
+    ]
+    
+    const currentIndex = steps.findIndex(s => s.id === phase || (phase === 'change-approach' && s.id === 'strategy'))
+    
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '15px 20px', backgroundColor: colors.card, borderBottom: `1px solid ${colors.gray}20` }}>
+        {steps.map((step, i) => {
+          const isActive = i === currentIndex
+          const isComplete = i < currentIndex
+          const isFuture = i > currentIndex
+          
+          return (
+            <div key={step.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ 
+                width: '28px', 
+                height: '28px', 
+                borderRadius: '50%', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                backgroundColor: isComplete ? colors.primary : isActive ? colors.gold : 'transparent',
+                border: `2px solid ${isComplete ? colors.primary : isActive ? colors.gold : colors.gray}50`,
+                color: isComplete || isActive ? colors.background : colors.gray,
+                fontSize: '12px',
+                fontWeight: '600'
+              }}>
+                {isComplete ? '✓' : step.num}
+              </div>
+              <span style={{ 
+                color: isActive ? colors.white : isComplete ? colors.primary : colors.gray, 
+                fontSize: '12px',
+                fontWeight: isActive ? '600' : '400',
+                display: window.innerWidth > 500 ? 'inline' : 'none'
+              }}>
+                {step.label}
+              </span>
+              {i < steps.length - 1 && (
+                <div style={{ width: '20px', height: '2px', backgroundColor: isComplete ? colors.primary : `${colors.gray}30` }} />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Add a new question from RFP
+  const handleAddQuestion = () => {
+    if (!newQuestionText.trim()) {
+      alert('Please enter the question text')
+      return
+    }
+    
+    const newQuestion = {
+      id: `q-${Date.now()}`,
+      text: newQuestionText.trim(),
+      charLimit: parseInt(newQuestionLimit) || 2000,
+      response: '',
+      source: ''
+    }
+    
+    const updated = [...questions, newQuestion]
+    setQuestions(updated)
+    saveToDatabase({ questions: updated })
+    setNewQuestionText('')
+    setNewQuestionLimit('2000')
+  }
+
+  // Remove a question
+  const handleRemoveQuestion = (index) => {
+    const updated = questions.filter((_, i) => i !== index)
+    setQuestions(updated)
+    saveToDatabase({ questions: updated })
+  }
 
   // Save status display
   const SaveIndicator = () => (
@@ -741,6 +1148,8 @@ ${question.response}`,
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back to Cart</button>
           <SaveIndicator />
         </div>
+        
+        <ProgressStepper />
 
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
           
@@ -782,7 +1191,7 @@ ${question.response}`,
             ) : (
               <div>
                 <p style={{ color: colors.gray, margin: '0 0 12px 0', fontSize: '14px', fontStyle: 'italic' }}>
-                  No description added yet. Add details about what this contract is asking for to help BUCKET + CR-AI generate better responses.
+                  No description added yet. Add details about what this contract is asking for to help CR-AI generate better responses.
                 </p>
                 <button 
                   onClick={() => setShowEditDetails(true)} 
@@ -794,18 +1203,35 @@ ${question.response}`,
             )}
           </div>
 
-          {/* BUCKET Match */}
+          {/* BUCKET Match - ENCOURAGING messaging */}
           <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '25px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ color: colors.white, fontSize: '16px', fontWeight: '600' }}>BUCKET Match</span>
+              <span style={{ color: colors.white, fontSize: '16px', fontWeight: '600' }}>Your BUCKET</span>
               <span style={{ backgroundColor: colors.primary, color: colors.background, padding: '6px 14px', borderRadius: '20px', fontWeight: '700' }}>{bucketMatch.percentage}%</span>
             </div>
+            
+            {/* Encouraging message based on score */}
+            <p style={{ color: colors.white, margin: '0 0 12px 0', fontSize: '14px', fontWeight: '500' }}>
+              {bucketMatch.percentage >= 80 
+                ? "You're ready! CR-AI has what it needs to help you win this." 
+                : bucketMatch.percentage >= 50 
+                  ? "You have a strong foundation. CR-AI can fill in the gaps."
+                  : "You can still go after this! CR-AI will help you build as you go."
+              }
+            </p>
+            
             {bucketMatch.hasItems.length > 0 && (
-              <div style={{ display: 'grid', gap: '4px' }}>
+              <div style={{ display: 'grid', gap: '4px', marginBottom: '12px' }}>
                 {bucketMatch.hasItems.slice(0, 4).map((item, i) => (
-                  <p key={i} style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>{item}</p>
+                  <p key={i} style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>✓ {item}</p>
                 ))}
               </div>
+            )}
+            
+            {bucketMatch.percentage < 80 && (
+              <p style={{ color: colors.gold, margin: 0, fontSize: '12px', fontStyle: 'italic' }}>
+                💡 Remember: You're a contract manager — CR-AI helps you hire the team and fill the gaps.
+              </p>
             )}
           </div>
 
@@ -881,16 +1307,18 @@ ${question.response}`,
 
   // ==========================================
   // PHASE 2: STRATEGY
-  // BUCKET + CR-AI generates a title and approach based on their BUCKET and the contract
+  // CR-AI generates a title and approach based on their BUCKET and the contract
   // ==========================================
   if (phase === 'strategy') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={() => setPhase('overview')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back</button>
-          <span style={{ color: colors.white, fontSize: '14px' }}>BUCKET + CR-AI</span>
+          <span style={{ color: colors.primary, fontSize: '14px', fontWeight: '600' }}>CR-AI</span>
           <SaveIndicator />
         </div>
+        
+        <ProgressStepper />
 
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
           <div style={{ marginBottom: '25px' }}>
@@ -902,11 +1330,18 @@ ${question.response}`,
 
           {generatingStrategy ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-              <p style={{ color: colors.primary, fontSize: '18px', margin: '0 0 10px 0' }}>Generating strategy...</p>
-              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>BUCKET + CR-AI is working</p>
+              <p style={{ color: colors.primary, fontSize: '18px', margin: '0 0 10px 0' }}>CR-AI is thinking...</p>
+              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>Creating a strategy based on your BUCKET</p>
             </div>
           ) : (
             <>
+              {/* Explanation for first-timers */}
+              <div style={{ backgroundColor: `${colors.gold}15`, borderRadius: '10px', padding: '15px', marginBottom: '20px', border: `1px solid ${colors.gold}30` }}>
+                <p style={{ color: colors.white, margin: 0, fontSize: '13px', lineHeight: '1.5' }}>
+                  💡 <strong>What's happening:</strong> CR-AI looked at your BUCKET and this opportunity to suggest a program title and approach. You can edit these or ask for a different direction.
+                </p>
+              </div>
+              
               {/* Program Title */}
               <div style={{ marginBottom: '20px' }}>
                 <p style={{ color: colors.gray, fontSize: '12px', margin: '0 0 8px 0' }}>PROGRAM TITLE</p>
@@ -946,11 +1381,11 @@ ${question.response}`,
               </div>
 
               <button onClick={() => setPhase('change-approach')} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: `1px solid ${colors.gray}50`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer', marginBottom: '15px' }}>
-                Change Approach
+                Try a Different Direction
               </button>
 
-              <button onClick={() => { if (questions.length === 0) handleGenerateAllAnswers(); setPhase('answers') }} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
-                Accept and Start
+              <button onClick={() => setPhase('questions')} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
+                Continue to Questions
               </button>
             </>
           )}
@@ -969,17 +1404,19 @@ ${question.response}`,
         <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30` }}>
           <button onClick={() => setPhase('strategy')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Go Back</button>
         </div>
+        
+        <ProgressStepper />
 
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
           <h2 style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '20px' }}>What direction do you want to go?</h2>
           <p style={{ color: colors.gray, margin: '0 0 25px 0', fontSize: '14px' }}>
-            This is not the title. BUCKET + CR-AI will generate a title based on your direction and the contract/grant focus.
+            Tell CR-AI what angle you want to take. It will create a new title and approach based on your direction.
           </p>
 
           <textarea
             value={newDirection}
             onChange={(e) => setNewDirection(e.target.value)}
-            placeholder="e.g., TeleHealth vans at college campuses, focus on student mental health..."
+            placeholder="e.g., Focus on mobile mental health services for college students using our TeleHealth vans..."
             rows={4}
             style={{ ...inputStyle, marginBottom: '20px', resize: 'vertical' }}
             autoFocus
@@ -999,7 +1436,7 @@ ${question.response}`,
               disabled={generatingStrategy}
               style={{ flex: 1, padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
             >
-              {generatingStrategy ? 'Generating...' : 'Ask BUCKET + CR-AI'}
+              {generatingStrategy ? 'Generating...' : 'Ask CR-AI'}
             </button>
             <button onClick={() => { setNewDirection(''); setPhase('strategy') }} style={{ flex: 1, padding: '14px', borderRadius: '10px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer' }}>
               Go Back
@@ -1011,24 +1448,162 @@ ${question.response}`,
   }
 
   // ==========================================
-  // PHASE 3: ANSWERS
-  // User answers each question with BUCKET + CR-AI assistance
+  // PHASE 3: QUESTIONS ENTRY (NEW - CRITICAL)
+  // User copy/pastes questions from the RFP
+  // This is where they tell us WHAT to answer
+  // ==========================================
+  if (phase === 'questions') {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={() => setPhase('strategy')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Strategy</button>
+          <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>{questions.length} question{questions.length !== 1 ? 's' : ''} added</span>
+          <SaveIndicator />
+        </div>
+        
+        <ProgressStepper />
+
+        <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
+          
+          {/* Instructions */}
+          <div style={{ marginBottom: '25px' }}>
+            <h1 style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '20px' }}>Add Questions from the RFP</h1>
+            <p style={{ color: colors.gray, margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+              Open your RFP document and copy/paste each question you need to answer. CR-AI will generate responses based on your BUCKET.
+            </p>
+          </div>
+
+          {/* Helper tip */}
+          <div style={{ backgroundColor: `${colors.gold}15`, borderRadius: '10px', padding: '15px', marginBottom: '25px', border: `1px solid ${colors.gold}30` }}>
+            <p style={{ color: colors.white, margin: 0, fontSize: '13px', lineHeight: '1.5' }}>
+              💡 <strong>Tip:</strong> Look for questions like "Describe your approach to..." or "How will you..." in the RFP. Each one becomes a question here. Include the character limit if the RFP shows one.
+            </p>
+          </div>
+
+          {/* Add Question Form */}
+          <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}30`, marginBottom: '20px' }}>
+            <p style={{ color: colors.gray, fontSize: '12px', margin: '0 0 10px 0', fontWeight: '600' }}>ADD A QUESTION</p>
+            
+            <textarea
+              value={newQuestionText}
+              onChange={(e) => setNewQuestionText(e.target.value)}
+              placeholder="Paste or type a question from the RFP here..."
+              rows={3}
+              style={{ ...inputStyle, marginBottom: '15px', resize: 'vertical' }}
+            />
+            
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '15px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>Character Limit</label>
+                <input
+                  type="number"
+                  value={newQuestionLimit}
+                  onChange={(e) => setNewQuestionLimit(e.target.value)}
+                  placeholder="2000"
+                  style={{ ...inputStyle, width: '100%' }}
+                />
+              </div>
+              <p style={{ color: colors.gray, fontSize: '11px', flex: 2, margin: 0 }}>
+                Check the RFP for limits. If none shown, 2000 is a safe default.
+              </p>
+            </div>
+            
+            <button 
+              onClick={handleAddQuestion}
+              disabled={!newQuestionText.trim()}
+              style={{ 
+                width: '100%', 
+                padding: '14px', 
+                borderRadius: '10px', 
+                border: 'none', 
+                backgroundColor: newQuestionText.trim() ? colors.primary : colors.gray, 
+                color: colors.background, 
+                fontSize: '14px', 
+                fontWeight: '600', 
+                cursor: newQuestionText.trim() ? 'pointer' : 'not-allowed' 
+              }}
+            >
+              + Add Question
+            </button>
+          </div>
+
+          {/* Questions List */}
+          {questions.length > 0 && (
+            <div style={{ marginBottom: '25px' }}>
+              <p style={{ color: colors.gray, fontSize: '12px', margin: '0 0 15px 0', fontWeight: '600' }}>YOUR QUESTIONS ({questions.length})</p>
+              
+              {questions.map((q, index) => (
+                <div key={q.id} style={{ backgroundColor: colors.card, borderRadius: '10px', padding: '15px', border: `1px solid ${colors.gray}30`, marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ color: colors.primary, fontSize: '11px', fontWeight: '600' }}>Q{index + 1}</span>
+                      <p style={{ color: colors.white, margin: '5px 0 0 0', fontSize: '14px', lineHeight: '1.4' }}>{q.text}</p>
+                      <p style={{ color: colors.gray, margin: '8px 0 0 0', fontSize: '11px' }}>{q.charLimit} character limit</p>
+                    </div>
+                    <button 
+                      onClick={() => handleRemoveQuestion(index)}
+                      style={{ background: 'none', border: 'none', color: colors.red, cursor: 'pointer', fontSize: '12px', padding: '5px' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {questions.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 20px', backgroundColor: colors.card, borderRadius: '12px', marginBottom: '20px' }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>No questions added yet. Add at least one question from the RFP to continue.</p>
+            </div>
+          )}
+
+          {/* Continue Button */}
+          <button 
+            onClick={() => { handleGenerateAllAnswers(); setPhase('answers') }}
+            disabled={questions.length === 0}
+            style={{ 
+              width: '100%', 
+              padding: '16px', 
+              borderRadius: '12px', 
+              border: questions.length === 0 ? `2px solid ${colors.gray}50` : 'none', 
+              backgroundColor: questions.length === 0 ? 'transparent' : colors.primary, 
+              color: questions.length === 0 ? colors.gray : colors.background, 
+              fontSize: '16px', 
+              fontWeight: '700', 
+              cursor: questions.length === 0 ? 'not-allowed' : 'pointer' 
+            }}
+          >
+            {questions.length === 0 ? 'Add questions to continue' : `Generate Answers for ${questions.length} Question${questions.length !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================
+  // PHASE 4: ANSWERS
+  // CR-AI generates answers from BUCKET, user reviews and edits
   // ==========================================
   if (phase === 'answers') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, position: 'sticky', top: 0, zIndex: 100 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <button onClick={() => setPhase('strategy')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Strategy</button>
-            <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>{answeredCount} of {totalQuestions} ({progressPercent}%)</span>
+            <button onClick={() => setPhase('questions')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Questions</button>
+            <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>{answeredCount} of {totalQuestions} done</span>
             <SaveIndicator />
           </div>
           <div style={{ height: '4px', backgroundColor: '#1a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${progressPercent}%`, backgroundColor: colors.primary, transition: 'width 0.3s' }} />
           </div>
         </div>
+        
+        <ProgressStepper />
 
         <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
+          {/* Strategy reminder */}
           <div style={{ backgroundColor: colors.card, borderRadius: '10px', padding: '15px', marginBottom: '20px', border: `1px solid ${colors.gray}30` }}>
             <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>{programTitle}</p>
             <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>{approach}</p>
@@ -1036,14 +1611,15 @@ ${question.response}`,
 
           {generatingAnswers && (
             <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px', marginBottom: '20px' }}>
-              <p style={{ color: colors.primary, fontSize: '18px', margin: '0 0 10px 0' }}>Generating answers...</p>
-              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>BUCKET + CR-AI is working</p>
+              <p style={{ color: colors.primary, fontSize: '18px', margin: '0 0 10px 0' }}>CR-AI is writing your answers...</p>
+              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>Pulling from your BUCKET to create personalized responses</p>
             </div>
           )}
 
           {!generatingAnswers && questions.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
-              <button onClick={handleGenerateAllAnswers} style={{ padding: '14px 28px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Generate Answers</button>
+              <p style={{ color: colors.gray, margin: '0 0 15px 0' }}>No questions found. Go back and add questions from the RFP.</p>
+              <button onClick={() => setPhase('questions')} style={{ padding: '14px 28px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Add Questions</button>
             </div>
           )}
 
@@ -1053,8 +1629,8 @@ ${question.response}`,
             return (
               <div key={q.id} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${overLimit ? colors.red : colors.gray}30`, marginBottom: '15px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <span style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>{index + 1} of {totalQuestions}</span>
-                  <span style={{ fontSize: '10px', backgroundColor: `${colors.primary}20`, color: colors.primary, padding: '3px 8px', borderRadius: '4px' }}>BUCKET + CR-AI</span>
+                  <span style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>Question {index + 1} of {totalQuestions}</span>
+                  <span style={{ fontSize: '10px', backgroundColor: `${colors.primary}20`, color: colors.primary, padding: '3px 8px', borderRadius: '4px' }}>CR-AI</span>
                 </div>
 
                 <p style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '15px', fontWeight: '500' }}>{q.text}</p>
@@ -1075,12 +1651,12 @@ ${question.response}`,
                 ) : (
                   <>
                     <div style={{ backgroundColor: '#0a0a0a', borderRadius: '8px', padding: '15px', marginBottom: '10px' }}>
-                      <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>{q.response || 'No response yet'}</p>
+                      <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>{q.response || 'Generating answer...'}</p>
                     </div>
                     
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <span style={{ color: overLimit ? colors.red : colors.gray, fontSize: '12px' }}>
-                        {q.response?.length || 0}/{q.charLimit} characters {overLimit && '- over limit'}
+                        {q.response?.length || 0}/{q.charLimit} characters {overLimit && '⚠️ over limit'}
                       </span>
                     </div>
 
@@ -1088,13 +1664,13 @@ ${question.response}`,
                       <div style={{ backgroundColor: `${colors.red}15`, borderRadius: '8px', padding: '12px', marginBottom: '12px', border: `1px solid ${colors.red}30` }}>
                         <p style={{ color: colors.red, margin: '0 0 10px 0', fontSize: '13px' }}>This answer is {q.response.length - q.charLimit} characters over the limit.</p>
                         <button onClick={() => handleAutoShorten(index)} disabled={shorteningIndex === index} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '12px', cursor: 'pointer' }}>
-                          {shorteningIndex === index ? 'Shortening...' : 'Auto-shorten with BUCKET + CR-AI'}
+                          {shorteningIndex === index ? 'Shortening...' : 'Auto-shorten with CR-AI'}
                         </button>
                       </div>
                     )}
 
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={() => handleRegenerateAnswer(index)} style={{ padding: '8px 12px', borderRadius: '6px', border: `1px solid ${colors.primary}50`, backgroundColor: 'transparent', color: colors.primary, fontSize: '12px', cursor: 'pointer' }}>Regenerate</button>
+                      <button onClick={() => handleRegenerateAnswer(index)} style={{ padding: '8px 12px', borderRadius: '6px', border: `1px solid ${colors.primary}50`, backgroundColor: 'transparent', color: colors.primary, fontSize: '12px', cursor: 'pointer' }}>Try Again</button>
                       <button onClick={() => { setEditingIndex(index); setEditingText(q.response || '') }} style={{ padding: '8px 12px', borderRadius: '6px', border: `1px solid ${colors.gray}50`, backgroundColor: 'transparent', color: colors.white, fontSize: '12px', cursor: 'pointer' }}>Edit</button>
                     </div>
                   </>
@@ -1114,51 +1690,80 @@ ${question.response}`,
   }
 
   // ==========================================
-  // PHASE 4: REVIEW
-  // Final check before submission
+  // PHASE 5: REVIEW
+  // Final check before submission - CELEBRATE their work!
   // ==========================================
   if (phase === 'review') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button onClick={() => setPhase('answers')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back</button>
-          <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>Review and Submit</span>
+          <button onClick={() => setPhase('answers')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back to Answers</button>
+          <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>Final Review</span>
           <SaveIndicator />
         </div>
+        
+        <ProgressStepper />
 
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
-          <div style={{ backgroundColor: `${colors.primary}15`, borderRadius: '12px', padding: '20px', marginBottom: '20px', textAlign: 'center' }}>
-            <p style={{ color: colors.primary, margin: 0, fontSize: '18px', fontWeight: '600' }}>All {totalQuestions} answers complete</p>
+          
+          {/* Celebration header */}
+          <div style={{ backgroundColor: `${colors.primary}15`, borderRadius: '12px', padding: '25px', marginBottom: '25px', textAlign: 'center', border: `1px solid ${colors.primary}30` }}>
+            <p style={{ fontSize: '32px', margin: '0 0 10px 0' }}>🎉</p>
+            <p style={{ color: colors.primary, margin: 0, fontSize: '20px', fontWeight: '700' }}>All {totalQuestions} answers complete!</p>
+            <p style={{ color: colors.gray, margin: '10px 0 0 0', fontSize: '14px' }}>You're almost there. Review your work and submit.</p>
           </div>
 
-          <button onClick={handleExport} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.gold, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: 'pointer', marginBottom: '20px' }}>Copy All Responses</button>
+          {/* Quick summary */}
+          <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', marginBottom: '20px', border: `1px solid ${colors.gray}30` }}>
+            <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>{localOpportunity.title}</p>
+            <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '13px' }}>{localOpportunity.agency || 'No agency'}</p>
+            <p style={{ color: colors.gold, margin: 0, fontSize: '13px' }}>Due: {new Date(localOpportunity.due_date).toLocaleDateString()}</p>
+          </div>
 
+          {/* Copy all button */}
+          <button onClick={handleExport} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.gold, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: 'pointer', marginBottom: '20px' }}>
+            📋 Copy All Responses to Clipboard
+          </button>
+
+          {/* Disclaimer */}
           <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '20px' }}>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
               <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} style={{ marginTop: '2px', width: '18px', height: '18px', accentColor: colors.primary }} />
-              <span style={{ color: colors.white, fontSize: '13px', lineHeight: '1.5' }}>I understand BUCKET + CR-AI is an assistant tool. I am responsible for reviewing all information before submission.</span>
+              <span style={{ color: colors.white, fontSize: '13px', lineHeight: '1.5' }}>I understand CR-AI is an assistant tool. I've reviewed all answers and I'm responsible for my submission.</span>
             </label>
           </div>
 
+          {/* Submit button */}
           <button onClick={handleMarkSubmitted} disabled={!acknowledged} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: acknowledged ? 'none' : `2px solid ${colors.gray}50`, backgroundColor: acknowledged ? colors.primary : 'transparent', color: acknowledged ? colors.background : colors.gray, fontSize: '16px', fontWeight: '600', cursor: acknowledged ? 'pointer' : 'not-allowed' }}>
-            Mark as Submitted
+            ✓ Mark as Submitted
           </button>
 
           <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: `${colors.primary}08`, borderRadius: '10px' }}>
-            <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>Prepared with BUCKET + CR-AI Technology</p>
+            <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>Your BUCKET + CR-AI • Contract Ready</p>
           </div>
         </div>
 
-        {/* Add to BUCKET Modal */}
+        {/* Put into my BUCKET Modal */}
         {showAddToBucket && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.primary}`, textAlign: 'center' }}>
-              <h3 style={{ color: colors.primary, margin: '0 0 15px 0', fontSize: '20px' }}>Marked as Submitted</h3>
-              <p style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '16px' }}>Would you like to add these responses to your BUCKET for future bids?</p>
-              <p style={{ color: colors.gray, margin: '0 0 25px 0', fontSize: '14px' }}>This helps BUCKET + CR-AI give better suggestions next time.</p>
+            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '450px', width: '100%', border: `2px solid ${colors.primary}`, textAlign: 'center' }}>
+              <p style={{ fontSize: '48px', margin: '0 0 15px 0' }}>🏆</p>
+              <h3 style={{ color: colors.primary, margin: '0 0 15px 0', fontSize: '22px' }}>Another One in the Books!</h3>
+              <p style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '15px' }}>Great work completing this submission.</p>
+              
+              <div style={{ backgroundColor: colors.background, borderRadius: '10px', padding: '15px', marginBottom: '20px', textAlign: 'left' }}>
+                <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '12px', fontWeight: '600' }}>PUT THIS INTO MY BUCKET?</p>
+                <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px' }}>✓ {totalQuestions} answers saved for reuse</p>
+                <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px' }}>✓ Program title: "{programTitle}"</p>
+                <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px' }}>✓ Your approach for {localOpportunity.agency || 'this agency'}</p>
+                <p style={{ color: colors.white, margin: 0, fontSize: '13px' }}>✓ +1 submission to your experience</p>
+              </div>
+              
+              <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>Your BUCKET grows with every submission. CR-AI uses this to help you win.</p>
+              
               <div style={{ display: 'grid', gap: '10px' }}>
-                <button onClick={handleAddToBucket} style={{ padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Yes, Add to BUCKET</button>
-                <button onClick={handleSkipAddToBucket} style={{ padding: '14px', borderRadius: '10px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer' }}>No Thanks</button>
+                <button onClick={handleAddToBucket} style={{ padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Yes, Put Into My BUCKET</button>
+                <button onClick={handleSkipAddToBucket} style={{ padding: '14px', borderRadius: '10px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer' }}>Skip for Now</button>
               </div>
             </div>
           </div>
