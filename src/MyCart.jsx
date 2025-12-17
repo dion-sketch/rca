@@ -108,80 +108,116 @@ function MyCart({ session, onBack, profileData }) {
       })
     } catch (err) {
       console.error('Error adding submission:', err)
-      alert('Error adding opportunity. Please try again.')
+      alert('Error saving opportunity. Please try again.')
     }
   }
 
-  const handleEditEntry = () => {
-    setShowConfirm(false)
-  }
+  // Helper function to calculate BUCKET match
+  const calculateBucketMatch = (profile) => {
+    if (!profile) return { percentage: 0, hasItems: [], craiHelps: [] }
+    
+    const hasItems = []
+    const craiHelps = []
+    let score = 0
+    const maxScore = 10
 
-  const handleViewInCart = () => {
-    setShowAddManual(false)
-    setSaveSuccess(false)
-    setSavedOpportunity(null)
-    setActiveTab('cart')
-  }
-
-  const handleAddAnother = () => {
-    setSaveSuccess(false)
-    setSavedOpportunity(null)
-  }
-
-  const handleStartNow = () => {
-    if (savedOpportunity) {
-      setSelectedOpportunity(savedOpportunity)
-      setShowResponseBuilder(true)
-      setShowAddManual(false)
-      setSaveSuccess(false)
-      setSavedOpportunity(null)
+    // Check what they have
+    if (profile.company_name) {
+      hasItems.push(`${profile.company_name}`)
+      score += 1
     }
+    if (profile.naics_codes && profile.naics_codes.length > 0) {
+      hasItems.push(`NAICS: ${profile.naics_codes.map(n => n.code).join(', ')}`)
+      score += 1
+    }
+    if (profile.certifications && profile.certifications.length > 0) {
+      hasItems.push(`${profile.certifications.map(c => c.name || c.id).join(', ')}`)
+      score += 1
+    }
+    if (profile.year_established) {
+      const years = new Date().getFullYear() - parseInt(profile.year_established)
+      hasItems.push(`${years}+ years in business`)
+      score += 1
+    }
+    if (profile.city && profile.state) {
+      hasItems.push(`Based in ${profile.city}, ${profile.state}`)
+      score += 0.5
+    }
+    if (profile.sam_registered) {
+      hasItems.push('SAM.gov Registered')
+      score += 1
+    }
+    if (profile.past_performance && profile.past_performance.length > 0) {
+      hasItems.push(`${profile.past_performance.length} past performance record${profile.past_performance.length !== 1 ? 's' : ''}`)
+      score += 1.5
+    }
+    if (profile.team_members && profile.team_members.length > 0) {
+      hasItems.push(`${profile.team_members.length} key personnel on file`)
+      score += 1
+    }
+    if (profile.services && profile.services.length > 0) {
+      hasItems.push(`${profile.services.length} service area${profile.services.length !== 1 ? 's' : ''} defined`)
+      score += 1
+    }
+    if (profile.mission) {
+      score += 0.5
+    }
+    if (profile.elevator_pitch) {
+      score += 0.5
+    }
+
+    // What CR-AI will help with (things that might be missing or need to be written)
+    craiHelps.push('Tailored response narratives')
+    craiHelps.push('Experience descriptions')
+    
+    if (!profile.past_performance || profile.past_performance.length === 0) {
+      craiHelps.push('Past performance statements')
+    }
+    if (!profile.what_makes_you_different) {
+      craiHelps.push('Differentiator highlights')
+    }
+    craiHelps.push('Budget justification language')
+    craiHelps.push('Staffing & approach sections')
+
+    const percentage = Math.min(Math.round((score / maxScore) * 100), 100)
+
+    return { percentage, hasItems, craiHelps }
   }
 
-  const closeModal = () => {
-    setShowAddManual(false)
-    setSaveSuccess(false)
-    setShowConfirm(false)
-    setSavedOpportunity(null)
-    setManualEntry({
-      title: '',
-      rfpNumber: '',
-      agency: '',
-      dueDate: '',
-      source: '',
-      estimatedValue: '',
-      description: ''
-    })
-  }
-
-  const startResponse = (opportunity) => {
-    setSelectedOpportunity(opportunity)
+  const openResponseBuilder = (opp) => {
+    setSelectedOpportunity(opp)
     setShowResponseBuilder(true)
   }
 
-  const getDaysUntilDue = (dueDate) => {
-    const due = new Date(dueDate)
-    const now = new Date()
-    const diff = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
-    return diff
+  // ==========================================
+  // RESPONSE BUILDER COMPONENT
+  // ==========================================
+  if (showResponseBuilder && selectedOpportunity) {
+    return (
+      <ResponseBuilder
+        opportunity={selectedOpportunity}
+        profile={profileData}
+        session={session}
+        onBack={() => {
+          setShowResponseBuilder(false)
+          setSelectedOpportunity(null)
+          fetchSubmissions()
+        }}
+        calculateBucketMatch={calculateBucketMatch}
+      />
+    )
   }
 
-  const handleDeleteOpportunity = async (e, id) => {
-    e.stopPropagation() // Prevent card click
-    if (confirm('Remove this opportunity from your cart?')) {
-      try {
-        await supabase
-          .from('submissions')
-          .update({ status: 'archived' })
-          .eq('id', id)
-        
-        setAllSubmissions(allSubmissions.filter(s => s.id !== id))
-      } catch (err) {
-        console.error('Error deleting:', err)
-        alert('Error removing opportunity. Please try again.')
-      }
-    }
-  }
+  const tabStyle = (isActive) => ({
+    padding: '10px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    backgroundColor: isActive ? colors.primary : 'transparent',
+    color: isActive ? colors.background : colors.gray,
+    fontWeight: isActive ? '600' : '400',
+    cursor: 'pointer',
+    fontSize: '14px'
+  })
 
   const inputStyle = {
     width: '100%',
@@ -195,224 +231,163 @@ function MyCart({ session, onBack, profileData }) {
     boxSizing: 'border-box'
   }
 
-  // Response Builder View
-  if (showResponseBuilder && selectedOpportunity) {
-    return (
-      <ResponseBuilder 
-        opportunity={selectedOpportunity}
-        session={session}
-        profileData={profileData}
-        onBack={() => {
-          setShowResponseBuilder(false)
-          setSelectedOpportunity(null)
-          fetchSubmissions()
-        }}
-      />
-    )
-  }
-
-  // Render an opportunity card
-  const renderOpportunityCard = (sub) => {
-    const daysLeft = getDaysUntilDue(sub.due_date)
-    const isUrgent = daysLeft <= 7
-    const isPastDue = daysLeft < 0
-    const questionsCount = sub.questions?.length || 0
-    const answeredCount = sub.questions?.filter(q => q.response)?.length || 0
-
-    return (
-      <div
-        key={sub.id}
-        onClick={() => startResponse(sub)}
-        style={{
-          backgroundColor: colors.card,
-          borderRadius: '12px',
-          padding: '20px',
-          border: `1px solid ${isPastDue ? '#ff4444' : isUrgent ? colors.gold : colors.gray}30`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          cursor: 'pointer',
-          transition: 'border-color 0.2s'
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <h3 style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{sub.title}</h3>
-            {sub.rfp_number && (
-              <span style={{ color: colors.gray, fontSize: '12px' }}>#{sub.rfp_number}</span>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '20px', fontSize: '13px' }}>
-            {sub.agency && <span style={{ color: colors.gray }}>🏢 {sub.agency}</span>}
-            <span style={{ color: isPastDue ? '#ff4444' : isUrgent ? colors.gold : colors.gray }}>
-              📅 {isPastDue ? 'Past Due' : `${daysLeft} days left`}
-            </span>
-            {questionsCount > 0 && (
-              <span style={{ color: colors.gray }}>📝 {answeredCount}/{questionsCount} answered</span>
-            )}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <button
-            onClick={(e) => handleDeleteOpportunity(e, sub.id)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: colors.gray,
-              cursor: 'pointer',
-              fontSize: '18px',
-              padding: '5px',
-              borderRadius: '4px',
-              transition: 'color 0.2s'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.color = '#ff4444'}
-            onMouseLeave={(e) => e.currentTarget.style.color = colors.gray}
-            title="Remove from cart"
-          >
-            🗑️
-          </button>
-          <div style={{ color: colors.primary, fontSize: '20px' }}>→</div>
-        </div>
-      </div>
-    )
-  }
-
-  // Empty state component
-  const renderEmptyState = (emoji, title, subtitle, showAddButton = false) => (
-    <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '40px', textAlign: 'center', border: `1px solid ${colors.gray}30` }}>
-      <div style={{ fontSize: '48px', marginBottom: '15px' }}>{emoji}</div>
-      <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>{title}</h3>
-      <p style={{ color: colors.gray, margin: showAddButton ? '0 0 20px 0' : 0 }}>{subtitle}</p>
-      {showAddButton && (
-        <button onClick={() => setShowAddManual(true)} style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-          + Add Opportunity
-        </button>
-      )}
-    </div>
-  )
-
+  // ==========================================
+  // MAIN CART VIEW
+  // ==========================================
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Header */}
       <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
-            <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🛒 My Cart</h1>
-          </div>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Dashboard</button>
+          <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>🛒 My Cart</h1>
           <button
             onClick={() => setShowAddManual(true)}
-            style={{
-              padding: '10px 20px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: colors.primary,
-              color: colors.background,
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
+            style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}
           >
-            + Add Opportunity
+            + Add
           </button>
         </div>
-        <p style={{ color: colors.gray, margin: '10px 0 0 0', fontSize: '13px', paddingLeft: '85px' }}>
-          Opportunities you're pursuing — work on bids here before submitting.
-        </p>
       </div>
 
       {/* Tabs */}
-      <div style={{ backgroundColor: colors.card, padding: '0 30px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', gap: '30px' }}>
-        {[
-          { id: 'cart', label: `🛒 In Cart (${cartItems.length})`, subtitle: 'Considering' },
-          { id: 'inprogress', label: `📝 In Progress (${inProgressItems.length})`, subtitle: 'Working on' },
-          { id: 'ready', label: `✅ Ready (${readyItems.length})`, subtitle: 'To submit' },
-          { id: 'submitted', label: `📬 Submitted (${submittedItems.length})`, subtitle: 'Waiting' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: activeTab === tab.id ? colors.primary : colors.gray,
-              padding: '15px 0',
-              fontSize: '14px',
-              cursor: 'pointer',
-              borderBottom: activeTab === tab.id ? `2px solid ${colors.primary}` : '2px solid transparent',
-              marginBottom: '-1px'
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div style={{ padding: '20px 30px 0 30px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <button onClick={() => setActiveTab('cart')} style={tabStyle(activeTab === 'cart')}>
+          🛒 Considering ({cartItems.length})
+        </button>
+        <button onClick={() => setActiveTab('inprogress')} style={tabStyle(activeTab === 'inprogress')}>
+          ✏️ In Progress ({inProgressItems.length})
+        </button>
+        <button onClick={() => setActiveTab('submitted')} style={tabStyle(activeTab === 'submitted')}>
+          ✅ Submitted ({submittedItems.length})
+        </button>
       </div>
 
-      {/* Main Content */}
-      <div style={{ padding: '30px', maxWidth: '1000px', margin: '0 auto' }}>
-        
-        {/* IN CART TAB - Opportunities you're considering */}
-        {activeTab === 'cart' && (
-          <div style={{ display: 'grid', gap: '15px' }}>
-            <div style={{ marginBottom: '10px' }}>
-              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                🛒 Opportunities you've saved. Click one to start bidding.
-              </p>
-            </div>
-            {cartItems.length === 0 ? (
-              renderEmptyState('🛒', 'Your cart is empty', 'Add opportunities you find to start bidding on them.', true)
-            ) : (
-              cartItems.map(sub => renderOpportunityCard(sub))
+      {/* Content */}
+      <div style={{ padding: '20px 30px' }}>
+        {loading ? (
+          <p style={{ color: colors.gray, textAlign: 'center' }}>Loading...</p>
+        ) : (
+          <>
+            {/* Cart Tab */}
+            {activeTab === 'cart' && (
+              cartItems.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
+                  <p style={{ color: colors.gray, fontSize: '18px', margin: '0 0 10px 0' }}>No opportunities yet</p>
+                  <p style={{ color: colors.gray, fontSize: '14px', margin: '0 0 20px 0' }}>Add contracts you're considering</p>
+                  <button
+                    onClick={() => setShowAddManual(true)}
+                    style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
+                  >
+                    + Add Opportunity
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  {cartItems.map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => openResponseBuilder(item)}
+                      style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
+                          <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ color: colors.gold, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>
+                            Due: {new Date(item.due_date).toLocaleDateString()}
+                          </p>
+                          {item.estimated_value && (
+                            <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>{item.estimated_value}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
-          </div>
-        )}
 
-        {/* IN PROGRESS TAB - Actively working on */}
-        {activeTab === 'inprogress' && (
-          <div style={{ display: 'grid', gap: '15px' }}>
-            <div style={{ marginBottom: '10px' }}>
-              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                📝 Bids you're actively writing. Not submitted yet.
-              </p>
-            </div>
-            {inProgressItems.length === 0 ? (
-              renderEmptyState('📝', 'Nothing in progress', 'When you start writing a bid, it moves here.')
-            ) : (
-              inProgressItems.map(sub => renderOpportunityCard(sub))
+            {/* In Progress Tab */}
+            {activeTab === 'inprogress' && (
+              inProgressItems.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
+                  <p style={{ color: colors.gray, fontSize: '18px', margin: '0 0 10px 0' }}>Nothing in progress</p>
+                  <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>Click "Go After This" on an opportunity to start</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  {inProgressItems.map(item => {
+                    const answered = item.questions?.filter(q => q.response).length || 0
+                    const total = item.questions?.length || 0
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => openResponseBuilder(item)}
+                        style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}30`, cursor: 'pointer' }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
+                            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>
+                              {answered}/{total} Questions
+                            </p>
+                            <p style={{ color: colors.gold, margin: 0, fontSize: '12px' }}>
+                              Due: {new Date(item.due_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Progress Bar */}
+                        <div style={{ marginTop: '15px', height: '4px', backgroundColor: '#1a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${total > 0 ? (answered / total) * 100 : 0}%`, backgroundColor: colors.primary }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
             )}
-          </div>
-        )}
 
-        {/* READY TO SUBMIT TAB */}
-        {activeTab === 'ready' && (
-          <div style={{ display: 'grid', gap: '15px' }}>
-            <div style={{ marginBottom: '10px' }}>
-              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                ✅ Bids complete and ready to submit. Review and export.
-              </p>
-            </div>
-            {readyItems.length === 0 ? (
-              renderEmptyState('✅', 'Nothing ready yet', 'Complete your bids to move them here.')
-            ) : (
-              readyItems.map(sub => renderOpportunityCard(sub))
+            {/* Submitted Tab */}
+            {activeTab === 'submitted' && (
+              submittedItems.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
+                  <p style={{ color: colors.gray, fontSize: '18px', margin: '0 0 10px 0' }}>No submissions yet</p>
+                  <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>Your submitted bids will appear here</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  {submittedItems.map(item => (
+                    <div
+                      key={item.id}
+                      onClick={() => openResponseBuilder(item)}
+                      style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}50`, cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                            <span style={{ color: colors.primary, fontSize: '14px' }}>✅</span>
+                            <h3 style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{item.title}</h3>
+                          </div>
+                          <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ color: colors.gray, margin: '0', fontSize: '12px' }}>
+                            {item.questions?.length || 0} responses saved
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
-          </div>
-        )}
-
-        {/* SUBMITTED TAB */}
-        {activeTab === 'submitted' && (
-          <div style={{ display: 'grid', gap: '15px' }}>
-            <div style={{ marginBottom: '10px' }}>
-              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                📬 Bids you've submitted. Waiting to hear back.
-              </p>
-            </div>
-            {submittedItems.length === 0 ? (
-              renderEmptyState('📬', 'No submissions yet', 'Your submitted bids will appear here.')
-            ) : (
-              submittedItems.map(sub => renderOpportunityCard(sub))
-            )}
-          </div>
+          </>
         )}
       </div>
 
@@ -420,146 +395,132 @@ function MyCart({ session, onBack, profileData }) {
       {showAddManual && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '500px', width: '100%', border: `2px solid ${colors.primary}`, maxHeight: '90vh', overflowY: 'auto' }}>
-            
-            {/* SUCCESS STATE */}
-            {saveSuccess && savedOpportunity ? (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: `${colors.primary}20`, border: `3px solid ${colors.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' }}>
-                  <span style={{ fontSize: '40px' }}>✓</span>
-                </div>
-                <h3 style={{ color: colors.primary, margin: '0 0 10px 0', fontSize: '24px' }}>Added to Your Cart!</h3>
-                <p style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px', fontWeight: '600' }}>{savedOpportunity.title}</p>
-                <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '14px' }}>Due {new Date(savedOpportunity.due_date).toLocaleDateString()}</p>
-                
-                <div style={{ backgroundColor: `${colors.gold}15`, borderRadius: '8px', padding: '12px', marginBottom: '25px', border: `1px solid ${colors.gold}30` }}>
-                  <p style={{ color: colors.gold, margin: 0, fontSize: '13px' }}>
-                    🛒 Your cart holds opportunities you're working on — not submitted yet.
-                  </p>
-                </div>
-
-                <div style={{ display: 'grid', gap: '10px' }}>
-                  <button onClick={handleStartNow} style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: 'pointer' }}>
-                    🚀 Start Bidding Now
-                  </button>
-                  <button onClick={handleViewInCart} style={{ width: '100%', padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, fontSize: '14px', cursor: 'pointer' }}>
-                    View in Cart
-                  </button>
-                  <button onClick={handleAddAnother} style={{ width: '100%', padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer' }}>
-                    + Add Another Opportunity
-                  </button>
-                </div>
-              </div>
-            ) : showConfirm ? (
-              /* CONFIRMATION STATE - Is this the right one? */
+            <h2 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '22px' }}>Add Opportunity</h2>
+            <div style={{ display: 'grid', gap: '15px' }}>
               <div>
-                <h3 style={{ color: colors.white, margin: '0 0 5px 0', textAlign: 'center' }}>🔍 Is this correct?</h3>
-                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px', textAlign: 'center' }}>Review the details before adding to your cart.</p>
-                
-                <div style={{ backgroundColor: '#1a1a1a', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-                  <h4 style={{ color: colors.primary, margin: '0 0 15px 0', fontSize: '18px' }}>{manualEntry.title}</h4>
-                  
-                  <div style={{ display: 'grid', gap: '10px' }}>
-                    {manualEntry.rfpNumber && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: colors.gray, fontSize: '13px' }}>RFP/Bid #</span>
-                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.rfpNumber}</span>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: colors.gray, fontSize: '13px' }}>Due Date</span>
-                      <span style={{ color: colors.white, fontSize: '13px' }}>{new Date(manualEntry.dueDate).toLocaleDateString()}</span>
-                    </div>
-                    {manualEntry.agency && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: colors.gray, fontSize: '13px' }}>Agency</span>
-                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.agency}</span>
-                      </div>
-                    )}
-                    {manualEntry.estimatedValue && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: colors.gray, fontSize: '13px' }}>Value</span>
-                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.estimatedValue}</span>
-                      </div>
-                    )}
-                    {manualEntry.source && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: colors.gray, fontSize: '13px' }}>Source</span>
-                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.source}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {manualEntry.description && (
-                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: `1px solid ${colors.gray}30` }}>
-                      <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>NOTES</p>
-                      <p style={{ color: colors.white, margin: 0, fontSize: '13px' }}>{manualEntry.description}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={handleEditEntry} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer', fontSize: '14px' }}>
-                    ✏️ Edit
-                  </button>
-                  <button onClick={handleConfirmAdd} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>
-                    ✓ Yes, Add to Cart
-                  </button>
-                </div>
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Title / Contract Name *</label>
+                <input
+                  type="text"
+                  value={manualEntry.title}
+                  onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })}
+                  placeholder="e.g., Mental Health Services RFP"
+                  style={inputStyle}
+                />
               </div>
-            ) : (
-              /* ENTRY FORM */
-              <>
-                <h3 style={{ color: colors.white, margin: '0 0 5px 0' }}>🛒 Add to Cart</h3>
-                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>Found an opportunity? Add it here to start bidding.</p>
-                <div style={{ display: 'grid', gap: '15px' }}>
-                  <div>
-                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Opportunity Title *</label>
-                    <input type="text" value={manualEntry.title} onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })} placeholder="e.g., Mental Health Services RFP" style={inputStyle} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    <div>
-                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>RFP/Bid Number</label>
-                      <input type="text" value={manualEntry.rfpNumber} onChange={(e) => setManualEntry({ ...manualEntry, rfpNumber: e.target.value })} placeholder="e.g., RFP-2024-001" style={inputStyle} />
-                    </div>
-                    <div>
-                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Due Date *</label>
-                      <input type="date" value={manualEntry.dueDate} onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })} style={inputStyle} />
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency / Organization</label>
-                    <input type="text" value={manualEntry.agency} onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })} placeholder="e.g., LA County Department of Mental Health" style={inputStyle} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                    <div>
-                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Where'd you find it?</label>
-                      <select value={manualEntry.source} onChange={(e) => setManualEntry({ ...manualEntry, source: e.target.value })} style={{ ...inputStyle, cursor: 'pointer' }}>
-                        <option value="">Select...</option>
-                        <option value="SAM.gov">SAM.gov</option>
-                        <option value="State Website">State Website</option>
-                        <option value="County Website">County Website</option>
-                        <option value="City Website">City Website</option>
-                        <option value="Email/Newsletter">Email/Newsletter</option>
-                        <option value="Referral">Referral</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Contract Value (if known)</label>
-                      <input type="text" value={manualEntry.estimatedValue} onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })} placeholder="e.g., $500,000" style={inputStyle} />
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Notes</label>
-                    <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="Anything else you want to remember..." rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '25px' }}>
-                  <button onClick={closeModal} style={{ padding: '12px 24px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer', fontSize: '14px' }}>Cancel</button>
-                  <button onClick={handleShowConfirm} style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>Next →</button>
-                </div>
-              </>
-            )}
+              <div>
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Due Date *</label>
+                <input
+                  type="date"
+                  value={manualEntry.dueDate}
+                  onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency / Organization</label>
+                <input
+                  type="text"
+                  value={manualEntry.agency}
+                  onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })}
+                  placeholder="e.g., LA County DMH"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>RFP / Bid Number</label>
+                <input
+                  type="text"
+                  value={manualEntry.rfpNumber}
+                  onChange={(e) => setManualEntry({ ...manualEntry, rfpNumber: e.target.value })}
+                  placeholder="e.g., RFP-2024-001"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Estimated Value</label>
+                <input
+                  type="text"
+                  value={manualEntry.estimatedValue}
+                  onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })}
+                  placeholder="e.g., $50,000 - $100,000"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Notes</label>
+                <textarea
+                  value={manualEntry.description}
+                  onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })}
+                  placeholder="Any notes about this opportunity..."
+                  rows={3}
+                  style={{ ...inputStyle, resize: 'vertical' }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
+              <button
+                onClick={() => setShowAddManual(false)}
+                style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleShowConfirm}
+                style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
+              >
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Modal */}
+      {showConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '20px' }}>
+          <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.gold}`, textAlign: 'center' }}>
+            <p style={{ fontSize: '40px', margin: '0 0 15px 0' }}>🛒</p>
+            <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Add to Cart?</h3>
+            <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '16px' }}>{manualEntry.title}</p>
+            <p style={{ color: colors.gold, margin: '0 0 20px 0', fontSize: '14px' }}>Due: {new Date(manualEntry.dueDate).toLocaleDateString()}</p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setShowConfirm(false)} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleConfirmAdd} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {saveSuccess && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '20px' }}>
+          <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.primary}`, textAlign: 'center' }}>
+            <p style={{ fontSize: '50px', margin: '0 0 15px 0' }}>✅</p>
+            <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Added to Cart!</h3>
+            <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>{savedOpportunity?.title}</p>
+            <div style={{ display: 'grid', gap: '10px' }}>
+              <button
+                onClick={() => {
+                  setSaveSuccess(false)
+                  setShowAddManual(false)
+                  if (savedOpportunity) {
+                    openResponseBuilder(savedOpportunity)
+                  }
+                }}
+                style={{ padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
+              >
+                🚀 Start Working on It
+              </button>
+              <button
+                onClick={() => {
+                  setSaveSuccess(false)
+                  setShowAddManual(false)
+                }}
+                style={{ padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer' }}
+              >
+                Add Another
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -569,19 +530,17 @@ function MyCart({ session, onBack, profileData }) {
 
 
 // ==========================================
-// RESPONSE BUILDER - WIZARD STYLE
+// RESPONSE BUILDER COMPONENT (Separate component for clarity)
 // ==========================================
-function ResponseBuilder({ opportunity, session, profileData, onBack }) {
-  // Phases: 'overview' -> 'add-questions' -> 'answer' -> 'review'
-  const [phase, setPhase] = useState('overview')
+function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucketMatch }) {
+  const [phase, setPhase] = useState('overview') // overview, add-questions, answer, review
   const [questions, setQuestions] = useState(opportunity.questions || [])
+  const [newQuestion, setNewQuestion] = useState('')
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [newQuestionText, setNewQuestionText] = useState('')
-  const [bulkQuestions, setBulkQuestions] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [profile, setProfile] = useState(profileData || null)
   const [showWriteOwn, setShowWriteOwn] = useState(false)
   const [ownResponse, setOwnResponse] = useState('')
+  const [localOpportunity, setLocalOpportunity] = useState(opportunity)
   const [showEditDetails, setShowEditDetails] = useState(false)
   const [editForm, setEditForm] = useState({
     title: opportunity.title || '',
@@ -591,80 +550,34 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
     estimatedValue: opportunity.estimated_value || '',
     description: opportunity.description || ''
   })
-  const [localOpportunity, setLocalOpportunity] = useState(opportunity)
+  const [acknowledged, setAcknowledged] = useState(false)
+  const [submissionNotes, setSubmissionNotes] = useState('')
 
-  useEffect(() => {
-    if (!profile && session?.user?.id) {
-      fetchProfile()
-    }
-  }, [session])
+  // Calculate days left
+  const daysLeft = Math.ceil((new Date(localOpportunity.due_date) - new Date()) / (1000 * 60 * 60 * 24))
+  const isUrgent = daysLeft <= 7
 
-  // If there are already questions, skip to answer phase
-  useEffect(() => {
-    if (opportunity.questions?.length > 0) {
-      setQuestions(opportunity.questions)
-      // Find first unanswered question
-      const firstUnanswered = opportunity.questions.findIndex(q => !q.response)
-      if (firstUnanswered >= 0) {
-        setCurrentQuestionIndex(firstUnanswered)
-        setPhase('answer')
-      } else {
-        setPhase('review')
-      }
-    }
-  }, [opportunity])
+  // Calculate BUCKET match
+  const bucketMatch = calculateBucketMatch(profile)
 
-  const fetchProfile = async () => {
-    try {
-      const { data } = await supabase
-        .from('business_profiles')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .single()
-      if (data) setProfile(data)
-    } catch (err) {
-      console.error('Error fetching profile:', err)
-    }
-  }
-
-  const getDaysUntilDue = (dueDate) => {
-    const due = new Date(dueDate)
-    const now = new Date()
-    return Math.ceil((due - now) / (1000 * 60 * 60 * 24))
-  }
-
-  const saveQuestions = async (qs) => {
+  // Save questions to database
+  const saveQuestions = async (updatedQuestions) => {
     try {
       await supabase
         .from('submissions')
-        .update({ questions: qs })
-        .eq('id', opportunity.id)
+        .update({ questions: updatedQuestions })
+        .eq('id', localOpportunity.id)
     } catch (err) {
-      console.error('Error saving:', err)
+      console.error('Error saving questions:', err)
     }
   }
 
-  const handleAddSingleQuestion = () => {
-    if (!newQuestionText.trim()) return
-    const newQ = { id: Date.now(), text: newQuestionText.trim(), response: '' }
-    const updated = [...questions, newQ]
+  const handleAddQuestion = () => {
+    if (!newQuestion.trim()) return
+    const updated = [...questions, { id: Date.now(), text: newQuestion.trim(), response: '' }]
     setQuestions(updated)
-    setNewQuestionText('')
     saveQuestions(updated)
-  }
-
-  const handleAddBulkQuestions = () => {
-    if (!bulkQuestions.trim()) return
-    const lines = bulkQuestions.split('\n').filter(line => line.trim())
-    const newQs = lines.map((line, i) => ({
-      id: Date.now() + i,
-      text: line.trim(),
-      response: ''
-    }))
-    const updated = [...questions, ...newQs]
-    setQuestions(updated)
-    setBulkQuestions('')
-    saveQuestions(updated)
+    setNewQuestion('')
   }
 
   const handleStartAnswering = () => {
@@ -761,38 +674,50 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   }
 
   const handleArchive = async () => {
-    try {
-      await supabase
-        .from('submissions')
-        .update({ status: 'archived' })
-        .eq('id', opportunity.id)
-      onBack()
-    } catch (err) {
-      console.error('Error archiving:', err)
+    if (confirm('Archive this opportunity? You can find it later if needed.')) {
+      try {
+        await supabase
+          .from('submissions')
+          .update({ status: 'archived' })
+          .eq('id', localOpportunity.id)
+        onBack()
+      } catch (err) {
+        console.error('Error archiving:', err)
+      }
     }
+  }
+
+  const handleSaveForLater = async () => {
+    alert('Saved! You can find this in your Cart when you\'re ready.')
+    onBack()
   }
 
   const handleSaveEdit = async () => {
     try {
-      const updates = {
+      await supabase
+        .from('submissions')
+        .update({
+          title: editForm.title,
+          due_date: editForm.dueDate,
+          agency: editForm.agency,
+          rfp_number: editForm.rfpNumber,
+          estimated_value: editForm.estimatedValue,
+          description: editForm.description
+        })
+        .eq('id', localOpportunity.id)
+      
+      setLocalOpportunity({
+        ...localOpportunity,
         title: editForm.title,
         due_date: editForm.dueDate,
         agency: editForm.agency,
         rfp_number: editForm.rfpNumber,
         estimated_value: editForm.estimatedValue,
         description: editForm.description
-      }
-      
-      await supabase
-        .from('submissions')
-        .update(updates)
-        .eq('id', opportunity.id)
-      
-      // Update local state
-      setLocalOpportunity({...localOpportunity, ...updates})
+      })
       setShowEditDetails(false)
     } catch (err) {
-      console.error('Error saving edit:', err)
+      console.error('Error updating:', err)
       alert('Error saving changes. Please try again.')
     }
   }
@@ -802,8 +727,6 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
     setPhase('answer')
   }
 
-  const daysLeft = getDaysUntilDue(localOpportunity.due_date)
-  const isUrgent = daysLeft <= 7
   const answeredCount = questions.filter(q => q.response).length
 
   const inputStyle = {
@@ -819,7 +742,7 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   }
 
   // ==========================================
-  // PHASE 1: OVERVIEW
+  // PHASE 1: OVERVIEW (NEW DESIGN!)
   // ==========================================
   if (phase === 'overview') {
     return (
@@ -828,64 +751,148 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back to Cart</button>
         </div>
 
-        <div style={{ padding: '40px 30px', maxWidth: '600px', margin: '0 auto' }}>
-          {/* Opportunity Card */}
-          <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', border: `1px solid ${colors.gray}30`, marginBottom: '25px' }}>
-            <h1 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '24px', lineHeight: '1.3' }}>{localOpportunity.title}</h1>
+        <div style={{ padding: '30px', maxWidth: '650px', margin: '0 auto' }}>
+          
+          {/* Contract Title & Key Info */}
+          <div style={{ marginBottom: '25px' }}>
+            <h1 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '24px', lineHeight: '1.3' }}>
+              {localOpportunity.title}
+            </h1>
             
-            <div style={{ display: 'grid', gap: '15px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '15px' }}>
               {localOpportunity.agency && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.gray }}>Agency</span>
-                  <span style={{ color: colors.white }}>{localOpportunity.agency}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>🏛️</span>
+                  <span style={{ color: colors.white, fontSize: '14px' }}>{localOpportunity.agency}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: colors.gray }}>Due Date</span>
-                <span style={{ color: isUrgent ? colors.gold : colors.white, fontWeight: '600' }}>
-                  {new Date(localOpportunity.due_date).toLocaleDateString()} ({daysLeft} days)
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>📅</span>
+                <span style={{ color: isUrgent ? colors.gold : colors.white, fontSize: '14px', fontWeight: '600' }}>
+                  {daysLeft} days left
                 </span>
               </div>
               {localOpportunity.estimated_value && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.gray }}>Value</span>
-                  <span style={{ color: colors.white }}>{localOpportunity.estimated_value}</span>
-                </div>
-              )}
-              {localOpportunity.rfp_number && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.gray }}>RFP #</span>
-                  <span style={{ color: colors.white }}>{localOpportunity.rfp_number}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>💰</span>
+                  <span style={{ color: colors.white, fontSize: '14px' }}>{localOpportunity.estimated_value}</span>
                 </div>
               )}
             </div>
 
-            {localOpportunity.description && (
-              <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: `1px solid ${colors.gray}30` }}>
-                <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>NOTES</p>
-                <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.5' }}>{localOpportunity.description}</p>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+              {localOpportunity.rfp_number && (
+                <span style={{ color: colors.gray, fontSize: '13px' }}>RFP# {localOpportunity.rfp_number}</span>
+              )}
+              <button
+                onClick={() => setShowEditDetails(true)}
+                style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}
+              >
+                ✏️ Edit Details
+              </button>
+            </div>
+          </div>
 
-            {/* Edit Details Button */}
-            <button
-              onClick={() => setShowEditDetails(true)}
-              style={{
-                marginTop: '20px',
-                padding: '10px 16px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.gray}50`,
-                backgroundColor: 'transparent',
-                color: colors.gray,
-                fontSize: '13px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              ✏️ Edit Details
-            </button>
+          {/* Divider */}
+          <div style={{ height: '1px', backgroundColor: `${colors.gray}30`, margin: '25px 0' }} />
+
+          {/* BUCKET Match Score */}
+          <div style={{ 
+            backgroundColor: `${colors.primary}10`, 
+            borderRadius: '12px', 
+            padding: '20px',
+            border: `1px solid ${colors.primary}30`,
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>🎯</span>
+                <span style={{ color: colors.white, fontSize: '18px', fontWeight: '600' }}>BUCKET Match</span>
+              </div>
+              <div style={{ 
+                backgroundColor: colors.primary, 
+                color: colors.background,
+                padding: '8px 16px',
+                borderRadius: '20px',
+                fontWeight: '700',
+                fontSize: '18px'
+              }}>
+                {bucketMatch.percentage}%
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div style={{ height: '8px', backgroundColor: `${colors.gray}30`, borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ 
+                height: '100%', 
+                width: `${bucketMatch.percentage}%`,
+                backgroundColor: colors.primary,
+                borderRadius: '4px',
+                transition: 'width 0.5s ease'
+              }} />
+            </div>
+          </div>
+
+          {/* YOUR BUCKET HAS Section */}
+          {bucketMatch.hasItems.length > 0 && (
+            <div style={{ 
+              backgroundColor: '#0a1a0a', 
+              borderRadius: '12px', 
+              padding: '20px',
+              border: `1px solid ${colors.primary}20`,
+              marginBottom: '15px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                <span style={{ fontSize: '20px' }}>🪣</span>
+                <span style={{ color: colors.primary, fontSize: '16px', fontWeight: '600' }}>YOUR BUCKET HAS:</span>
+              </div>
+              
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {bucketMatch.hasItems.slice(0, 5).map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ color: colors.primary, fontSize: '16px' }}>✓</span>
+                    <span style={{ color: colors.white, fontSize: '14px' }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* CR-AI WILL HELP YOU WITH Section */}
+          <div style={{ 
+            backgroundColor: `${colors.gold}08`, 
+            borderRadius: '12px', 
+            padding: '20px',
+            border: `1px solid ${colors.gold}30`,
+            marginBottom: '25px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+              <span style={{ fontSize: '20px' }}>🤖</span>
+              <span style={{ color: colors.gold, fontSize: '16px', fontWeight: '600' }}>CR-AI WILL HELP YOU WITH:</span>
+            </div>
+            
+            <div style={{ display: 'grid', gap: '10px', marginBottom: '15px' }}>
+              {bucketMatch.craiHelps.slice(0, 5).map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ color: colors.gold, fontSize: '14px' }}>✨</span>
+                  <span style={{ color: colors.white, fontSize: '14px' }}>{item}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ 
+              backgroundColor: `${colors.gold}15`,
+              borderRadius: '8px',
+              padding: '12px 15px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <span style={{ fontSize: '16px' }}>💡</span>
+              <span style={{ color: colors.gold, fontSize: '13px' }}>
+                Completing these will boost your Contract Readiness score!
+              </span>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -900,27 +907,47 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
                 backgroundColor: colors.primary,
                 color: colors.background,
                 fontSize: '18px',
-                fontWeight: '600',
-                cursor: 'pointer'
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px'
               }}
             >
               🚀 Go After This
             </button>
-            <button
-              onClick={handleArchive}
-              style={{
-                width: '100%',
-                padding: '14px',
-                borderRadius: '12px',
-                border: `1px solid ${colors.gray}50`,
-                backgroundColor: 'transparent',
-                color: colors.gray,
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}
-            >
-              Not a Fit — Archive
-            </button>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <button
+                onClick={handleArchive}
+                style={{
+                  padding: '14px',
+                  borderRadius: '10px',
+                  border: `1px solid ${colors.gray}50`,
+                  backgroundColor: 'transparent',
+                  color: colors.gray,
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                ❌ Not a Fit
+              </button>
+              <button
+                onClick={handleSaveForLater}
+                style={{
+                  padding: '14px',
+                  borderRadius: '10px',
+                  border: `1px solid ${colors.gold}50`,
+                  backgroundColor: 'transparent',
+                  color: colors.gold,
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                🔖 Save for Later
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1001,75 +1028,44 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
                         setQuestions(updated)
                         saveQuestions(updated)
                       }}
-                      style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', fontSize: '12px' }}
-                    >✕</button>
+                      style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Add Single Question */}
-          <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, marginBottom: '15px' }}>
-            <p style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>Add a question</p>
-            <input
-              type="text"
-              value={newQuestionText}
-              onChange={(e) => setNewQuestionText(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddSingleQuestion()}
-              placeholder="Type or paste a question..."
-              style={inputStyle}
+          {/* Add Question Input */}
+          <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, marginBottom: '20px' }}>
+            <textarea
+              value={newQuestion}
+              onChange={(e) => setNewQuestion(e.target.value)}
+              placeholder="Paste or type an RFP question here..."
+              rows={4}
+              style={{ ...inputStyle, marginBottom: '15px', resize: 'vertical' }}
             />
             <button
-              onClick={handleAddSingleQuestion}
-              disabled={!newQuestionText.trim()}
+              onClick={handleAddQuestion}
+              disabled={!newQuestion.trim()}
               style={{
-                marginTop: '10px',
-                padding: '10px 20px',
+                width: '100%',
+                padding: '12px',
                 borderRadius: '8px',
                 border: 'none',
-                backgroundColor: newQuestionText.trim() ? colors.primary : colors.gray,
-                color: colors.background,
-                fontSize: '14px',
+                backgroundColor: newQuestion.trim() ? colors.primary : '#333',
+                color: newQuestion.trim() ? colors.background : colors.gray,
                 fontWeight: '600',
-                cursor: newQuestionText.trim() ? 'pointer' : 'not-allowed'
+                cursor: newQuestion.trim() ? 'pointer' : 'not-allowed'
               }}
             >
               + Add Question
             </button>
           </div>
 
-          {/* Bulk Add */}
-          <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, marginBottom: '25px' }}>
-            <p style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>Or paste multiple questions</p>
-            <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '12px' }}>One question per line</p>
-            <textarea
-              value={bulkQuestions}
-              onChange={(e) => setBulkQuestions(e.target.value)}
-              placeholder="Question 1&#10;Question 2&#10;Question 3"
-              rows={4}
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-            <button
-              onClick={handleAddBulkQuestions}
-              disabled={!bulkQuestions.trim()}
-              style={{
-                marginTop: '10px',
-                padding: '10px 20px',
-                borderRadius: '8px',
-                border: 'none',
-                backgroundColor: bulkQuestions.trim() ? colors.primary : colors.gray,
-                color: colors.background,
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: bulkQuestions.trim() ? 'pointer' : 'not-allowed'
-              }}
-            >
-              + Add All Questions
-            </button>
-          </div>
-
-          {/* Start Answering Button */}
+          {/* Continue Button */}
           {questions.length > 0 && (
             <button
               onClick={handleStartAnswering}
@@ -1085,7 +1081,7 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
                 cursor: 'pointer'
               }}
             >
-              ✨ Start Answering with CR-AI
+              Continue to Answers →
             </button>
           )}
         </div>
@@ -1094,7 +1090,7 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   }
 
   // ==========================================
-  // PHASE 3: ANSWER (ONE AT A TIME)
+  // PHASE 3: ANSWER QUESTIONS
   // ==========================================
   if (phase === 'answer') {
     const currentQuestion = questions[currentQuestionIndex]
@@ -1190,10 +1186,10 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
                   opacity: generating ? 0.7 : 1
                 }}
               >
-                {generating ? '⏳ Pulling from your BUCKET...' : '✨ Generate with CR-AI'}
+                {generating ? '⏳ Pulling from your BUCKET...' : '✨ Get CR-AI Suggestion'}
               </button>
               <p style={{ color: colors.gray, margin: '0', fontSize: '12px', textAlign: 'center' }}>
-                🪣 CR-AI uses your BUCKET + online data to write responses
+                🪣 CR-AI uses your BUCKET to write tailored responses
               </p>
               <button
                 onClick={handleWriteOwn}
@@ -1201,10 +1197,10 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
                   width: '100%',
                   padding: '14px',
                   borderRadius: '12px',
-                  border: `1px solid ${colors.gray}`,
+                  border: `1px solid ${colors.gray}50`,
                   backgroundColor: 'transparent',
                   color: colors.white,
-                  fontSize: '14px',
+                  fontSize: '16px',
                   cursor: 'pointer'
                 }}
               >
@@ -1213,37 +1209,52 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
               <button
                 onClick={handleSkip}
                 style={{
-                  width: '100%',
-                  padding: '14px',
-                  borderRadius: '12px',
+                  background: 'none',
                   border: 'none',
-                  backgroundColor: 'transparent',
                   color: colors.gray,
+                  cursor: 'pointer',
                   fontSize: '14px',
-                  cursor: 'pointer'
+                  padding: '10px'
                 }}
               >
-                ⏭️ Skip for Now
+                Skip for now →
               </button>
             </div>
           )}
 
-          {/* Navigation for answered questions */}
+          {/* Navigation (when has answer) */}
           {hasAnswer && (
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               {currentQuestionIndex > 0 && (
                 <button
                   onClick={goToPrevQuestion}
-                  style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    borderRadius: '12px',
+                    border: `1px solid ${colors.gray}50`,
+                    backgroundColor: 'transparent',
+                    color: colors.white,
+                    cursor: 'pointer'
+                  }}
                 >
                   ← Previous
                 </button>
               )}
               <button
                 onClick={goToNextQuestion}
-                style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: colors.primary,
+                  color: colors.background,
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
               >
-                {currentQuestionIndex < questions.length - 1 ? 'Next →' : 'Review All →'}
+                {currentQuestionIndex < questions.length - 1 ? 'Next Question →' : 'Review All →'}
               </button>
             </div>
           )}
@@ -1253,7 +1264,7 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   }
 
   // ==========================================
-  // PHASE 4: REVIEW
+  // PHASE 4: REVIEW (WITH ACKNOWLEDGMENT)
   // ==========================================
   if (phase === 'review') {
     const handleExport = () => {
@@ -1287,19 +1298,25 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
     }
 
     const handleMarkSubmitted = async () => {
-      if (confirm('Mark this as submitted? It will move to your Submitted tab.')) {
-        try {
-          await supabase
-            .from('submissions')
-            .update({ status: 'submitted' })
-            .eq('id', localOpportunity.id)
-          
-          alert('🎉 Marked as submitted!\n\nYour responses have been saved to your BUCKET for future bids.')
-          onBack()
-        } catch (err) {
-          console.error('Error updating status:', err)
-          alert('Error updating status. Please try again.')
-        }
+      if (!acknowledged) {
+        alert('Please check the acknowledgment box before submitting.')
+        return
+      }
+      
+      try {
+        await supabase
+          .from('submissions')
+          .update({ 
+            status: 'submitted',
+            submission_notes: submissionNotes
+          })
+          .eq('id', localOpportunity.id)
+        
+        alert('🎉 Marked as submitted!\n\nYour responses have been saved to your BUCKET for future bids.')
+        onBack()
+      } catch (err) {
+        console.error('Error updating status:', err)
+        alert('Error updating status. Please try again.')
       }
     }
 
@@ -1368,9 +1385,9 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
             ))}
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons & Acknowledgment */}
           {answeredCount > 0 && (
-            <div style={{ display: 'grid', gap: '12px' }}>
+            <div style={{ display: 'grid', gap: '15px' }}>
               <button
                 onClick={handleExport}
                 style={{
@@ -1389,22 +1406,59 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
               </button>
               
               {answeredCount === questions.length && (
-                <button
-                  onClick={handleMarkSubmitted}
-                  style={{
-                    width: '100%',
-                    padding: '18px',
+                <>
+                  {/* Acknowledgment Box */}
+                  <div style={{
+                    backgroundColor: `${colors.primary}10`,
                     borderRadius: '12px',
-                    border: `2px solid ${colors.primary}`,
-                    backgroundColor: 'transparent',
-                    color: colors.primary,
-                    fontSize: '18px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ✅ Mark as Submitted
-                </button>
+                    padding: '20px',
+                    border: `1px solid ${colors.primary}30`
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={acknowledged}
+                        onChange={(e) => setAcknowledged(e.target.checked)}
+                        style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: colors.primary }}
+                      />
+                      <span style={{ color: colors.white, fontSize: '14px', lineHeight: '1.5' }}>
+                        I understand CR-AI is an assistant tool. I am responsible for reviewing and verifying all information before submission.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Optional Notes */}
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '8px' }}>
+                      📝 Notes (optional) — Anything to remember for this bid?
+                    </label>
+                    <textarea
+                      value={submissionNotes}
+                      onChange={(e) => setSubmissionNotes(e.target.value)}
+                      placeholder="e.g., Need to follow up on references, submitted via email..."
+                      rows={3}
+                      style={{ ...inputStyle, resize: 'vertical' }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleMarkSubmitted}
+                    disabled={!acknowledged}
+                    style={{
+                      width: '100%',
+                      padding: '18px',
+                      borderRadius: '12px',
+                      border: acknowledged ? 'none' : `2px solid ${colors.gray}50`,
+                      backgroundColor: acknowledged ? colors.primary : 'transparent',
+                      color: acknowledged ? colors.background : colors.gray,
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      cursor: acknowledged ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    ✅ Mark as Submitted
+                  </button>
+                </>
               )}
             </div>
           )}
