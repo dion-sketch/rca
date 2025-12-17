@@ -1564,7 +1564,7 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>Add your typical hourly rates by role.</strong> CR-AI uses this to help build budgets in proposals. These are just estimates — you can adjust for each contract.
+                💡 <strong style={{ color: colors.white }}>Add your typical hourly rates by role.</strong> These are just starting estimates — you'll adjust them for each contract or grant you submit.
               </p>
             </div>
 
@@ -1648,13 +1648,13 @@ Return ONLY the service description, no explanations.`
                   </div>
                   <div>
                     <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                      Hourly Rate ($)
+                      Hourly Estimate ($)
                     </label>
                     <input
                       type="text"
                       value={item.hourlyRate}
                       onChange={(e) => updatePricingRole(index, 'hourlyRate', e.target.value)}
-                      placeholder="e.g., 85"
+                      placeholder="e.g., 85 (adjust per job)"
                       style={inputStyle}
                     />
                   </div>
@@ -1939,7 +1939,7 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>Build your team over time.</strong> Add anyone you work with — employees, contractors, vendors, partners. When you respond to contracts and grants, you'll select from this list. New people you add during submissions automatically save here for future use.
+                💡 <strong style={{ color: colors.white }}>This is your team POOL — not everyone goes on every job.</strong> Add anyone you might work with. When you respond to a contract or grant, you'll SELECT who to include from this list.
               </p>
             </div>
 
@@ -1951,7 +1951,7 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.gold}30`
             }}>
               <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
-                🪣 <strong>This is part of your BUCKET.</strong> Start with 1-2 people now. As you go after more contracts and grants, you'll add plumbers, consultants, specialists — whoever you need. Your Team Builder will grow and you can select from it for future proposals.
+                🪣 <strong>Part of your BUCKET.</strong> Add employees, contractors, vendors, partners — whoever you work with. This list grows over time. For each submission, you choose who fits that specific job.
               </p>
             </div>
 
@@ -2046,13 +2046,13 @@ Return ONLY the service description, no explanations.`
                     </div>
                     <div>
                       <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                        Hourly Rate ($)
+                        Hourly Estimate ($)
                       </label>
                       <input
                         type="text"
                         value={member.hourlyRate || ''}
                         onChange={(e) => updateTeamMember(index, 'hourlyRate', e.target.value)}
-                        placeholder="e.g., 85"
+                        placeholder="e.g., 85 (adjust per job)"
                         style={inputStyle}
                       />
                     </div>
@@ -2114,7 +2114,7 @@ Return ONLY the service description, no explanations.`
             {teamMembers.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
                 <p style={{ fontSize: '16px', margin: 0 }}>No team members added yet.</p>
-                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Start with yourself! Add contractors and vendors as you need them for contracts.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Build your pool — you'll pick from this list for each contract you go after.</p>
               </div>
             )}
           </div>
