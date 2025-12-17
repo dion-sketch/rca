@@ -43,7 +43,7 @@ const sections = [
   { id: 4, title: 'NAICS Codes', icon: '🔢', description: 'Industry classification codes (up to 10)' },
   { id: 5, title: 'Certifications', icon: '📜', description: 'MBE, WBE, DVBE, SBE, 8(a), HUBZone, etc.' },
   { id: 6, title: 'SAM.gov Registration', icon: '✅', description: 'Federal registration status, UEI, CAGE code' },
-  { id: 7, title: 'Pricing Snapshot', icon: '💰', description: 'Hourly rates by role' },
+  { id: 7, title: 'Rates', icon: '💰', description: 'Hourly rates by role' },
   { id: 8, title: 'Past Work', icon: '📊', description: 'Jobs, projects & contracts you\'ve completed' },
   { id: 9, title: 'Team Builder', icon: '👥', description: 'Employees, contractors, vendors — grows as you submit' },
   { id: 10, title: 'Generate Capability Statement', icon: '🔒', description: 'Coming Soon', locked: true },
@@ -210,7 +210,7 @@ function BusinessBuilder({ session, onBack }) {
       { label: 'NAICS Codes', has: naicsCodes.length > 0, pts: 2 },
       { label: 'Past Work', has: pastPerformance.length > 0, pts: 2 },
       { label: 'Team Members', has: teamMembers.length > 0, pts: 1 },
-      { label: 'Pricing', has: pricing.length > 0, pts: 1 },
+      { label: 'Rates', has: pricing.length > 0, pts: 1 },
       { label: 'Certifications', has: certifications.length > 0, pts: 3 },
     ]
   }
@@ -235,7 +235,7 @@ function BusinessBuilder({ session, onBack }) {
     const optional = [
       { label: 'Certifications', has: certifications.length > 0, section: 5 },
       { label: 'Team Members', has: teamMembers.length > 0, section: 9 },
-      { label: 'Pricing', has: pricing.length > 0, section: 7 },
+      { label: 'Rates', has: pricing.length > 0, section: 7 },
     ]
     
     const requiredComplete = required.filter(r => r.has).length
@@ -1673,7 +1673,7 @@ Return ONLY the service description, no explanations.`
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ color: colors.white, margin: 0 }}>Pricing Snapshot</h3>
+              <h3 style={{ color: colors.white, margin: 0 }}>Rates</h3>
               <span style={{ color: colors.gray, fontSize: '14px' }}>{pricing.length}/15 roles</span>
             </div>
 
