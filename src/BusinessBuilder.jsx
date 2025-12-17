@@ -1190,7 +1190,7 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.gold}30`
             }}>
               <p style={{ color: colors.gold, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>
-                Common NAICS Codes:
+                Common NAICS codes based on your previously inputted information. You can change anytime.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 {[
