@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import BusinessBuilder from './BusinessBuilder'
-import FindContracts from './FindContracts'
 
 // Contract Ready Brand Colors
 const colors = {
@@ -24,6 +22,8 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [profileCompletion, setProfileCompletion] = useState(0)
+  const [opportunities, setOpportunities] = useState(5)
+  const [submissions, setSubmissions] = useState(0)
 
   useEffect(() => {
     // Check for existing session
@@ -53,8 +53,8 @@ function App() {
       .eq('user_id', userId)
       .single()
     
-    if (data) {
-      setProfileCompletion(data.completion_percentage || 0)
+    if (data?.completion_percentage) {
+      setProfileCompletion(data.completion_percentage)
     }
   }
 
@@ -102,7 +102,6 @@ function App() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    setCurrentPage('dashboard')
   }
 
   // Loading state
@@ -285,29 +284,6 @@ function App() {
     )
   }
 
-  // Business Builder Page
-  if (currentPage === 'business-builder') {
-    return (
-      <BusinessBuilder 
-        session={session} 
-        onBack={() => {
-          setCurrentPage('dashboard')
-          fetchProfileCompletion(session.user.id)
-        }} 
-      />
-    )
-  }
-
-  // Find Contracts Page
-  if (currentPage === 'find-contracts') {
-    return (
-      <FindContracts 
-        session={session} 
-        onBack={() => setCurrentPage('dashboard')} 
-      />
-    )
-  }
-
   // Main Dashboard
   return (
     <div style={{
@@ -324,9 +300,14 @@ function App() {
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <h1 style={{ color: colors.primary, margin: 0, fontSize: '24px' }}>
-          RCA
-        </h1>
+        <div>
+          <h1 style={{ color: colors.primary, margin: 0, fontSize: '24px', letterSpacing: '1px' }}>
+            RCA
+          </h1>
+          <p style={{ color: colors.gray, margin: '2px 0 0 0', fontSize: '10px', letterSpacing: '0.5px' }}>
+            Rambo Contract Assistant
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
           {['Dashboard', 'Find Contracts', 'Business Builder', 'Submissions'].map((item) => (
             <button
@@ -366,21 +347,27 @@ function App() {
       {/* Stats Bar */}
       <div style={{
         backgroundColor: colors.card,
-        padding: '15px 30px',
+        padding: '20px 30px',
         display: 'flex',
         justifyContent: 'space-around',
         borderBottom: `1px solid ${colors.primary}30`
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.primary, fontSize: '28px', fontWeight: '700' }}>{profileCompletion}%</div>
-          <div style={{ color: colors.gray, fontSize: '12px' }}>Readiness</div>
+          <div style={{ color: colors.primary, fontSize: '32px', fontWeight: '700' }}>
+            📊 {profileCompletion}%
+          </div>
+          <div style={{ color: colors.gray, fontSize: '12px' }}>Contract Readiness</div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.gold, fontSize: '28px', fontWeight: '700' }}>5</div>
+          <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
+            🔍 {opportunities}
+          </div>
           <div style={{ color: colors.gray, fontSize: '12px' }}>Opportunities</div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.white, fontSize: '28px', fontWeight: '700' }}>0/2</div>
+          <div style={{ color: colors.white, fontSize: '32px', fontWeight: '700' }}>
+            🎯 {submissions}/2
+          </div>
           <div style={{ color: colors.gray, fontSize: '12px' }}>Monthly Goal</div>
         </div>
       </div>
@@ -393,7 +380,7 @@ function App() {
             Welcome to RCA! 👋
           </h2>
           <p style={{ color: colors.gray, margin: 0 }}>
-            Your contract and grant assistant. Let's get you contract ready.
+            Your <strong style={{ color: colors.primary }}>Rambo Contract Assistant</strong>. Let's get you contract ready.
           </p>
         </div>
 
@@ -485,7 +472,7 @@ function App() {
           border: `1px solid ${colors.primary}30`
         }}>
           <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
-            💡 <strong>Tip:</strong> Start by completing your Business Builder profile. The more complete your profile, the better CR-AI can match you with contracts and grants!
+            💡 <strong>Tip:</strong> Start by completing your Business Builder profile. The more complete your profile, the better RCA can match you with contracts and grants!
           </p>
         </div>
       </div>
