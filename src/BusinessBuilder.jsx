@@ -2123,6 +2123,41 @@ Return ONLY the service description, no explanations.`
       default:
         // Case 10: Generate Capability Statement
         if (activeSection === 10) {
+          
+          // Smart Logic: Determine what to show
+          const hasEmployees = teamSize && parseInt(teamSize) > 1
+          const hasRevenue = revenueRange && revenueRange !== '' && revenueRange !== 'Prefer not to say'
+          const hasPastPerf = pastPerformance.length > 0
+          const hasCerts = certifications.length > 0
+          const hasNaics = naicsCodes.length > 0
+          const hasUei = ueiNumber && ueiNumber.trim() !== ''
+          const hasCage = cageCode && cageCode.trim() !== ''
+          const hasTeam = teamMembers.length > 0
+          const hasResults = resultsAchieved && resultsAchieved.trim() !== ''
+          const hasDifferentiator = whatMakesYouDifferent && whatMakesYouDifferent.trim() !== ''
+          const hasYearEstablished = yearEstablished && yearEstablished.trim() !== ''
+          
+          // Get primary service from first service entry
+          const primaryService = services.length > 0 ? services[0].category : 'professional services'
+          
+          // Get owner/founder from team (first person or fallback)
+          const owner = teamMembers.length > 0 ? teamMembers[0] : null
+          
+          // Format revenue display
+          const formatRevenue = (range) => {
+            if (!range || range === 'Prefer not to say') return null
+            return range
+          }
+          
+          // Format team size display
+          const formatTeamSize = (size) => {
+            if (!size) return null
+            const num = parseInt(size)
+            if (num === 1) return null // Don't show "1 Employee"
+            if (size.includes('+')) return size
+            return `${size} Team Members`
+          }
+
           return (
             <div style={{ display: 'grid', gap: '25px' }}>
               <h3 style={{ color: colors.white, margin: 0 }}>Generate Capability Statement</h3>
@@ -2135,11 +2170,11 @@ Return ONLY the service description, no explanations.`
                 border: `1px solid ${colors.primary}30`
               }}>
                 <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                  💡 <strong style={{ color: colors.white }}>CR-AI will create a professional capability statement from your BUCKET.</strong> The more you've filled out, the better it will be. You can download and customize it with your logo.
+                  💡 <strong style={{ color: colors.white }}>Professional template with YOUR data.</strong> Same clean layout for everyone. Smart logic shows your strengths and hides what you don't have.
                 </p>
               </div>
 
-              {/* What will be included */}
+              {/* Preview what will be included */}
               <div style={{
                 backgroundColor: '#1a1a1a',
                 borderRadius: '12px',
@@ -2147,285 +2182,247 @@ Return ONLY the service description, no explanations.`
                 border: `1px solid ${colors.gray}30`
               }}>
                 <p style={{ color: colors.white, fontWeight: '600', marginBottom: '15px', fontSize: '16px' }}>
-                  What will be included:
+                  Smart Logic Preview:
                 </p>
-                <div style={{ display: 'grid', gap: '10px' }}>
-                  {[
-                    { label: 'Company Info & Contact', filled: companyName && phone },
-                    { label: 'Mission & Vision', filled: mission && vision },
-                    { label: 'Core Services', filled: services.length > 0 },
-                    { label: 'NAICS Codes', filled: naicsCodes.length > 0 },
-                    { label: 'Certifications', filled: certifications.length > 0 },
-                    { label: 'Past Performance', filled: pastPerformance.length > 0 },
-                    { label: 'Key Personnel', filled: teamMembers.length > 0 },
-                    { label: 'Federal IDs (UEI/CAGE)', filled: ueiNumber || cageCode },
-                  ].map((item, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ color: item.filled ? colors.primary : colors.gray }}>
-                        {item.filled ? '✅' : '⬜'}
-                      </span>
-                      <span style={{ color: item.filled ? colors.white : colors.gray }}>
-                        {item.label}
-                      </span>
-                    </div>
-                  ))}
+                <div style={{ display: 'grid', gap: '8px', fontSize: '14px' }}>
+                  <div style={{ color: companyName ? colors.primary : colors.gray }}>
+                    {companyName ? '✅' : '⬜'} Company Header & Contact
+                  </div>
+                  <div style={{ color: hasYearEstablished || formatTeamSize(teamSize) || formatRevenue(revenueRange) ? colors.primary : colors.gray }}>
+                    {hasYearEstablished || formatTeamSize(teamSize) || formatRevenue(revenueRange) ? '✅' : '➖'} Quick Facts Sidebar {!hasYearEstablished && !formatTeamSize(teamSize) && !formatRevenue(revenueRange) ? '(will skip - no data)' : ''}
+                  </div>
+                  <div style={{ color: services.length > 0 ? colors.primary : colors.gray }}>
+                    {services.length > 0 ? '✅' : '⬜'} Core Capabilities ({services.length} services)
+                  </div>
+                  <div style={{ color: hasPastPerf ? colors.primary : colors.gold }}>
+                    {hasPastPerf ? '✅ Past Performance' : '🔄 "Why Contract Ready" (no past performance)'} 
+                  </div>
+                  <div style={{ color: hasDifferentiator ? colors.primary : colors.gray }}>
+                    {hasDifferentiator ? '✅' : '➖'} Differentiators {!hasDifferentiator ? '(will skip)' : ''}
+                  </div>
+                  <div style={{ color: hasCerts || hasNaics || hasUei ? colors.primary : colors.gray }}>
+                    {hasCerts || hasNaics || hasUei ? '✅' : '⬜'} Certifications & Codes
+                  </div>
+                  <div style={{ color: hasTeam ? colors.primary : colors.gray }}>
+                    {hasTeam ? '✅' : '➖'} Key Personnel {!hasTeam ? '(will skip)' : `(${teamMembers.length} people)`}
+                  </div>
                 </div>
-              </div>
-
-              {/* Smart logic explanation */}
-              <div style={{
-                backgroundColor: `${colors.gold}10`,
-                borderRadius: '12px',
-                padding: '15px',
-                border: `1px solid ${colors.gold}30`
-              }}>
-                <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
-                  🧠 <strong>Smart Logic:</strong> {pastPerformance.length > 0 
-                    ? "CR-AI will highlight your past contracts and proven results." 
-                    : "Since you don't have past performance yet, CR-AI will spotlight your team's experience, industry expertise, and why you're ready for contracts."}
-                </p>
               </div>
 
               {/* Generate Button */}
               <button
-                onClick={async () => {
-                  const apiKey = getApiKey()
-                  if (!apiKey) {
-                    setShowApiKeyModal(true)
-                    return
-                  }
-                  
+                onClick={() => {
                   if (!companyName) {
                     alert('Please fill out Company Basics first.')
                     return
                   }
 
-                  setAiLoading({ ...aiLoading, capStatement: true })
-
-                  try {
-                    // Build the full context
-                    const bucketData = {
-                      company: {
-                        name: companyName,
-                        dba: dba,
-                        address: `${address}, ${city}, ${state} ${zip}`,
-                        phone: phone,
-                        email: email,
-                        website: website,
-                        entityType: entityType,
-                        isNonprofit: isNonprofit,
-                        teamSize: teamSize,
-                        yearEstablished: yearEstablished,
-                        revenueRange: revenueRange
-                      },
-                      mission: mission,
-                      vision: vision,
-                      elevatorPitch: elevatorPitch,
-                      whatMakesYouDifferent: whatMakesYouDifferent,
-                      resultsAchieved: resultsAchieved,
-                      anythingElse: anythingElse,
-                      services: services,
-                      naicsCodes: naicsCodes,
-                      certifications: certifications,
-                      samRegistered: samRegistered,
-                      ueiNumber: ueiNumber,
-                      cageCode: cageCode,
-                      pastPerformance: pastPerformance,
-                      teamMembers: teamMembers
+                  // BUILD THE TEMPLATE - No AI needed for most parts
+                  
+                  // Quick Facts (only show what exists)
+                  let quickFacts = []
+                  if (hasYearEstablished) quickFacts.push(`Est. ${yearEstablished}`)
+                  if (formatTeamSize(teamSize)) quickFacts.push(formatTeamSize(teamSize))
+                  if (formatRevenue(revenueRange)) quickFacts.push(formatRevenue(revenueRange))
+                  if (city && state) quickFacts.push(`${city}, ${state}`)
+                  
+                  // Core Capabilities (from services)
+                  const capabilities = services.map(s => s.category).filter(Boolean)
+                  
+                  // Past Performance OR Why Contract Ready
+                  let performanceSection = ''
+                  if (hasPastPerf) {
+                    performanceSection = `
+                      <h2>PAST PERFORMANCE</h2>
+                      <ul>
+                        ${pastPerformance.slice(0, 4).map(p => `<li><strong>${p.clientName || 'Client'}</strong>${p.projectName ? ` - ${p.projectName}` : ''}${p.contractValue ? ` ($${p.contractValue})` : ''}${p.description ? `<br><span style="color:#666;font-size:10pt">${p.description.substring(0, 100)}${p.description.length > 100 ? '...' : ''}</span>` : ''}</li>`).join('')}
+                      </ul>
+                    `
+                  } else {
+                    // Why Contract Ready - templated sentences
+                    let readyPoints = []
+                    if (owner && owner.yearsExperience) {
+                      readyPoints.push(`${owner.yearsExperience}+ years of industry experience`)
+                    } else if (hasYearEstablished) {
+                      const years = new Date().getFullYear() - parseInt(yearEstablished)
+                      if (years > 0) readyPoints.push(`${years}+ years in business`)
                     }
-
-                    const hasPastPerformance = pastPerformance.length > 0
-
-                    const prompt = `You are creating a ONE-PAGE CAPABILITY STATEMENT for a government contractor. It must be CONCISE and SCANNABLE — no long paragraphs.
-
-COMPANY DATA:
-${JSON.stringify(bucketData, null, 2)}
-
-CRITICAL FORMATTING RULES:
-- This is a ONE-PAGE document. Be BRIEF.
-- Use short bullet points, not paragraphs
-- NAICS codes: Just list the numbers, no descriptions (e.g., "541820 | 561920 | 541613")
-- No fluff, no filler words
-- Every line should deliver value
-- Certifications: Just list them (e.g., "MBE | SBE | DVBE")
-
-${hasPastPerformance ? `
-INSTRUCTION: Highlight their proven contracts and results in 2-3 bullet points max.
-` : `
-INSTRUCTION: Create a brief "CONTRACT READY" section with 3-4 bullet points showing why they're ready (experience, team strength, relevant expertise). No long paragraphs.
-`}
-
-Generate these sections. Be BRIEF and PUNCHY:
-
-1. COMPANY OVERVIEW (2 sentences MAX)
-
-2. CORE CAPABILITIES (4-6 bullet points, 5-10 words each)
-
-3. ${hasPastPerformance ? 'PAST PERFORMANCE (2-3 bullet points with results)' : 'WHY CONTRACT READY (3-4 bullet points)'}
-
-4. DIFFERENTIATORS (3-4 bullet points, 5-10 words each)
-
-5. CERTIFICATIONS & CODES (One line each, no explanations)
-
-6. KEY PERSONNEL (Name, Title, Years Experience — that's it)
-
-Format as JSON:
-{
-  "companyOverview": "Brief 2 sentences",
-  "coreCapabilities": ["short bullet", "short bullet"],
-  "pastPerformanceOrWhyReady": ["bullet 1", "bullet 2"],
-  "differentiators": ["short bullet", "short bullet"],
-  "certifications": "MBE | SBE | DVBE (or N/A)",
-  "naicsCodes": "541820 | 561920 | 541613",
-  "keyPersonnel": ["Name - Title - X years", "Name - Title - X years"],
-  "contact": {
-    "address": "full address",
-    "phone": "phone",
-    "email": "email",
-    "website": "website"
-  }
-}
-
-Return ONLY the JSON.`
-
-                    const response = await fetch('https://api.anthropic.com/v1/messages', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01',
-                        'anthropic-dangerous-direct-browser-access': 'true'
-                      },
-                      body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
-                        max_tokens: 4000,
-                        messages: [{ role: 'user', content: prompt }]
-                      })
-                    })
-
-                    if (!response.ok) throw new Error(`API error: ${response.status}`)
+                    if (formatTeamSize(teamSize)) {
+                      readyPoints.push(`${formatTeamSize(teamSize)} ready to deliver`)
+                    }
+                    if (hasCerts) {
+                      readyPoints.push(`Certified: ${certifications.map(c => c.name).join(', ')}`)
+                    }
+                    if (hasResults) {
+                      readyPoints.push(resultsAchieved.substring(0, 80) + (resultsAchieved.length > 80 ? '...' : ''))
+                    }
+                    if (readyPoints.length === 0) {
+                      readyPoints.push('Fully operational and ready to perform')
+                      readyPoints.push('Committed to quality and compliance')
+                    }
                     
-                    const data = await response.json()
-                    let content
-                    try {
-                      content = JSON.parse(data.content[0].text)
-                    } catch {
-                      // If JSON parse fails, try to extract JSON from the response
-                      const jsonMatch = data.content[0].text.match(/\{[\s\S]*\}/)
-                      if (jsonMatch) {
-                        content = JSON.parse(jsonMatch[0])
-                      } else {
-                        throw new Error('Could not parse response')
-                      }
-                    }
-
-                    // Create clean HTML that Word can open
-                    const capStatement = `<!DOCTYPE html>
+                    performanceSection = `
+                      <h2>WHY CONTRACT READY</h2>
+                      <ul>
+                        ${readyPoints.map(p => `<li>${p}</li>`).join('')}
+                      </ul>
+                    `
+                  }
+                  
+                  // Differentiators (only if they have it)
+                  let diffSection = ''
+                  if (hasDifferentiator) {
+                    // Split by common delimiters or just show as-is
+                    const diffs = whatMakesYouDifferent.includes('\n') 
+                      ? whatMakesYouDifferent.split('\n').filter(d => d.trim())
+                      : whatMakesYouDifferent.includes(',')
+                        ? whatMakesYouDifferent.split(',').filter(d => d.trim())
+                        : [whatMakesYouDifferent]
+                    
+                    diffSection = `
+                      <h2>DIFFERENTIATORS</h2>
+                      <ul>
+                        ${diffs.slice(0, 4).map(d => `<li>${d.trim()}</li>`).join('')}
+                      </ul>
+                    `
+                  }
+                  
+                  // Key Personnel (only if they have team)
+                  let personnelSection = ''
+                  if (hasTeam) {
+                    personnelSection = `
+                      <h2>KEY PERSONNEL</h2>
+                      <ul>
+                        ${teamMembers.slice(0, 4).map(t => `<li><strong>${t.name || 'Team Member'}</strong> - ${t.role || 'Staff'}${t.yearsExperience ? ` - ${t.yearsExperience} yrs` : ''}${t.qualifications ? ` - ${t.qualifications}` : ''}</li>`).join('')}
+                      </ul>
+                    `
+                  }
+                  
+                  // Certifications & Codes
+                  const certList = hasCerts ? certifications.map(c => c.name).join(' | ') : 'N/A'
+                  const naicsList = hasNaics ? naicsCodes.map(n => n.code).join(' | ') : 'N/A'
+                  
+                  // BUILD FINAL HTML
+                  const capStatement = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <title>${companyName} - Capability Statement</title>
 <style>
-body { font-family: Arial, sans-serif; max-width: 8.5in; margin: 0 auto; padding: 0.5in; font-size: 11pt; }
-h1 { text-align: center; font-size: 18pt; margin-bottom: 5px; border-bottom: 3px solid #00A86B; padding-bottom: 10px; }
-h2 { font-size: 12pt; background: #00A86B; color: white; padding: 5px 10px; margin: 15px 0 10px 0; }
-.contact-header { text-align: center; font-size: 10pt; color: #666; margin-bottom: 20px; }
-ul { margin: 5px 0; padding-left: 20px; }
-li { margin: 3px 0; }
-.two-col { display: flex; gap: 20px; }
-.col { flex: 1; }
-.codes { font-family: monospace; background: #f5f5f5; padding: 8px; margin: 5px 0; }
-.footer { text-align: center; font-size: 9pt; color: #999; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
+@page { size: letter; margin: 0.5in; }
+body { font-family: Arial, sans-serif; font-size: 10pt; margin: 0; padding: 20px; color: #333; }
+.container { max-width: 7.5in; margin: 0 auto; }
+.header { text-align: center; border-bottom: 4px solid #00A86B; padding-bottom: 10px; margin-bottom: 15px; }
+.header h1 { margin: 0; font-size: 22pt; color: #00A86B; letter-spacing: 1px; }
+.header .tagline { font-size: 10pt; color: #666; margin-top: 3px; }
+.header .contact { font-size: 9pt; color: #333; margin-top: 8px; }
+.main { display: flex; gap: 15px; }
+.sidebar { width: 140px; flex-shrink: 0; }
+.sidebar-box { background: #00A86B; color: white; padding: 12px; border-radius: 6px; }
+.sidebar-box h3 { margin: 0 0 10px 0; font-size: 10pt; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px; }
+.sidebar-box p { margin: 5px 0; font-size: 9pt; }
+.sidebar-box strong { display: block; font-size: 12pt; }
+.content { flex: 1; }
+h2 { font-size: 11pt; background: #00A86B; color: white; padding: 4px 10px; margin: 12px 0 8px 0; border-radius: 3px; }
+ul { margin: 5px 0 10px 0; padding-left: 18px; }
+li { margin: 4px 0; font-size: 10pt; }
+.codes-box { background: #f5f5f5; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 9pt; }
+.codes-box strong { color: #00A86B; }
+.overview { font-size: 10pt; line-height: 1.4; margin-bottom: 10px; }
+.footer { text-align: center; font-size: 8pt; color: #999; margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd; }
+.logo-placeholder { width: 80px; height: 80px; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center; font-size: 8pt; color: #999; margin: 0 auto 10px auto; }
 </style>
 </head>
 <body>
+<div class="container">
 
-<h1>${companyName.toUpperCase()}</h1>
-<div class="contact-header">
-${content.contact?.address || `${address}, ${city}, ${state} ${zip}`}<br>
-${content.contact?.phone || phone} | ${content.contact?.email || email}${content.contact?.website || website ? ` | ${content.contact?.website || website}` : ''}
+<div class="header">
+  <div class="logo-placeholder">YOUR LOGO</div>
+  <h1>${companyName.toUpperCase()}</h1>
+  ${elevatorPitch ? `<div class="tagline">${elevatorPitch.substring(0, 80)}${elevatorPitch.length > 80 ? '...' : ''}</div>` : ''}
+  <div class="contact">
+    ${address ? `${address}, ` : ''}${city || ''}${state ? `, ${state}` : ''} ${zip || ''}<br>
+    ${phone || ''}${email ? ` | ${email}` : ''}${website ? ` | ${website}` : ''}
+  </div>
 </div>
 
-<h2>COMPANY OVERVIEW</h2>
-<p>${content.companyOverview}</p>
-
-<div class="two-col">
-<div class="col">
-<h2>CORE CAPABILITIES</h2>
-<ul>
-${Array.isArray(content.coreCapabilities) ? content.coreCapabilities.map(c => `<li>${c}</li>`).join('\n') : `<li>${content.coreCapabilities}</li>`}
-</ul>
-
-<h2>${hasPastPerformance ? 'PAST PERFORMANCE' : 'WHY CONTRACT READY'}</h2>
-<ul>
-${Array.isArray(content.pastPerformanceOrWhyReady) ? content.pastPerformanceOrWhyReady.map(p => `<li>${p}</li>`).join('\n') : `<li>${content.pastPerformanceOrWhyReady}</li>`}
-</ul>
+<div class="main">
+  ${quickFacts.length > 0 ? `
+  <div class="sidebar">
+    <div class="sidebar-box">
+      <h3>QUICK FACTS</h3>
+      ${quickFacts.map(f => `<p>${f}</p>`).join('')}
+      ${hasUei ? `<p><strong>UEI</strong>${ueiNumber}</p>` : ''}
+      ${hasCage ? `<p><strong>CAGE</strong>${cageCode}</p>` : ''}
+    </div>
+  </div>
+  ` : ''}
+  
+  <div class="content">
+    <h2>COMPANY OVERVIEW</h2>
+    <p class="overview">${mission ? mission.substring(0, 200) + (mission.length > 200 ? '...' : '') : `${companyName} provides professional ${primaryService} services.`}</p>
+    
+    ${capabilities.length > 0 ? `
+    <h2>CORE CAPABILITIES</h2>
+    <ul>
+      ${capabilities.slice(0, 6).map(c => `<li>${c}</li>`).join('')}
+    </ul>
+    ` : ''}
+    
+    ${performanceSection}
+    
+    ${diffSection}
+    
+    ${personnelSection}
+    
+    <div class="codes-box">
+      <strong>Certifications:</strong> ${certList}<br>
+      <strong>NAICS:</strong> ${naicsList}
+      ${hasUei && quickFacts.length === 0 ? `<br><strong>UEI:</strong> ${ueiNumber}` : ''}
+      ${hasCage && quickFacts.length === 0 ? ` | <strong>CAGE:</strong> ${cageCode}` : ''}
+    </div>
+  </div>
 </div>
-
-<div class="col">
-<h2>DIFFERENTIATORS</h2>
-<ul>
-${Array.isArray(content.differentiators) ? content.differentiators.map(d => `<li>${d}</li>`).join('\n') : `<li>${content.differentiators}</li>`}
-</ul>
-
-<h2>KEY PERSONNEL</h2>
-<ul>
-${Array.isArray(content.keyPersonnel) ? content.keyPersonnel.map(k => `<li>${k}</li>`).join('\n') : `<li>${content.keyPersonnel}</li>`}
-</ul>
-</div>
-</div>
-
-<h2>CERTIFICATIONS & CODES</h2>
-<p><strong>Certifications:</strong> ${content.certifications || 'N/A'}</p>
-<p class="codes"><strong>NAICS:</strong> ${content.naicsCodes || naicsCodes.map(n => n.code).join(' | ') || 'N/A'}${ueiNumber ? ` | <strong>UEI:</strong> ${ueiNumber}` : ''}${cageCode ? ` | <strong>CAGE:</strong> ${cageCode}` : ''}</p>
 
 <div class="footer">Generated with ContractReady.com</div>
 
+</div>
 </body>
 </html>`
 
-                    // Create and download as .doc (Word can open HTML with .doc extension)
-                    const blob = new Blob([capStatement], { type: 'application/msword' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `${companyName.replace(/[^a-z0-9]/gi, '_')}_Capability_Statement.doc`
-                    document.body.appendChild(a)
-                    a.click()
-                    document.body.removeChild(a)
-                    URL.revokeObjectURL(url)
+                  // Download as .doc
+                  const blob = new Blob([capStatement], { type: 'application/msword' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${companyName.replace(/[^a-z0-9]/gi, '_')}_Capability_Statement.doc`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
 
-                    alert('✅ Capability Statement downloaded! Open it in Word to add your logo.')
-
-                  } catch (err) {
-                    console.error('Error generating:', err)
-                    alert('Error generating capability statement. Please try again.')
-                  } finally {
-                    setAiLoading({ ...aiLoading, capStatement: false })
-                  }
+                  alert('✅ Capability Statement downloaded! Open in Word to add your logo.')
                 }}
-                disabled={aiLoading.capStatement}
                 style={{
                   padding: '20px 40px',
                   borderRadius: '12px',
                   border: 'none',
                   backgroundColor: colors.primary,
                   color: colors.background,
-                  cursor: aiLoading.capStatement ? 'not-allowed' : 'pointer',
+                  cursor: 'pointer',
                   fontSize: '18px',
                   fontWeight: '600',
-                  opacity: aiLoading.capStatement ? 0.7 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '10px'
                 }}
               >
-                {aiLoading.capStatement ? '⏳ Generating... (this may take 30 seconds)' : '📄 Generate Capability Statement'}
+                📄 Generate Capability Statement
               </button>
 
               <p style={{ color: colors.gray, fontSize: '13px', textAlign: 'center', margin: 0 }}>
-                Downloads as a Word document (.doc). Add your logo and customize as needed.
+                Instant download — no AI wait time. Opens in Word. Add your logo.
               </p>
             </div>
           )
