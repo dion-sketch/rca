@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import BusinessBuilder from './BusinessBuilder'
 
 // Contract Ready Brand Colors
 const colors = {
@@ -24,7 +25,6 @@ function App() {
   const [profileCompletion, setProfileCompletion] = useState(0)
   const [opportunities, setOpportunities] = useState(5)
   const [submissions, setSubmissions] = useState(0)
-  const [contractReadyStatus, setContractReadyStatus] = useState({ status: 'getting-started', label: 'Getting Started', icon: '⬜', color: colors.gray })
 
   useEffect(() => {
     // Check for existing session
@@ -50,39 +50,12 @@ function App() {
   const fetchProfileCompletion = async (userId) => {
     const { data } = await supabase
       .from('business_profiles')
-      .select('completion_percentage, company_name, address, phone, email, services, naics_codes, mission, sam_registered, uei_number, past_performance')
+      .select('completion_percentage')
       .eq('user_id', userId)
       .single()
     
-    if (data) {
-      setProfileCompletion(data.completion_percentage || 0)
-      
-      // Determine Contract Ready status
-      const required = [
-        !!data.company_name,
-        !!data.address,
-        !!data.phone,
-        !!data.email,
-        data.services && data.services.length > 0,
-        data.naics_codes && data.naics_codes.length > 0,
-      ]
-      
-      const recommended = [
-        !!data.mission,
-        !!(data.sam_registered || data.uei_number),
-        data.past_performance && data.past_performance.length > 0,
-      ]
-      
-      const requiredComplete = required.filter(Boolean).length
-      const recommendedComplete = recommended.filter(Boolean).length
-      
-      if (requiredComplete === required.length && recommendedComplete >= 2) {
-        setContractReadyStatus({ status: 'contract-ready', label: 'Contract Ready', icon: '✅', color: colors.primary })
-      } else if (requiredComplete === required.length || requiredComplete >= 4) {
-        setContractReadyStatus({ status: 'almost-ready', label: 'Almost Ready', icon: '🟡', color: colors.gold })
-      } else {
-        setContractReadyStatus({ status: 'getting-started', label: 'Getting Started', icon: '⬜', color: colors.gray })
-      }
+    if (data?.completion_percentage) {
+      setProfileCompletion(data.completion_percentage)
     }
   }
 
@@ -372,19 +345,30 @@ function App() {
         </div>
       </nav>
 
-      {/* Stats Bar */}
-      <div style={{
-        backgroundColor: colors.card,
-        padding: '20px 30px',
-        display: 'flex',
-        justifyContent: 'space-around',
-        borderBottom: `1px solid ${colors.primary}30`
-      }}>
+      {/* Conditional Page Rendering */}
+      {currentPage === 'business-builder' ? (
+        <BusinessBuilder 
+          session={session} 
+          onBack={() => {
+            setCurrentPage('dashboard')
+            fetchProfileCompletion(session.user.id)
+          }} 
+        />
+      ) : (
+        <>
+          {/* Stats Bar */}
+          <div style={{
+            backgroundColor: colors.card,
+            padding: '20px 30px',
+            display: 'flex',
+            justifyContent: 'space-around',
+            borderBottom: `1px solid ${colors.primary}30`
+          }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: contractReadyStatus.color, fontSize: '28px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            <span>{contractReadyStatus.icon}</span>
+          <div style={{ color: colors.primary, fontSize: '32px', fontWeight: '700' }}>
+            🪣 {profileCompletion}%
           </div>
-          <div style={{ color: contractReadyStatus.color, fontSize: '14px', fontWeight: '600' }}>{contractReadyStatus.label}</div>
+          <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Full</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
@@ -454,14 +438,14 @@ function App() {
               position: 'absolute',
               top: '-10px',
               right: '20px',
-              backgroundColor: contractReadyStatus.color,
+              backgroundColor: colors.primary,
               color: colors.background,
               padding: '4px 12px',
               borderRadius: '12px',
               fontSize: '12px',
               fontWeight: '600'
             }}>
-              {contractReadyStatus.status === 'getting-started' ? 'START HERE' : contractReadyStatus.label.toUpperCase()}
+              {profileCompletion > 0 ? `🪣 ${profileCompletion}%` : 'START HERE'}
             </div>
             <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏗️</div>
             <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Business Builder</h3>
@@ -500,10 +484,13 @@ function App() {
           border: `1px solid ${colors.primary}30`
         }}>
           <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
-            💡 <strong>Tip:</strong> Start by completing your Business Builder profile. The more complete your profile, the better RCA can match you with contracts and grants!
+            💡 <strong>Tip:</strong> Fill your bucket in Business Builder, then start bidding! Your bucket grows as you use RCA — the more you bid, the smarter your responses get.
           </p>
         </div>
       </div>
+
+        </>
+      )}
 
       {/* Footer */}
       <div style={{
