@@ -2136,12 +2136,23 @@ Return ONLY the service description, no explanations.`
           const hasResults = resultsAchieved && resultsAchieved.trim() !== ''
           const hasDifferentiator = whatMakesYouDifferent && whatMakesYouDifferent.trim() !== ''
           const hasYearEstablished = yearEstablished && yearEstablished.trim() !== ''
+          const hasMission = mission && mission.trim() !== ''
           
           // Get primary service from first service entry
           const primaryService = services.length > 0 ? services[0].category : 'professional services'
           
           // Get owner/founder from team (first person or fallback)
           const owner = teamMembers.length > 0 ? teamMembers[0] : null
+          
+          // Format phone number
+          const formatPhone = (p) => {
+            if (!p) return ''
+            const digits = p.replace(/\D/g, '')
+            if (digits.length === 10) {
+              return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`
+            }
+            return p
+          }
           
           // Format revenue display
           const formatRevenue = (range) => {
@@ -2153,10 +2164,12 @@ Return ONLY the service description, no explanations.`
           const formatTeamSize = (size) => {
             if (!size) return null
             const num = parseInt(size)
-            if (num === 1) return null // Don't show "1 Employee"
-            if (size.includes('+')) return size
-            return `${size} Team Members`
+            if (num === 1) return null
+            return size
           }
+          
+          // Check if any quick facts exist
+          const hasQuickFacts = hasYearEstablished || formatTeamSize(teamSize) || formatRevenue(revenueRange)
 
           return (
             <div style={{ display: 'grid', gap: '25px' }}>
@@ -2188,8 +2201,8 @@ Return ONLY the service description, no explanations.`
                   <div style={{ color: companyName ? colors.primary : colors.gray }}>
                     {companyName ? '✅' : '⬜'} Company Header & Contact
                   </div>
-                  <div style={{ color: hasYearEstablished || formatTeamSize(teamSize) || formatRevenue(revenueRange) ? colors.primary : colors.gray }}>
-                    {hasYearEstablished || formatTeamSize(teamSize) || formatRevenue(revenueRange) ? '✅' : '➖'} Quick Facts Sidebar {!hasYearEstablished && !formatTeamSize(teamSize) && !formatRevenue(revenueRange) ? '(will skip - no data)' : ''}
+                  <div style={{ color: hasQuickFacts ? colors.primary : colors.gray }}>
+                    {hasQuickFacts ? '✅' : '➖'} Quick Facts Box {!hasQuickFacts ? '(will skip - no data)' : ''}
                   </div>
                   <div style={{ color: services.length > 0 ? colors.primary : colors.gray }}>
                     {services.length > 0 ? '✅' : '⬜'} Core Capabilities ({services.length} services)
@@ -2222,15 +2235,15 @@ Return ONLY the service description, no explanations.`
 
                   // BUILD THE TEMPLATE - No AI needed for most parts
                   
-                  // Quick Facts (only show what exists)
-                  let quickFacts = []
-                  if (hasYearEstablished) quickFacts.push(`Est. ${yearEstablished}`)
-                  if (formatTeamSize(teamSize)) quickFacts.push(formatTeamSize(teamSize))
-                  if (formatRevenue(revenueRange)) quickFacts.push(formatRevenue(revenueRange))
-                  if (city && state) quickFacts.push(`${city}, ${state}`)
-                  
-                  // Core Capabilities (from services)
-                  const capabilities = services.map(s => s.category).filter(Boolean)
+                  // Core Capabilities (from services - use descriptions if available)
+                  const capabilities = services.map(s => {
+                    if (s.description && s.description.length > 10) {
+                      // Use first sentence or first 60 chars of description
+                      const firstSentence = s.description.split('.')[0]
+                      return firstSentence.length > 60 ? firstSentence.substring(0, 60) + '...' : firstSentence
+                    }
+                    return s.category
+                  }).filter(Boolean)
                   
                   // Past Performance (only if they have it)
                   let pastPerfSection = ''
@@ -2246,26 +2259,27 @@ Return ONLY the service description, no explanations.`
                   // Why Contract Ready - ALWAYS show (builds from their strengths)
                   let readyPoints = []
                   if (owner && owner.yearsExperience) {
-                    readyPoints.push(`${owner.yearsExperience}+ years of industry experience`)
+                    readyPoints.push(`${owner.yearsExperience}+ years of hands-on industry experience`)
                   } else if (hasYearEstablished) {
                     const years = new Date().getFullYear() - parseInt(yearEstablished)
-                    if (years > 0) readyPoints.push(`${years}+ years in business`)
+                    if (years > 0) readyPoints.push(`${years}+ years in business since ${yearEstablished}`)
                   }
-                  if (formatTeamSize(teamSize)) {
-                    readyPoints.push(`${formatTeamSize(teamSize)} ready to deliver`)
+                  if (formatTeamSize(teamSize) && parseInt(teamSize) > 1) {
+                    readyPoints.push(`${formatTeamSize(teamSize)}-person team ready to scale`)
                   }
                   if (hasCerts) {
-                    readyPoints.push(`Certified: ${certifications.map(c => c.name).join(', ')}`)
+                    readyPoints.push(`Certified: ${certifications.slice(0, 3).map(c => c.name).join(', ')}`)
                   }
                   if (hasResults) {
-                    readyPoints.push(resultsAchieved.substring(0, 80) + (resultsAchieved.length > 80 ? '...' : ''))
+                    // Use first part of results
+                    const resultSnippet = resultsAchieved.split('.')[0].substring(0, 70)
+                    readyPoints.push(resultSnippet + (resultsAchieved.length > 70 ? '...' : ''))
                   }
-                  if (services.length > 0) {
-                    readyPoints.push(`Specialized in ${services[0].category}`)
+                  if (readyPoints.length < 3 && city) {
+                    readyPoints.push(`Based in ${city}, ${state} — local presence and expertise`)
                   }
-                  if (readyPoints.length === 0) {
-                    readyPoints.push('Fully operational and ready to perform')
-                    readyPoints.push('Committed to quality and compliance')
+                  if (readyPoints.length < 2) {
+                    readyPoints.push('Fully operational with capacity to deliver immediately')
                   }
                   
                   const whyReadySection = `
@@ -2304,92 +2318,105 @@ Return ONLY the service description, no explanations.`
                     `
                   }
                   
-                  // Certifications & Codes
-                  const certList = hasCerts ? certifications.map(c => c.name).join(' | ') : 'N/A'
-                  const naicsList = hasNaics ? naicsCodes.map(n => n.code).join(' | ') : 'N/A'
+                  // Certifications & Codes - format properly
+                  const certList = hasCerts ? certifications.map(c => c.name).join(' | ') : null
+                  const naicsList = hasNaics ? naicsCodes.map(n => n.code).join(' | ') : null
                   
-                  // BUILD FINAL HTML
+                  // BUILD FINAL HTML - Clean professional template
                   const capStatement = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <title>${companyName} - Capability Statement</title>
 <style>
-@page { size: letter; margin: 0.5in; }
-body { font-family: Arial, sans-serif; font-size: 10pt; margin: 0; padding: 20px; color: #333; }
+@page { size: letter; margin: 0.4in; }
+body { font-family: Arial, sans-serif; font-size: 10pt; margin: 0; padding: 15px; color: #333; line-height: 1.3; }
 .container { max-width: 7.5in; margin: 0 auto; }
-.header { text-align: center; border-bottom: 4px solid #00A86B; padding-bottom: 10px; margin-bottom: 15px; }
-.header h1 { margin: 0; font-size: 22pt; color: #00A86B; letter-spacing: 1px; }
-.header .tagline { font-size: 10pt; color: #666; margin-top: 3px; }
-.header .contact { font-size: 9pt; color: #333; margin-top: 8px; }
-.main { display: flex; gap: 15px; }
-.sidebar { width: 140px; flex-shrink: 0; }
-.sidebar-box { background: #00A86B; color: white; padding: 12px; border-radius: 6px; }
-.sidebar-box h3 { margin: 0 0 10px 0; font-size: 10pt; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px; }
-.sidebar-box p { margin: 5px 0; font-size: 9pt; }
-.sidebar-box strong { display: block; font-size: 12pt; }
-.content { flex: 1; }
-h2 { font-size: 11pt; background: #00A86B; color: white; padding: 4px 10px; margin: 12px 0 8px 0; border-radius: 3px; }
-ul { margin: 5px 0 10px 0; padding-left: 18px; }
-li { margin: 4px 0; font-size: 10pt; }
-.codes-box { background: #f5f5f5; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 9pt; }
+
+/* Header */
+.header { border-bottom: 4px solid #00A86B; padding-bottom: 12px; margin-bottom: 12px; }
+.header-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.company-info { flex: 1; }
+.company-info h1 { margin: 0 0 5px 0; font-size: 24pt; color: #00A86B; }
+.company-info .contact { font-size: 9pt; color: #555; }
+.quick-facts { background: #00A86B; color: white; padding: 10px 15px; border-radius: 5px; text-align: right; font-size: 9pt; min-width: 130px; }
+.quick-facts div { margin: 3px 0; }
+.quick-facts strong { font-size: 11pt; }
+
+/* Main content */
+h2 { font-size: 11pt; background: #00A86B; color: white; padding: 4px 10px; margin: 10px 0 6px 0; border-radius: 3px; }
+.two-col { display: flex; gap: 20px; }
+.col { flex: 1; }
+ul { margin: 4px 0 8px 0; padding-left: 16px; }
+li { margin: 3px 0; font-size: 9.5pt; }
+.overview { font-size: 10pt; margin: 5px 0 10px 0; }
+
+/* Codes box */
+.codes-box { background: #f0f0f0; padding: 8px 12px; border-radius: 4px; margin-top: 8px; font-size: 9pt; display: flex; flex-wrap: wrap; gap: 15px; }
+.codes-box span { white-space: nowrap; }
 .codes-box strong { color: #00A86B; }
-.overview { font-size: 10pt; line-height: 1.4; margin-bottom: 10px; }
-.footer { text-align: center; font-size: 8pt; color: #999; margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd; }
-.logo-placeholder { width: 80px; height: 80px; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center; font-size: 8pt; color: #999; margin: 0 auto 10px auto; }
+
+/* Footer */
+.footer { text-align: center; font-size: 8pt; color: #999; margin-top: 10px; padding-top: 8px; border-top: 1px solid #ddd; }
 </style>
 </head>
 <body>
 <div class="container">
 
 <div class="header">
-  <div class="logo-placeholder">YOUR LOGO</div>
-  <h1>${companyName.toUpperCase()}</h1>
-  ${elevatorPitch ? `<div class="tagline">${elevatorPitch.substring(0, 80)}${elevatorPitch.length > 80 ? '...' : ''}</div>` : ''}
-  <div class="contact">
-    ${address ? `${address}, ` : ''}${city || ''}${state ? `, ${state}` : ''} ${zip || ''}<br>
-    ${phone || ''}${email ? ` | ${email}` : ''}${website ? ` | ${website}` : ''}
+  <div class="header-top">
+    <div class="company-info">
+      <h1>${companyName.toUpperCase()}</h1>
+      <div class="contact">
+        ${[address, city, state, zip].filter(Boolean).join(', ')}<br>
+        ${[formatPhone(phone), email, website].filter(Boolean).join(' | ')}
+      </div>
+    </div>
+    ${hasQuickFacts ? `
+    <div class="quick-facts">
+      ${hasYearEstablished ? `<div><strong>Est. ${yearEstablished}</strong></div>` : ''}
+      ${formatTeamSize(teamSize) ? `<div><strong>${formatTeamSize(teamSize)}</strong> Team</div>` : ''}
+      ${formatRevenue(revenueRange) ? `<div><strong>${formatRevenue(revenueRange)}</strong> Revenue</div>` : ''}
+      ${hasUei ? `<div>UEI: ${ueiNumber}</div>` : ''}
+      ${hasCage ? `<div>CAGE: ${cageCode}</div>` : ''}
+    </div>
+    ` : ''}
   </div>
 </div>
 
-<div class="main">
-  ${quickFacts.length > 0 ? `
-  <div class="sidebar">
-    <div class="sidebar-box">
-      <h3>QUICK FACTS</h3>
-      ${quickFacts.map(f => `<p>${f}</p>`).join('')}
-      ${hasUei ? `<p><strong>UEI</strong>${ueiNumber}</p>` : ''}
-      ${hasCage ? `<p><strong>CAGE</strong>${cageCode}</p>` : ''}
-    </div>
-  </div>
-  ` : ''}
-  
-  <div class="content">
-    <h2>COMPANY OVERVIEW</h2>
-    <p class="overview">${mission ? mission.substring(0, 200) + (mission.length > 200 ? '...' : '') : `${companyName} provides professional ${primaryService} services.`}</p>
-    
-    ${capabilities.length > 0 ? `
-    <h2>CORE CAPABILITIES</h2>
-    <ul>
-      ${capabilities.slice(0, 6).map(c => `<li>${c}</li>`).join('')}
-    </ul>
-    ` : ''}
-    
-    ${whyReadySection}
-    
-    ${pastPerfSection}
-    
-    ${diffSection}
-    
-    ${personnelSection}
-    
-    <div class="codes-box">
-      <strong>Certifications:</strong> ${certList}<br>
-      <strong>NAICS:</strong> ${naicsList}
-      ${hasUei && quickFacts.length === 0 ? `<br><strong>UEI:</strong> ${ueiNumber}` : ''}
-      ${hasCage && quickFacts.length === 0 ? ` | <strong>CAGE:</strong> ${cageCode}` : ''}
-    </div>
-  </div>
+<h2>COMPANY OVERVIEW</h2>
+<p class="overview">${hasMission && mission.length > 20 ? mission.substring(0, 250) + (mission.length > 250 ? '...' : '') : `${companyName} is a ${city || state || 'US'}-based company specializing in ${primaryService.toLowerCase()}.`}</p>
+
+<div class="two-col">
+<div class="col">
+
+${capabilities.length > 0 ? `
+<h2>CORE CAPABILITIES</h2>
+<ul>
+${capabilities.slice(0, 6).map(c => `<li>${c}</li>`).join('\n')}
+</ul>
+` : ''}
+
+${whyReadySection}
+
+${pastPerfSection}
+
+</div>
+<div class="col">
+
+${diffSection}
+
+${personnelSection}
+
+${(hasCerts || hasNaics) ? `
+<h2>CERTIFICATIONS & CODES</h2>
+<div class="codes-box">
+  ${certList ? `<span><strong>Certs:</strong> ${certList}</span>` : ''}
+  ${naicsList ? `<span><strong>NAICS:</strong> ${naicsList}</span>` : ''}
+</div>
+` : ''}
+
+</div>
 </div>
 
 <div class="footer">Generated with ContractReady.com</div>
