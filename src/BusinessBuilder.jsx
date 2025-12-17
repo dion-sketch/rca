@@ -2194,8 +2194,11 @@ Return ONLY the service description, no explanations.`
                   <div style={{ color: services.length > 0 ? colors.primary : colors.gray }}>
                     {services.length > 0 ? '✅' : '⬜'} Core Capabilities ({services.length} services)
                   </div>
-                  <div style={{ color: hasPastPerf ? colors.primary : colors.gold }}>
-                    {hasPastPerf ? '✅ Past Performance' : '🔄 "Why Contract Ready" (no past performance)'} 
+                  <div style={{ color: colors.primary }}>
+                    ✅ Why Contract Ready (always included)
+                  </div>
+                  <div style={{ color: hasPastPerf ? colors.primary : colors.gray }}>
+                    {hasPastPerf ? '✅' : '➖'} Past Performance {!hasPastPerf ? '(will skip - none added)' : `(${pastPerformance.length} projects)`}
                   </div>
                   <div style={{ color: hasDifferentiator ? colors.primary : colors.gray }}>
                     {hasDifferentiator ? '✅' : '➖'} Differentiators {!hasDifferentiator ? '(will skip)' : ''}
@@ -2229,45 +2232,48 @@ Return ONLY the service description, no explanations.`
                   // Core Capabilities (from services)
                   const capabilities = services.map(s => s.category).filter(Boolean)
                   
-                  // Past Performance OR Why Contract Ready
-                  let performanceSection = ''
+                  // Past Performance (only if they have it)
+                  let pastPerfSection = ''
                   if (hasPastPerf) {
-                    performanceSection = `
+                    pastPerfSection = `
                       <h2>PAST PERFORMANCE</h2>
                       <ul>
                         ${pastPerformance.slice(0, 4).map(p => `<li><strong>${p.clientName || 'Client'}</strong>${p.projectName ? ` - ${p.projectName}` : ''}${p.contractValue ? ` ($${p.contractValue})` : ''}${p.description ? `<br><span style="color:#666;font-size:10pt">${p.description.substring(0, 100)}${p.description.length > 100 ? '...' : ''}</span>` : ''}</li>`).join('')}
                       </ul>
                     `
-                  } else {
-                    // Why Contract Ready - templated sentences
-                    let readyPoints = []
-                    if (owner && owner.yearsExperience) {
-                      readyPoints.push(`${owner.yearsExperience}+ years of industry experience`)
-                    } else if (hasYearEstablished) {
-                      const years = new Date().getFullYear() - parseInt(yearEstablished)
-                      if (years > 0) readyPoints.push(`${years}+ years in business`)
-                    }
-                    if (formatTeamSize(teamSize)) {
-                      readyPoints.push(`${formatTeamSize(teamSize)} ready to deliver`)
-                    }
-                    if (hasCerts) {
-                      readyPoints.push(`Certified: ${certifications.map(c => c.name).join(', ')}`)
-                    }
-                    if (hasResults) {
-                      readyPoints.push(resultsAchieved.substring(0, 80) + (resultsAchieved.length > 80 ? '...' : ''))
-                    }
-                    if (readyPoints.length === 0) {
-                      readyPoints.push('Fully operational and ready to perform')
-                      readyPoints.push('Committed to quality and compliance')
-                    }
-                    
-                    performanceSection = `
-                      <h2>WHY CONTRACT READY</h2>
-                      <ul>
-                        ${readyPoints.map(p => `<li>${p}</li>`).join('')}
-                      </ul>
-                    `
                   }
+                  
+                  // Why Contract Ready - ALWAYS show (builds from their strengths)
+                  let readyPoints = []
+                  if (owner && owner.yearsExperience) {
+                    readyPoints.push(`${owner.yearsExperience}+ years of industry experience`)
+                  } else if (hasYearEstablished) {
+                    const years = new Date().getFullYear() - parseInt(yearEstablished)
+                    if (years > 0) readyPoints.push(`${years}+ years in business`)
+                  }
+                  if (formatTeamSize(teamSize)) {
+                    readyPoints.push(`${formatTeamSize(teamSize)} ready to deliver`)
+                  }
+                  if (hasCerts) {
+                    readyPoints.push(`Certified: ${certifications.map(c => c.name).join(', ')}`)
+                  }
+                  if (hasResults) {
+                    readyPoints.push(resultsAchieved.substring(0, 80) + (resultsAchieved.length > 80 ? '...' : ''))
+                  }
+                  if (services.length > 0) {
+                    readyPoints.push(`Specialized in ${services[0].category}`)
+                  }
+                  if (readyPoints.length === 0) {
+                    readyPoints.push('Fully operational and ready to perform')
+                    readyPoints.push('Committed to quality and compliance')
+                  }
+                  
+                  const whyReadySection = `
+                    <h2>WHY CONTRACT READY</h2>
+                    <ul>
+                      ${readyPoints.slice(0, 4).map(p => `<li>${p}</li>`).join('')}
+                    </ul>
+                  `
                   
                   // Differentiators (only if they have it)
                   let diffSection = ''
@@ -2369,7 +2375,9 @@ li { margin: 4px 0; font-size: 10pt; }
     </ul>
     ` : ''}
     
-    ${performanceSection}
+    ${whyReadySection}
+    
+    ${pastPerfSection}
     
     ${diffSection}
     
@@ -2400,8 +2408,6 @@ li { margin: 4px 0; font-size: 10pt; }
                   a.click()
                   document.body.removeChild(a)
                   URL.revokeObjectURL(url)
-
-                  alert('✅ Capability Statement downloaded! Open in Word to add your logo.')
                 }}
                 style={{
                   padding: '20px 40px',
