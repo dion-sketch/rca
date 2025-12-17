@@ -2569,18 +2569,17 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <div 
             style={{ 
-              backgroundColor: `${colors.primary}20`, 
+              backgroundColor: completionPercentage >= 80 ? `${colors.primary}20` : `${colors.gold}20`, 
               padding: '8px 16px', 
               borderRadius: '20px', 
-              border: `1px solid ${colors.primary}`,
+              border: `1px solid ${completionPercentage >= 80 ? colors.primary : colors.gold}`,
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
             }}
           >
-            <span style={{ fontSize: '16px' }}>🪣</span>
-            <span style={{ color: colors.primary, fontWeight: '600', fontSize: '16px' }}>
-              {completionPercentage}% Full
+            <span style={{ color: completionPercentage >= 80 ? colors.primary : colors.gold, fontWeight: '600', fontSize: '16px' }}>
+              {completionPercentage}% Ready
             </span>
           </div>
         </div>
@@ -2598,23 +2597,26 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
           </div>
         ) : (
           <>
-            {/* Bucket Progress Box */}
+            {/* Profile Progress Box */}
             <div style={{
-              backgroundColor: `${colors.primary}10`,
-              border: `2px solid ${colors.primary}50`,
+              backgroundColor: completionPercentage >= 80 ? `${colors.primary}10` : `${colors.gold}10`,
+              border: `2px solid ${completionPercentage >= 80 ? colors.primary : colors.gold}50`,
               borderRadius: '16px',
               padding: '20px',
               marginBottom: '25px'
             }}>
               {/* Progress Header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
-                <span style={{ fontSize: '32px' }}>🪣</span>
+                <span style={{ fontSize: '32px' }}>{completionPercentage >= 80 ? '🚀' : '📈'}</span>
                 <div>
-                  <h3 style={{ color: colors.primary, margin: 0, fontSize: '20px', fontWeight: '700' }}>
-                    Your Bucket is {completionPercentage}% Full
+                  <h3 style={{ color: completionPercentage >= 80 ? colors.primary : colors.gold, margin: 0, fontSize: '20px', fontWeight: '700' }}>
+                    {completionPercentage}% Ready to Bid
                   </h3>
                   <p style={{ color: colors.gray, margin: '3px 0 0 0', fontSize: '13px' }}>
-                    Start bidding anytime — your bucket grows as you go!
+                    {completionPercentage >= 80 
+                      ? "Your profile is strong! Go win some contracts."
+                      : "You can start bidding now — add more to strengthen your responses."
+                    }
                   </p>
                 </div>
               </div>
@@ -2630,7 +2632,7 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
                     {missing.length > 0 && (
                       <div style={{ marginBottom: '15px' }}>
                         <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
-                          💡 Fill your bucket more:
+                          💡 Add these to strengthen your bids:
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           {missing.map((item, i) => (
@@ -2658,7 +2660,7 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
                     {completed.length > 0 && (
                       <div>
                         <p style={{ color: colors.gray, margin: '0 0 8px 0', fontSize: '12px' }}>
-                          ✅ In your bucket:
+                          ✅ You have:
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                           {completed.map((item, i) => (
