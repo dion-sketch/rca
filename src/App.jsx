@@ -24,6 +24,7 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [profileCompletion, setProfileCompletion] = useState(0)
+  const [profileData, setProfileData] = useState(null)
   const [cartCount, setCartCount] = useState(0)
   const [submissions, setSubmissions] = useState(0)
 
@@ -53,12 +54,15 @@ function App() {
   const fetchProfileCompletion = async (userId) => {
     const { data } = await supabase
       .from('business_profiles')
-      .select('completion_percentage')
+      .select('*')
       .eq('user_id', userId)
       .single()
     
-    if (data?.completion_percentage) {
-      setProfileCompletion(data.completion_percentage)
+    if (data) {
+      setProfileData(data)
+      if (data.completion_percentage) {
+        setProfileCompletion(data.completion_percentage)
+      }
     }
   }
 
@@ -380,7 +384,8 @@ function App() {
           onBack={() => {
             setCurrentPage('dashboard')
             fetchCartCount(session.user.id)
-          }} 
+          }}
+          profileData={profileData}
         />
       ) : currentPage === 'shop-contracts' ? (
         /* Shop Contracts Page */
