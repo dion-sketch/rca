@@ -166,6 +166,23 @@ function MyCart({ session, onBack, profileData }) {
     return diff
   }
 
+  const handleDeleteOpportunity = async (e, id) => {
+    e.stopPropagation() // Prevent card click
+    if (confirm('Remove this opportunity from your cart?')) {
+      try {
+        await supabase
+          .from('submissions')
+          .update({ status: 'archived' })
+          .eq('id', id)
+        
+        setAllSubmissions(allSubmissions.filter(s => s.id !== id))
+      } catch (err) {
+        console.error('Error deleting:', err)
+        alert('Error removing opportunity. Please try again.')
+      }
+    }
+  }
+
   const inputStyle = {
     width: '100%',
     padding: '12px 15px',
@@ -235,7 +252,27 @@ function MyCart({ session, onBack, profileData }) {
             )}
           </div>
         </div>
-        <div style={{ color: colors.primary, fontSize: '20px' }}>→</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <button
+            onClick={(e) => handleDeleteOpportunity(e, sub.id)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: colors.gray,
+              cursor: 'pointer',
+              fontSize: '18px',
+              padding: '5px',
+              borderRadius: '4px',
+              transition: 'color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#ff4444'}
+            onMouseLeave={(e) => e.currentTarget.style.color = colors.gray}
+            title="Remove from cart"
+          >
+            🗑️
+          </button>
+          <div style={{ color: colors.primary, fontSize: '20px' }}>→</div>
+        </div>
       </div>
     )
   }
@@ -257,26 +294,31 @@ function MyCart({ session, onBack, profileData }) {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Header */}
-      <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
-          <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🛒 My Cart</h1>
+      <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
+            <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🛒 My Cart</h1>
+          </div>
+          <button
+            onClick={() => setShowAddManual(true)}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: colors.primary,
+              color: colors.background,
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            + Add Opportunity
+          </button>
         </div>
-        <button
-          onClick={() => setShowAddManual(true)}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '8px',
-            border: 'none',
-            backgroundColor: colors.primary,
-            color: colors.background,
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer'
-          }}
-        >
-          + Add Opportunity
-        </button>
+        <p style={{ color: colors.gray, margin: '10px 0 0 0', fontSize: '13px', paddingLeft: '85px' }}>
+          Opportunities you're pursuing — work on bids here before submitting.
+        </p>
       </div>
 
       {/* Tabs */}
@@ -1041,8 +1083,11 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
                   opacity: generating ? 0.7 : 1
                 }}
               >
-                {generating ? '⏳ Generating...' : '✨ Generate with CR-AI'}
+                {generating ? '⏳ Pulling from your BUCKET...' : '✨ Generate with CR-AI'}
               </button>
+              <p style={{ color: colors.gray, margin: '0', fontSize: '12px', textAlign: 'center' }}>
+                🪣 CR-AI uses your BUCKET + online data to write responses
+              </p>
               <button
                 onClick={handleWriteOwn}
                 style={{
@@ -1104,6 +1149,53 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   // PHASE 4: REVIEW
   // ==========================================
   if (phase === 'review') {
+    const handleExport = () => {
+      // Build export text
+      let exportText = `${opportunity.title}\n`
+      exportText += `${opportunity.agency || 'No agency specified'}\n`
+      exportText += `Due: ${new Date(opportunity.due_date).toLocaleDateString()}\n`
+      exportText += `${'='.repeat(50)}\n\n`
+      
+      questions.forEach((q, i) => {
+        exportText += `Q${i + 1}: ${q.text}\n\n`
+        exportText += `A: ${q.response || '[Not answered]'}\n\n`
+        exportText += `${'-'.repeat(40)}\n\n`
+      })
+      
+      exportText += `\nGenerated with Contract Ready • CR-AI Technology`
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(exportText).then(() => {
+        alert('✅ Responses copied to clipboard!\n\nPaste them into your proposal document.')
+      }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea')
+        textArea.value = exportText
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        alert('✅ Responses copied to clipboard!\n\nPaste them into your proposal document.')
+      })
+    }
+
+    const handleMarkSubmitted = async () => {
+      if (confirm('Mark this as submitted? It will move to your Submitted tab.')) {
+        try {
+          await supabase
+            .from('submissions')
+            .update({ status: 'submitted' })
+            .eq('id', opportunity.id)
+          
+          alert('🎉 Marked as submitted!\n\nWould you like to save your responses to your BUCKET for future bids?')
+          onBack()
+        } catch (err) {
+          console.error('Error updating status:', err)
+          alert('Error updating status. Please try again.')
+        }
+      }
+    }
+
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
@@ -1169,24 +1261,59 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
             ))}
           </div>
 
-          {/* Export Button */}
+          {/* Action Buttons */}
           {answeredCount > 0 && (
-            <button
-              style={{
-                width: '100%',
-                padding: '18px',
-                borderRadius: '12px',
-                border: 'none',
-                backgroundColor: colors.gold,
-                color: colors.background,
-                fontSize: '18px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              📄 Export Responses
-            </button>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <button
+                onClick={handleExport}
+                style={{
+                  width: '100%',
+                  padding: '18px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: colors.gold,
+                  color: colors.background,
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                📋 Copy All Responses
+              </button>
+              
+              {answeredCount === questions.length && (
+                <button
+                  onClick={handleMarkSubmitted}
+                  style={{
+                    width: '100%',
+                    padding: '18px',
+                    borderRadius: '12px',
+                    border: `2px solid ${colors.primary}`,
+                    backgroundColor: 'transparent',
+                    color: colors.primary,
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✅ Mark as Submitted
+                </button>
+              )}
+            </div>
           )}
+
+          {/* Tip */}
+          <div style={{
+            marginTop: '25px',
+            backgroundColor: `${colors.primary}10`,
+            borderRadius: '12px',
+            padding: '15px 20px',
+            border: `1px solid ${colors.primary}30`
+          }}>
+            <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
+              💡 <strong style={{ color: colors.white }}>Tip:</strong> Copy your responses and paste them into your official proposal. After you submit, mark it as "Submitted" to track it.
+            </p>
+          </div>
         </div>
       </div>
     )
