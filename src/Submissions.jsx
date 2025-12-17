@@ -271,7 +271,7 @@ function Submissions({ session, onBack, profileData }) {
                 </button>
               </div>
 
-              {/* Option 3: Add Manually */}
+              {/* Option 3: I Found One */}
               <div style={{
                 backgroundColor: colors.card,
                 borderRadius: '16px',
@@ -280,9 +280,9 @@ function Submissions({ session, onBack, profileData }) {
                 boxShadow: `0 0 20px ${colors.primary}30`
               }}>
                 <div style={{ fontSize: '40px', marginBottom: '15px' }}>✍️</div>
-                <h3 style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '18px' }}>Add Manually</h3>
+                <h3 style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '18px' }}>I Found One</h3>
                 <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '14px', lineHeight: '1.5' }}>
-                  Found an RFP yourself? Enter the details and start building your response.
+                  Already found an RFP or grant? Enter what you know and start your response.
                 </p>
                 <button
                   onClick={() => setShowAddManual(true)}
@@ -298,7 +298,7 @@ function Submissions({ session, onBack, profileData }) {
                     cursor: 'pointer'
                   }}
                 >
-                  + Add Opportunity
+                  + Enter Opportunity
                 </button>
               </div>
             </div>
@@ -312,7 +312,7 @@ function Submissions({ session, onBack, profileData }) {
               marginTop: '10px'
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>Tip:</strong> Start by adding an opportunity manually. Once you add the questions, RCA will help you generate responses using your Business Builder profile.
+                💡 <strong style={{ color: colors.white }}>Tip:</strong> Found an RFP or grant? Enter it here, add the questions, and let CR-AI help you write winning responses using your bucket.
               </p>
             </div>
           </div>
@@ -453,7 +453,10 @@ function Submissions({ session, onBack, profileData }) {
             maxHeight: '90vh',
             overflowY: 'auto'
           }}>
-            <h3 style={{ color: colors.white, margin: '0 0 20px 0' }}>✍️ Add Opportunity</h3>
+            <h3 style={{ color: colors.white, margin: '0 0 5px 0' }}>✍️ Enter Opportunity</h3>
+            <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>
+              Fill in what you know — only title and due date are required.
+            </p>
 
             <div style={{ display: 'grid', gap: '15px' }}>
               <div>
@@ -511,7 +514,7 @@ function Submissions({ session, onBack, profileData }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div>
                   <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    Source
+                    Where'd you find it?
                   </label>
                   <select
                     value={manualEntry.source}
@@ -530,7 +533,7 @@ function Submissions({ session, onBack, profileData }) {
                 </div>
                 <div>
                   <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    Estimated Value
+                    Contract Value (if known)
                   </label>
                   <input
                     type="text"
@@ -544,12 +547,12 @@ function Submissions({ session, onBack, profileData }) {
 
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                  Description / Notes
+                  Notes
                 </label>
                 <textarea
                   value={manualEntry.description}
                   onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })}
-                  placeholder="Any notes about this opportunity..."
+                  placeholder="Anything else you want to remember..."
                   rows={3}
                   style={{ ...inputStyle, resize: 'vertical' }}
                 />
@@ -584,7 +587,7 @@ function Submissions({ session, onBack, profileData }) {
                   fontWeight: '600'
                 }}
               >
-                Add & Start Response
+                Save & Continue
               </button>
             </div>
           </div>
