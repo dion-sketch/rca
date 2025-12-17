@@ -44,7 +44,7 @@ const sections = [
   { id: 5, title: 'Certifications', icon: '📜', description: 'MBE, WBE, DVBE, SBE, 8(a), HUBZone, etc.' },
   { id: 6, title: 'SAM.gov Registration', icon: '✅', description: 'Federal registration status, UEI, CAGE code' },
   { id: 7, title: 'Pricing Snapshot', icon: '💰', description: 'Hourly rates by role' },
-  { id: 8, title: 'Past Performance', icon: '📊', description: 'Previous contracts and projects (up to 5)' },
+  { id: 8, title: 'Past Work', icon: '📊', description: 'Jobs, projects & contracts you\'ve completed' },
   { id: 9, title: 'Team Builder', icon: '👥', description: 'Employees, contractors, vendors — grows as you submit' },
   { id: 10, title: 'Generate Capability Statement', icon: '🔒', description: 'Coming Soon', locked: true },
 ]
@@ -188,9 +188,84 @@ function BusinessBuilder({ session, onBack }) {
     if (pastPerformance.length > 0) filled += 2
     if (teamMembers.length > 0) filled += 1
     if (pricing.length > 0) filled += 1
-    if (certifications.length > 0) filled += 1
+    if (certifications.length > 0) filled += 3
 
     return Math.round((filled / total) * 100)
+  }
+
+  // Breakdown for visibility
+  const getCompletionBreakdown = () => {
+    return [
+      { label: 'Company Name', has: !!companyName, pts: 1 },
+      { label: 'Address', has: !!address, pts: 1 },
+      { label: 'City', has: !!city, pts: 1 },
+      { label: 'State', has: !!state, pts: 1 },
+      { label: 'Phone', has: !!phone, pts: 1 },
+      { label: 'Email', has: !!email, pts: 1 },
+      { label: 'Entity Type', has: !!entityType, pts: 1 },
+      { label: 'Mission', has: !!mission, pts: 1 },
+      { label: 'Elevator Pitch', has: !!elevatorPitch, pts: 1 },
+      { label: 'SAM / UEI', has: !!(samRegistered || ueiNumber), pts: 2 },
+      { label: 'Services', has: services.length > 0, pts: 2 },
+      { label: 'NAICS Codes', has: naicsCodes.length > 0, pts: 2 },
+      { label: 'Past Work', has: pastPerformance.length > 0, pts: 2 },
+      { label: 'Team Members', has: teamMembers.length > 0, pts: 1 },
+      { label: 'Pricing', has: pricing.length > 0, pts: 1 },
+      { label: 'Certifications', has: certifications.length > 0, pts: 3 },
+    ]
+  }
+
+  // Contract Ready Status - What they NEED vs what's OPTIONAL
+  const getContractReadyStatus = () => {
+    const required = [
+      { label: 'Company Name', has: !!companyName, section: 1 },
+      { label: 'Address', has: !!address, section: 1 },
+      { label: 'Phone', has: !!phone, section: 1 },
+      { label: 'Email', has: !!email, section: 1 },
+      { label: 'Services', has: services.length > 0, section: 3 },
+      { label: 'NAICS Codes', has: naicsCodes.length > 0, section: 4 },
+    ]
+    
+    const recommended = [
+      { label: 'Mission Statement', has: !!mission, section: 2 },
+      { label: 'SAM / UEI', has: !!(samRegistered || ueiNumber), section: 6 },
+      { label: 'Past Work', has: pastPerformance.length > 0, section: 8 },
+    ]
+    
+    const optional = [
+      { label: 'Certifications', has: certifications.length > 0, section: 5 },
+      { label: 'Team Members', has: teamMembers.length > 0, section: 9 },
+      { label: 'Pricing', has: pricing.length > 0, section: 7 },
+    ]
+    
+    const requiredComplete = required.filter(r => r.has).length
+    const recommendedComplete = recommended.filter(r => r.has).length
+    
+    let status = 'getting-started'
+    let statusLabel = 'Getting Started'
+    let statusIcon = '⬜'
+    let statusColor = colors.gray
+    
+    if (requiredComplete === required.length) {
+      if (recommendedComplete >= 2) {
+        status = 'contract-ready'
+        statusLabel = 'Contract Ready'
+        statusIcon = '✅'
+        statusColor = colors.primary
+      } else {
+        status = 'almost-ready'
+        statusLabel = 'Almost Ready'
+        statusIcon = '🟡'
+        statusColor = colors.gold
+      }
+    } else if (requiredComplete >= 3) {
+      status = 'almost-ready'
+      statusLabel = 'Almost Ready'
+      statusIcon = '🟡'
+      statusColor = colors.gold
+    }
+    
+    return { status, statusLabel, statusIcon, statusColor, required, recommended, optional }
   }
 
   const saveProfile = async () => {
@@ -1309,28 +1384,49 @@ Return ONLY the service description, no explanations.`
         )
 
       case 5:
-        const availableCerts = [
-          { id: 'mbe', name: 'MBE', full: 'Minority Business Enterprise' },
-          { id: 'wbe', name: 'WBE', full: 'Women Business Enterprise' },
-          { id: 'dbe', name: 'DBE', full: 'Disadvantaged Business Enterprise' },
-          { id: 'dvbe', name: 'DVBE', full: 'Disabled Veteran Business Enterprise' },
-          { id: 'sdvosb', name: 'SDVOSB', full: 'Service-Disabled Veteran-Owned Small Business' },
-          { id: 'sbe', name: 'SBE', full: 'Small Business Enterprise' },
-          { id: 'lsbe', name: 'LSBE', full: 'Local Small Business Enterprise' },
-          { id: '8a', name: '8(a)', full: 'SBA 8(a) Business Development Program' },
-          { id: 'hubzone', name: 'HUBZone', full: 'Historically Underutilized Business Zone' },
-          { id: 'wosb', name: 'WOSB', full: 'Women-Owned Small Business' },
-          { id: 'edwosb', name: 'EDWOSB', full: 'Economically Disadvantaged WOSB' },
-          { id: 'lgbtbe', name: 'LGBTBE', full: 'LGBT Business Enterprise' },
-          { id: 'vosb', name: 'VOSB', full: 'Veteran-Owned Small Business' },
-        ]
+        const certCategories = {
+          federal: {
+            title: '🏛️ Federal Certifications',
+            description: 'SBA and federal government programs',
+            certs: [
+              { id: '8a', name: '8(a)', full: 'SBA 8(a) Business Development Program' },
+              { id: 'hubzone', name: 'HUBZone', full: 'Historically Underutilized Business Zone' },
+              { id: 'sdvosb', name: 'SDVOSB', full: 'Service-Disabled Veteran-Owned Small Business' },
+              { id: 'vosb', name: 'VOSB', full: 'Veteran-Owned Small Business' },
+              { id: 'wosb', name: 'WOSB', full: 'Women-Owned Small Business (Federal)' },
+              { id: 'edwosb', name: 'EDWOSB', full: 'Economically Disadvantaged WOSB' },
+            ]
+          },
+          state: {
+            title: '🏢 State Certifications',
+            description: 'State-level programs (varies by state)',
+            certs: [
+              { id: 'sbe', name: 'SBE', full: 'Small Business Enterprise' },
+              { id: 'dvbe', name: 'DVBE', full: 'Disabled Veteran Business Enterprise' },
+              { id: 'mbe', name: 'MBE', full: 'Minority Business Enterprise' },
+              { id: 'wbe', name: 'WBE', full: 'Women Business Enterprise' },
+              { id: 'dbe', name: 'DBE', full: 'Disadvantaged Business Enterprise' },
+              { id: 'lgbtbe', name: 'LGBTBE', full: 'LGBT Business Enterprise' },
+            ]
+          },
+          local: {
+            title: '📍 Local Certifications',
+            description: 'City, county, and regional programs',
+            certs: [
+              { id: 'lsbe', name: 'Local SBE', full: 'Local Small Business Enterprise' },
+              { id: 'cbe', name: 'CBE', full: 'Community Business Enterprise' },
+              { id: 'mwbe', name: 'M/WBE', full: 'Minority/Women Business Enterprise' },
+              { id: 'local-other', name: 'Other Local', full: 'Other local certification (specify below)' },
+            ]
+          }
+        }
 
         const toggleCert = (cert) => {
           const exists = certifications.find(c => c.id === cert.id)
           if (exists) {
             setCertifications(certifications.filter(c => c.id !== cert.id))
           } else {
-            setCertifications([...certifications, { id: cert.id, name: cert.name, full: cert.full, certNumber: '', expirationDate: '' }])
+            setCertifications([...certifications, { id: cert.id, name: cert.name, full: cert.full, certNumber: '', expirationDate: '', customName: '' }])
           }
         }
 
@@ -1352,7 +1448,7 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>Certifications give you bidding advantages.</strong> Many contracts are set aside for certified businesses. Check all that apply — you can update this anytime in your BUCKET.
+                💡 <strong style={{ color: colors.white }}>Certifications give you bidding advantages.</strong> Many contracts are set aside for certified businesses. Select all that apply — these are all optional.
               </p>
             </div>
 
@@ -1364,96 +1460,120 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.gold}30`
             }}>
               <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
-                ⚠️ <strong>Don't have certifications yet?</strong> That's okay! You can still bid on open contracts. Certifications just give you extra advantages. Skip this section and come back later.
+                ⚠️ <strong>Don't have certifications yet?</strong> That's okay! You can still bid on open contracts. Skip this section and come back later.
               </p>
             </div>
 
-            {/* Certification checkboxes */}
-            <div style={{ display: 'grid', gap: '10px' }}>
-              {availableCerts.map((cert) => {
-                const isChecked = certifications.some(c => c.id === cert.id)
-                const certData = certifications.find(c => c.id === cert.id)
+            {/* Certification categories */}
+            {Object.entries(certCategories).map(([key, category]) => (
+              <div key={key} style={{ display: 'grid', gap: '10px' }}>
+                <div style={{ marginBottom: '5px' }}>
+                  <h4 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px' }}>{category.title}</h4>
+                  <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>{category.description}</p>
+                </div>
                 
-                return (
-                  <div key={cert.id}>
-                    <div
-                      onClick={() => toggleCert(cert)}
-                      style={{
-                        backgroundColor: isChecked ? `${colors.primary}15` : '#1a1a1a',
-                        borderRadius: '10px',
-                        padding: '15px',
-                        border: `1px solid ${isChecked ? colors.primary : colors.gray}30`,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '15px'
-                      }}
-                    >
-                      <div style={{
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '6px',
-                        border: `2px solid ${isChecked ? colors.primary : colors.gray}`,
-                        backgroundColor: isChecked ? colors.primary : 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        {isChecked && <span style={{ color: colors.background, fontSize: '14px' }}>✓</span>}
-                      </div>
-                      <div>
-                        <span style={{ color: colors.white, fontWeight: '600', fontSize: '16px' }}>{cert.name}</span>
-                        <span style={{ color: colors.gray, fontSize: '14px', marginLeft: '10px' }}>{cert.full}</span>
-                      </div>
-                    </div>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {category.certs.map((cert) => {
+                    const isChecked = certifications.some(c => c.id === cert.id)
+                    const certData = certifications.find(c => c.id === cert.id)
+                    
+                    return (
+                      <div key={cert.id}>
+                        <div
+                          onClick={() => toggleCert(cert)}
+                          style={{
+                            backgroundColor: isChecked ? `${colors.primary}15` : '#1a1a1a',
+                            borderRadius: '10px',
+                            padding: '12px 15px',
+                            border: `1px solid ${isChecked ? colors.primary : colors.gray}30`,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px'
+                          }}
+                        >
+                          <div style={{
+                            width: '22px',
+                            height: '22px',
+                            borderRadius: '6px',
+                            border: `2px solid ${isChecked ? colors.primary : colors.gray}`,
+                            backgroundColor: isChecked ? colors.primary : 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            {isChecked && <span style={{ color: colors.background, fontSize: '12px' }}>✓</span>}
+                          </div>
+                          <div>
+                            <span style={{ color: colors.white, fontWeight: '600', fontSize: '14px' }}>{cert.name}</span>
+                            <span style={{ color: colors.gray, fontSize: '13px', marginLeft: '8px' }}>{cert.full}</span>
+                          </div>
+                        </div>
 
-                    {/* Show details when checked */}
-                    {isChecked && (
-                      <div style={{
-                        backgroundColor: '#1a1a1a',
-                        borderRadius: '0 0 10px 10px',
-                        padding: '15px',
-                        marginTop: '-5px',
-                        borderLeft: `1px solid ${colors.primary}30`,
-                        borderRight: `1px solid ${colors.primary}30`,
-                        borderBottom: `1px solid ${colors.primary}30`,
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: '10px'
-                      }}>
-                        <div>
-                          <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                            Certification # (optional)
-                          </label>
-                          <input
-                            type="text"
-                            value={certData?.certNumber || ''}
-                            onChange={(e) => updateCert(cert.id, 'certNumber', e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="Enter cert number"
-                            style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                            Expiration Date (optional)
-                          </label>
-                          <input
-                            type="text"
-                            value={certData?.expirationDate || ''}
-                            onChange={(e) => updateCert(cert.id, 'expirationDate', e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="MM/YYYY"
-                            style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
-                          />
-                        </div>
+                        {/* Show details when checked */}
+                        {isChecked && (
+                          <div style={{
+                            backgroundColor: '#1a1a1a',
+                            borderRadius: '0 0 10px 10px',
+                            padding: '12px',
+                            marginTop: '-5px',
+                            borderLeft: `1px solid ${colors.primary}30`,
+                            borderRight: `1px solid ${colors.primary}30`,
+                            borderBottom: `1px solid ${colors.primary}30`,
+                            display: 'grid',
+                            gridTemplateColumns: cert.id === 'local-other' ? '1fr' : '1fr 1fr',
+                            gap: '10px'
+                          }}>
+                            {cert.id === 'local-other' && (
+                              <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                                  Certification Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={certData?.customName || ''}
+                                  onChange={(e) => updateCert(cert.id, 'customName', e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  placeholder="e.g., LA County LSBE, NYC M/WBE"
+                                  style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                                Certification # (optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={certData?.certNumber || ''}
+                                onChange={(e) => updateCert(cert.id, 'certNumber', e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                placeholder="Enter cert number"
+                                style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                                Expiration Date (optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={certData?.expirationDate || ''}
+                                onChange={(e) => updateCert(cert.id, 'expirationDate', e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                placeholder="MM/YYYY"
+                                style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
 
             {/* Summary */}
             {certifications.length > 0 && (
@@ -1465,7 +1585,7 @@ Return ONLY the service description, no explanations.`
               }}>
                 <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
                   ✅ <strong>{certifications.length} certification{certifications.length > 1 ? 's' : ''} selected:</strong>{' '}
-                  {certifications.map(c => c.name).join(', ')}
+                  {certifications.map(c => c.id === 'local-other' && c.customName ? c.customName : c.name).join(', ')}
                 </p>
               </div>
             )}
@@ -1698,8 +1818,8 @@ Return ONLY the service description, no explanations.`
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ color: colors.white, margin: 0 }}>Past Performance</h3>
-              <span style={{ color: colors.gray, fontSize: '14px' }}>{pastPerformance.length}/5 projects</span>
+              <h3 style={{ color: colors.white, margin: 0 }}>Past Work</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{pastPerformance.length}/5 jobs</span>
             </div>
 
             {/* Info box */}
@@ -1710,11 +1830,11 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>This is what evaluators look at most.</strong> Add ANY projects — government contracts, private clients, grants, volunteer work. Start with what you have and build over time. You can always update this in your BUCKET.
+                💡 <strong style={{ color: colors.white }}>Add any jobs, projects, or contracts you've completed.</strong> Government OR private — it all counts. This helps RCA show your experience when you apply for contracts.
               </p>
             </div>
 
-            {/* Important clarification */}
+            {/* Encouragement box */}
             <div style={{
               backgroundColor: `${colors.gold}15`,
               borderRadius: '12px',
@@ -1722,10 +1842,14 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.gold}50`
             }}>
               <p style={{ color: colors.gold, margin: 0, fontSize: '14px', fontWeight: '600' }}>
-                ⚠️ This can be ANY work you've done — government OR private!
+                🎯 Examples of what to add:
               </p>
               <p style={{ color: colors.gray, margin: '8px 0 0 0', fontSize: '13px' }}>
-                Include projects for businesses, nonprofits, churches, schools, or anyone. If you've done the work, it counts. Evaluators want to see you can deliver — doesn't matter if it was public or private.
+                • Private clients (businesses, churches, schools, nonprofits)<br/>
+                • Government contracts (city, county, state, federal)<br/>
+                • Subcontracting work you did for another company<br/>
+                • Consulting or freelance projects<br/>
+                • Even small jobs count — they show you can deliver!
               </p>
             </div>
 
@@ -1759,45 +1883,61 @@ Return ONLY the service description, no explanations.`
                 </div>
 
                 <div style={{ display: 'grid', gap: '15px' }}>
-                  {/* Row 1: Client and Project Name */}
+                  {/* Row 1: Client, Project Name, and Type */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                     <div>
                       <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                        Who did you do this work for? *
+                        Client / Who paid you? *
                       </label>
                       <input
                         type="text"
                         value={pp.clientName}
                         onChange={(e) => updatePastPerformance(index, 'clientName', e.target.value)}
-                        placeholder="e.g., LA County, ABC Church, Smith Construction, Local Nonprofit"
+                        placeholder="e.g., City of LA, ABC Church, Smith Corp"
                         style={inputStyle}
                       />
                     </div>
                     <div>
                       <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                        Project or Contract Name
+                        Project / Job Name
                       </label>
                       <input
                         type="text"
                         value={pp.projectName}
                         onChange={(e) => updatePastPerformance(index, 'projectName', e.target.value)}
-                        placeholder="e.g., Student Wellness Program"
+                        placeholder="e.g., Office Renovation, Website Build"
                         style={inputStyle}
                       />
                     </div>
                   </div>
 
-                  {/* Row 2: Value and Dates */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                  {/* Row 2: Type and Value */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
                     <div>
                       <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                        Contract Value
+                        Type
+                      </label>
+                      <select
+                        value={pp.workType || ''}
+                        onChange={(e) => updatePastPerformance(index, 'workType', e.target.value)}
+                        style={{ ...inputStyle, cursor: 'pointer' }}
+                      >
+                        <option value="">Select...</option>
+                        <option value="private">Private / Business</option>
+                        <option value="government">Government Contract</option>
+                        <option value="nonprofit">Nonprofit / Grant</option>
+                        <option value="subcontract">Subcontract</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Amount (optional)
                       </label>
                       <input
                         type="text"
                         value={pp.contractValue}
                         onChange={(e) => updatePastPerformance(index, 'contractValue', e.target.value)}
-                        placeholder="e.g., $250,000"
+                        placeholder="e.g., $25,000"
                         style={inputStyle}
                       />
                     </div>
@@ -1821,7 +1961,7 @@ Return ONLY the service description, no explanations.`
                         type="text"
                         value={pp.endYear}
                         onChange={(e) => updatePastPerformance(index, 'endYear', e.target.value)}
-                        placeholder="e.g., 2024 or Ongoing"
+                        placeholder="e.g., 2024"
                         style={inputStyle}
                       />
                     </div>
@@ -2427,9 +2567,25 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
           <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🏗️ Business Builder</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={{ backgroundColor: completionPercentage >= 90 ? `${colors.primary}20` : `${colors.gold}20`, padding: '8px 16px', borderRadius: '20px', border: `1px solid ${completionPercentage >= 90 ? colors.primary : colors.gold}` }}>
-            <span style={{ color: completionPercentage >= 90 ? colors.primary : colors.gold, fontWeight: '600' }}>{completionPercentage}% Complete</span>
-          </div>
+          {(() => {
+            const status = getContractReadyStatus()
+            return (
+              <div 
+                style={{ 
+                  backgroundColor: `${status.statusColor}20`, 
+                  padding: '8px 16px', 
+                  borderRadius: '20px', 
+                  border: `1px solid ${status.statusColor}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>{status.statusIcon}</span>
+                <span style={{ color: status.statusColor, fontWeight: '600' }}>{status.statusLabel}</span>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -2444,7 +2600,117 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '15px' }}>
+          <>
+            {/* Contract Ready Status Box */}
+            {(() => {
+              const status = getContractReadyStatus()
+              return (
+                <div style={{
+                  backgroundColor: `${status.statusColor}10`,
+                  border: `2px solid ${status.statusColor}50`,
+                  borderRadius: '16px',
+                  padding: '20px',
+                  marginBottom: '25px'
+                }}>
+                  {/* Status Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
+                    <span style={{ fontSize: '32px' }}>{status.statusIcon}</span>
+                    <div>
+                      <h3 style={{ color: status.statusColor, margin: 0, fontSize: '20px', fontWeight: '700' }}>
+                        {status.statusLabel}
+                      </h3>
+                      <p style={{ color: colors.gray, margin: '3px 0 0 0', fontSize: '13px' }}>
+                        {status.status === 'contract-ready' 
+                          ? "You're ready to start bidding on contracts!"
+                          : status.status === 'almost-ready'
+                            ? "Just a few more items to become Contract Ready"
+                            : "Complete the required items below to get started"
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Required Items */}
+                  {status.required.some(r => !r.has) && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
+                        ⚠️ Required to become Contract Ready:
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {status.required.filter(r => !r.has).map((item, i) => (
+                          <span 
+                            key={i} 
+                            onClick={() => setActiveSection(item.section)}
+                            style={{
+                              backgroundColor: '#ff444420',
+                              color: '#ff6b6b',
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              border: '1px solid #ff444440'
+                            }}
+                          >
+                            ⬜ {item.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recommended Items */}
+                  {status.recommended.some(r => !r.has) && status.required.every(r => r.has) && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
+                        📈 Recommended to strengthen your bids:
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {status.recommended.filter(r => !r.has).map((item, i) => (
+                          <span 
+                            key={i}
+                            onClick={() => setActiveSection(item.section)}
+                            style={{
+                              backgroundColor: `${colors.gold}20`,
+                              color: colors.gold,
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              border: `1px solid ${colors.gold}40`
+                            }}
+                          >
+                            ⬜ {item.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Completed Items */}
+                  <div>
+                    <p style={{ color: colors.gray, margin: '0 0 8px 0', fontSize: '12px' }}>
+                      ✅ Completed:
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {[...status.required, ...status.recommended, ...status.optional].filter(r => r.has).map((item, i) => (
+                        <span key={i} style={{
+                          backgroundColor: `${colors.primary}15`,
+                          color: colors.primary,
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontSize: '11px'
+                        }}>
+                          ✓ {item.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* All Sections */}
+            <div style={{ display: 'grid', gap: '15px' }}>
             {sections.map((section) => {
               const completion = getSectionCompletion(section.id)
               const isLocked = section.locked === true
@@ -2481,7 +2747,8 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
                 </div>
               )
             })}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>
