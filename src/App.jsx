@@ -396,7 +396,7 @@ function App() {
               <div style={{ color: profileCompletion >= 80 ? colors.primary : colors.gold, fontSize: '32px', fontWeight: '700' }}>
                 {profileCompletion}%
               </div>
-              <div style={{ color: colors.gray, fontSize: '12px' }}>Profile Complete</div>
+              <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Full</div>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
@@ -528,7 +528,7 @@ function App() {
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
-                💡 <strong>Tip:</strong> Build your profile in Business Builder, then go shopping for contracts! Add opportunities to your cart and let CR-AI help you respond.
+                💡 <strong>Tip:</strong> Fill your bucket in Business Builder, then go shopping for contracts! Add opportunities to your cart and let CR-AI help you respond.
               </p>
             </div>
           </div>
