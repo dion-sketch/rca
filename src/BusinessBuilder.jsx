@@ -2210,9 +2210,6 @@ Return ONLY the service description, no explanations.`
                   <div style={{ color: colors.primary }}>
                     ✅ Why Contract Ready (always included)
                   </div>
-                  <div style={{ color: hasPastPerf ? colors.primary : colors.gray }}>
-                    {hasPastPerf ? '✅' : '➖'} Past Performance {!hasPastPerf ? '(will skip - none added)' : `(${pastPerformance.length} projects)`}
-                  </div>
                   <div style={{ color: hasDifferentiator ? colors.primary : colors.gray }}>
                     {hasDifferentiator ? '✅' : '➖'} Differentiators {!hasDifferentiator ? '(will skip)' : ''}
                   </div>
@@ -2245,17 +2242,6 @@ Return ONLY the service description, no explanations.`
                     return s.category
                   }).filter(Boolean)
                   
-                  // Past Performance (only if they have it)
-                  let pastPerfSection = ''
-                  if (hasPastPerf) {
-                    pastPerfSection = `
-                      <h2>PAST PERFORMANCE</h2>
-                      <ul>
-                        ${pastPerformance.slice(0, 4).map(p => `<li><strong>${p.clientName || 'Client'}</strong>${p.projectName ? ` - ${p.projectName}` : ''}${p.contractValue ? ` ($${p.contractValue})` : ''}${p.description ? `<br><span style="color:#666;font-size:10pt">${p.description.substring(0, 100)}${p.description.length > 100 ? '...' : ''}</span>` : ''}</li>`).join('')}
-                      </ul>
-                    `
-                  }
-                  
                   // Why Contract Ready - ALWAYS show (builds from their strengths)
                   let readyPoints = []
                   if (owner && owner.yearsExperience) {
@@ -2282,146 +2268,93 @@ Return ONLY the service description, no explanations.`
                     readyPoints.push('Fully operational with capacity to deliver immediately')
                   }
                   
-                  const whyReadySection = `
-                    <h2>WHY CONTRACT READY</h2>
-                    <ul>
-                      ${readyPoints.slice(0, 4).map(p => `<li>${p}</li>`).join('')}
-                    </ul>
-                  `
-                  
                   // Differentiators (only if they have it)
-                  let diffSection = ''
+                  let diffItems = []
                   if (hasDifferentiator) {
-                    // Split by common delimiters or just show as-is
                     const diffs = whatMakesYouDifferent.includes('\n') 
                       ? whatMakesYouDifferent.split('\n').filter(d => d.trim())
                       : whatMakesYouDifferent.includes(',')
                         ? whatMakesYouDifferent.split(',').filter(d => d.trim())
                         : [whatMakesYouDifferent]
-                    
-                    diffSection = `
-                      <h2>DIFFERENTIATORS</h2>
-                      <ul>
-                        ${diffs.slice(0, 4).map(d => `<li>${d.trim()}</li>`).join('')}
-                      </ul>
-                    `
+                    diffItems = diffs.slice(0, 4).map(d => d.trim())
                   }
                   
                   // Key Personnel (only if they have team)
-                  let personnelSection = ''
+                  let personnelItems = []
                   if (hasTeam) {
-                    personnelSection = `
-                      <h2>KEY PERSONNEL</h2>
-                      <ul>
-                        ${teamMembers.slice(0, 4).map(t => `<li><strong>${t.name || 'Team Member'}</strong> - ${t.role || 'Staff'}${t.yearsExperience ? ` - ${t.yearsExperience} yrs` : ''}${t.qualifications ? ` - ${t.qualifications}` : ''}</li>`).join('')}
-                      </ul>
-                    `
+                    personnelItems = teamMembers.slice(0, 4).map(t => 
+                      `${t.name || 'Team Member'} - ${t.role || 'Staff'}${t.yearsExperience ? ' - ' + t.yearsExperience + ' yrs' : ''}`
+                    )
                   }
                   
                   // Certifications & Codes - format properly
-                  const certList = hasCerts ? certifications.map(c => c.name).join(' | ') : null
-                  const naicsList = hasNaics ? naicsCodes.map(n => n.code).join(' | ') : null
+                  const certList = hasCerts ? certifications.map(c => c.name).join(' | ') : 'N/A'
+                  const naicsList = hasNaics ? naicsCodes.map(n => n.code).join(' | ') : 'N/A'
                   
-                  // BUILD FINAL HTML - Clean professional template
+                  // BUILD FINAL HTML - LOCKED TEMPLATE (matches approved PDF)
                   const capStatement = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <title>${companyName} - Capability Statement</title>
 <style>
-@page { size: letter; margin: 0.4in; }
-body { font-family: Arial, sans-serif; font-size: 10pt; margin: 0; padding: 15px; color: #333; line-height: 1.3; }
-.container { max-width: 7.5in; margin: 0 auto; }
-
-/* Header */
-.header { border-bottom: 4px solid #00A86B; padding-bottom: 12px; margin-bottom: 12px; }
-.header-top { display: flex; justify-content: space-between; align-items: flex-start; }
-.company-info { flex: 1; }
-.company-info h1 { margin: 0 0 5px 0; font-size: 24pt; color: #00A86B; }
-.company-info .contact { font-size: 9pt; color: #555; }
-.quick-facts { background: #00A86B; color: white; padding: 10px 15px; border-radius: 5px; text-align: right; font-size: 9pt; min-width: 130px; }
-.quick-facts div { margin: 3px 0; }
-.quick-facts strong { font-size: 11pt; }
-
-/* Main content */
-h2 { font-size: 11pt; background: #00A86B; color: white; padding: 4px 10px; margin: 10px 0 6px 0; border-radius: 3px; }
-.two-col { display: flex; gap: 20px; }
-.col { flex: 1; }
-ul { margin: 4px 0 8px 0; padding-left: 16px; }
-li { margin: 3px 0; font-size: 9.5pt; }
-.overview { font-size: 10pt; margin: 5px 0 10px 0; }
-
-/* Codes box */
-.codes-box { background: #f0f0f0; padding: 8px 12px; border-radius: 4px; margin-top: 8px; font-size: 9pt; display: flex; flex-wrap: wrap; gap: 15px; }
-.codes-box span { white-space: nowrap; }
-.codes-box strong { color: #00A86B; }
-
-/* Footer */
-.footer { text-align: center; font-size: 8pt; color: #999; margin-top: 10px; padding-top: 8px; border-top: 1px solid #ddd; }
+body { font-family: Arial, sans-serif; font-size: 11pt; margin: 40px; color: #333; line-height: 1.4; }
+h1 { font-size: 28pt; margin: 0 0 5px 0; color: #000; text-align: center; }
+.contact { text-align: center; font-size: 10pt; color: #333; margin-bottom: 20px; }
+h2 { font-size: 12pt; background: #2E7D32; color: white; padding: 6px 12px; margin: 20px 0 10px 0; }
+ul { margin: 0 0 15px 0; padding-left: 25px; }
+li { margin: 5px 0; }
+p { margin: 0 0 15px 0; }
+.codes { margin-top: 20px; }
+.codes p { margin: 3px 0; }
+.footer { text-align: center; font-size: 9pt; color: #999; margin-top: 30px; }
 </style>
 </head>
 <body>
-<div class="container">
 
-<div class="header">
-  <div class="header-top">
-    <div class="company-info">
-      <h1>${companyName.toUpperCase()}</h1>
-      <div class="contact">
-        ${[address, city, state, zip].filter(Boolean).join(', ')}<br>
-        ${[formatPhone(phone), email, website].filter(Boolean).join(' | ')}
-      </div>
-    </div>
-    ${hasQuickFacts ? `
-    <div class="quick-facts">
-      ${hasYearEstablished ? `<div><strong>Est. ${yearEstablished}</strong></div>` : ''}
-      ${formatTeamSize(teamSize) ? `<div><strong>${formatTeamSize(teamSize)}</strong> Team</div>` : ''}
-      ${formatRevenue(revenueRange) ? `<div><strong>${formatRevenue(revenueRange)}</strong> Revenue</div>` : ''}
-      ${hasUei ? `<div>UEI: ${ueiNumber}</div>` : ''}
-      ${hasCage ? `<div>CAGE: ${cageCode}</div>` : ''}
-    </div>
-    ` : ''}
-  </div>
+<h1>${companyName.toUpperCase()}</h1>
+<div class="contact">
+${[address, city, state, zip].filter(Boolean).join(', ')}<br>
+${formatPhone(phone)}${email ? ' | ' + email : ''}${website ? ' | ' + website : ''}
 </div>
 
 <h2>COMPANY OVERVIEW</h2>
-<p class="overview">${hasMission && mission.length > 20 ? mission.substring(0, 250) + (mission.length > 250 ? '...' : '') : `${companyName} is a ${city || state || 'US'}-based company specializing in ${primaryService.toLowerCase()}.`}</p>
-
-<div class="two-col">
-<div class="col">
+<p>${hasMission ? mission : companyName + ' provides professional ' + primaryService.toLowerCase() + ' services.'}</p>
 
 ${capabilities.length > 0 ? `
 <h2>CORE CAPABILITIES</h2>
 <ul>
-${capabilities.slice(0, 6).map(c => `<li>${c}</li>`).join('\n')}
+${capabilities.map(c => '<li>' + c + '</li>').join('\n')}
 </ul>
 ` : ''}
 
-${whyReadySection}
+<h2>WHY CONTRACT READY</h2>
+<ul>
+${readyPoints.map(p => '<li>' + p + '</li>').join('\n')}
+</ul>
 
-${pastPerfSection}
-
-</div>
-<div class="col">
-
-${diffSection}
-
-${personnelSection}
-
-${(hasCerts || hasNaics) ? `
-<h2>CERTIFICATIONS & CODES</h2>
-<div class="codes-box">
-  ${certList ? `<span><strong>Certs:</strong> ${certList}</span>` : ''}
-  ${naicsList ? `<span><strong>NAICS:</strong> ${naicsList}</span>` : ''}
-</div>
+${diffItems.length > 0 ? `
+<h2>DIFFERENTIATORS</h2>
+<ul>
+${diffItems.map(d => '<li>' + d + '</li>').join('\n')}
+</ul>
 ` : ''}
 
-</div>
+${personnelItems.length > 0 ? `
+<h2>KEY PERSONNEL</h2>
+<ul>
+${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
+</ul>
+` : ''}
+
+<div class="codes">
+<h2>CERTIFICATIONS & CODES</h2>
+<p><strong>Certifications:</strong> ${certList}</p>
+<p><strong>NAICS:</strong> ${naicsList}</p>
 </div>
 
 <div class="footer">Generated with ContractReady.com</div>
 
-</div>
 </body>
 </html>`
 
