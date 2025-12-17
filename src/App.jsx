@@ -548,12 +548,12 @@ function App() {
                   fontSize: '12px',
                   fontWeight: '600'
                 }}>
-                  {profileCompletion > 0 ? `${profileCompletion}% READY` : 'START HERE'}
+                  {profileCompletion > 0 ? `${profileCompletion}% BUILT` : 'START HERE'}
                 </div>
-                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏗️</div>
-                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Business Builder</h3>
+                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🪣</div>
+                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Build Your BUCKET</h3>
                 <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                  Build your profile to match with opportunities
+                  Your business profile — CR-AI pulls from here
                 </p>
               </div>
 
@@ -589,7 +589,7 @@ function App() {
                 <div style={{ fontSize: '40px', marginBottom: '15px' }}>🛒</div>
                 <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>My Cart</h3>
                 <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                  Your saved opportunities to pursue
+                  Opportunities you're bidding on (not submitted yet)
                 </p>
               </div>
             </div>
