@@ -46,7 +46,7 @@ const sections = [
   { id: 7, title: 'Pricing Snapshot', icon: '💰', description: 'Hourly rates by role' },
   { id: 8, title: 'Past Performance', icon: '📊', description: 'Previous contracts and projects (up to 5)' },
   { id: 9, title: 'Team Builder', icon: '👥', description: 'Employees, contractors, vendors — grows as you submit' },
-  { id: 10, title: 'Documents', icon: '📁', description: 'Capability statement, W-9, resumes, certifications' },
+  { id: 10, title: 'Generate Capability Statement', icon: '📄', description: 'Create a professional capability statement from your BUCKET' },
 ]
 
 function BusinessBuilder({ session, onBack }) {
@@ -2121,6 +2121,291 @@ Return ONLY the service description, no explanations.`
         )
 
       default:
+        // Case 10: Generate Capability Statement
+        if (activeSection === 10) {
+          return (
+            <div style={{ display: 'grid', gap: '25px' }}>
+              <h3 style={{ color: colors.white, margin: 0 }}>Generate Capability Statement</h3>
+
+              {/* Info box */}
+              <div style={{
+                backgroundColor: `${colors.primary}10`,
+                borderRadius: '12px',
+                padding: '15px',
+                border: `1px solid ${colors.primary}30`
+              }}>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                  💡 <strong style={{ color: colors.white }}>CR-AI will create a professional capability statement from your BUCKET.</strong> The more you've filled out, the better it will be. You can download and customize it with your logo.
+                </p>
+              </div>
+
+              {/* What will be included */}
+              <div style={{
+                backgroundColor: '#1a1a1a',
+                borderRadius: '12px',
+                padding: '20px',
+                border: `1px solid ${colors.gray}30`
+              }}>
+                <p style={{ color: colors.white, fontWeight: '600', marginBottom: '15px', fontSize: '16px' }}>
+                  What will be included:
+                </p>
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  {[
+                    { label: 'Company Info & Contact', filled: companyName && phone },
+                    { label: 'Mission & Vision', filled: mission && vision },
+                    { label: 'Core Services', filled: services.length > 0 },
+                    { label: 'NAICS Codes', filled: naicsCodes.length > 0 },
+                    { label: 'Certifications', filled: certifications.length > 0 },
+                    { label: 'Past Performance', filled: pastPerformance.length > 0 },
+                    { label: 'Key Personnel', filled: teamMembers.length > 0 },
+                    { label: 'Federal IDs (UEI/CAGE)', filled: ueiNumber || cageCode },
+                  ].map((item, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ color: item.filled ? colors.primary : colors.gray }}>
+                        {item.filled ? '✅' : '⬜'}
+                      </span>
+                      <span style={{ color: item.filled ? colors.white : colors.gray }}>
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Smart logic explanation */}
+              <div style={{
+                backgroundColor: `${colors.gold}10`,
+                borderRadius: '12px',
+                padding: '15px',
+                border: `1px solid ${colors.gold}30`
+              }}>
+                <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
+                  🧠 <strong>Smart Logic:</strong> {pastPerformance.length > 0 
+                    ? "CR-AI will highlight your past contracts and proven results." 
+                    : "Since you don't have past performance yet, CR-AI will spotlight your team's experience, industry expertise, and why you're ready for contracts."}
+                </p>
+              </div>
+
+              {/* Generate Button */}
+              <button
+                onClick={async () => {
+                  const apiKey = getApiKey()
+                  if (!apiKey) {
+                    setShowApiKeyModal(true)
+                    return
+                  }
+                  
+                  if (!companyName) {
+                    alert('Please fill out Company Basics first.')
+                    return
+                  }
+
+                  setAiLoading({ ...aiLoading, capStatement: true })
+
+                  try {
+                    // Build the full context
+                    const bucketData = {
+                      company: {
+                        name: companyName,
+                        dba: dba,
+                        address: `${address}, ${city}, ${state} ${zip}`,
+                        phone: phone,
+                        email: email,
+                        website: website,
+                        entityType: entityType,
+                        isNonprofit: isNonprofit,
+                        teamSize: teamSize,
+                        yearEstablished: yearEstablished,
+                        revenueRange: revenueRange
+                      },
+                      mission: mission,
+                      vision: vision,
+                      elevatorPitch: elevatorPitch,
+                      whatMakesYouDifferent: whatMakesYouDifferent,
+                      resultsAchieved: resultsAchieved,
+                      anythingElse: anythingElse,
+                      services: services,
+                      naicsCodes: naicsCodes,
+                      certifications: certifications,
+                      samRegistered: samRegistered,
+                      ueiNumber: ueiNumber,
+                      cageCode: cageCode,
+                      pastPerformance: pastPerformance,
+                      teamMembers: teamMembers
+                    }
+
+                    const hasPastPerformance = pastPerformance.length > 0
+
+                    const prompt = `You are creating a professional CAPABILITY STATEMENT for a government contractor. Generate the content in a structured format that can be placed in a one-page document.
+
+COMPANY DATA FROM THEIR BUCKET:
+${JSON.stringify(bucketData, null, 2)}
+
+${hasPastPerformance ? `
+INSTRUCTION: This company HAS past performance. Highlight their proven track record, specific contracts, results achieved, and references.
+` : `
+INSTRUCTION: This company does NOT have past performance yet. DO NOT leave this section empty or say "none". Instead, create a compelling "WHY WE'RE READY" section that highlights:
+- The founder/owner's years of experience in the industry
+- Team members' combined expertise and qualifications
+- Industry trends that show why their services are needed NOW
+- Community needs in their geographic area
+- Their certifications and what advantages they provide
+- What makes them different from competitors
+- Their commitment and readiness to deliver
+
+Make them look CONTRACT READY even though they're new to government contracting.
+`}
+
+Generate the following sections. Be specific, professional, and compelling:
+
+1. COMPANY OVERVIEW (2-3 sentences using their mission/elevator pitch)
+
+2. CORE CAPABILITIES (list their services with brief descriptions)
+
+3. ${hasPastPerformance ? 'PAST PERFORMANCE (highlight their best contracts with results)' : 'WHY WE ARE CONTRACT READY (make a compelling case using team experience, industry relevance, and readiness)'}
+
+4. DIFFERENTIATORS (what makes them unique - use their "what makes you different" answer)
+
+5. CERTIFICATIONS & CODES (list their certs and NAICS codes)
+
+6. KEY PERSONNEL (brief bio of key team members with experience)
+
+7. CONTACT INFORMATION (formatted nicely)
+
+Format your response as JSON with these exact keys:
+{
+  "companyOverview": "...",
+  "coreCapabilities": ["capability 1", "capability 2"],
+  "pastPerformanceOrWhyReady": "...",
+  "differentiators": ["diff 1", "diff 2"],
+  "certificationsAndCodes": "...",
+  "keyPersonnel": "...",
+  "contactInfo": "..."
+}
+
+Return ONLY the JSON, no other text.`
+
+                    const response = await fetch('https://api.anthropic.com/v1/messages', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                      },
+                      body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 4000,
+                        messages: [{ role: 'user', content: prompt }]
+                      })
+                    })
+
+                    if (!response.ok) throw new Error(`API error: ${response.status}`)
+                    
+                    const data = await response.json()
+                    let content
+                    try {
+                      content = JSON.parse(data.content[0].text)
+                    } catch {
+                      // If JSON parse fails, try to extract JSON from the response
+                      const jsonMatch = data.content[0].text.match(/\{[\s\S]*\}/)
+                      if (jsonMatch) {
+                        content = JSON.parse(jsonMatch[0])
+                      } else {
+                        throw new Error('Could not parse response')
+                      }
+                    }
+
+                    // Create downloadable text file (Word doc would require additional library)
+                    const capStatement = `
+═══════════════════════════════════════════════════════════════
+                    CAPABILITY STATEMENT
+═══════════════════════════════════════════════════════════════
+
+${companyName.toUpperCase()}
+${dba ? `DBA: ${dba}` : ''}
+───────────────────────────────────────────────────────────────
+
+COMPANY OVERVIEW
+────────────────
+${content.companyOverview}
+
+CORE CAPABILITIES
+─────────────────
+${Array.isArray(content.coreCapabilities) ? content.coreCapabilities.map(c => `• ${c}`).join('\n') : content.coreCapabilities}
+
+${hasPastPerformance ? 'PAST PERFORMANCE' : 'WHY WE ARE CONTRACT READY'}
+─────────────────${hasPastPerformance ? '' : '───────────────'}
+${content.pastPerformanceOrWhyReady}
+
+DIFFERENTIATORS
+───────────────
+${Array.isArray(content.differentiators) ? content.differentiators.map(d => `• ${d}`).join('\n') : content.differentiators}
+
+CERTIFICATIONS & CODES
+──────────────────────
+${content.certificationsAndCodes}
+
+KEY PERSONNEL
+─────────────
+${content.keyPersonnel}
+
+CONTACT INFORMATION
+───────────────────
+${content.contactInfo}
+
+───────────────────────────────────────────────────────────────
+                Generated with ContractReady.com
+═══════════════════════════════════════════════════════════════
+`
+
+                    // Create and download file
+                    const blob = new Blob([capStatement], { type: 'text/plain' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${companyName.replace(/[^a-z0-9]/gi, '_')}_Capability_Statement.txt`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+
+                    alert('✅ Capability Statement generated! Check your downloads folder.')
+
+                  } catch (err) {
+                    console.error('Error generating:', err)
+                    alert('Error generating capability statement. Please try again.')
+                  } finally {
+                    setAiLoading({ ...aiLoading, capStatement: false })
+                  }
+                }}
+                disabled={aiLoading.capStatement}
+                style={{
+                  padding: '20px 40px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  backgroundColor: colors.primary,
+                  color: colors.background,
+                  cursor: aiLoading.capStatement ? 'not-allowed' : 'pointer',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  opacity: aiLoading.capStatement ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                {aiLoading.capStatement ? '⏳ Generating... (this may take 30 seconds)' : '📄 Generate Capability Statement'}
+              </button>
+
+              <p style={{ color: colors.gray, fontSize: '13px', textAlign: 'center', margin: 0 }}>
+                Downloads as a text file. Open in Word/Google Docs to add your logo and customize formatting.
+              </p>
+            </div>
+          )
+        }
+        
         return (
           <div style={{ textAlign: 'center', padding: '40px' }}>
             <p style={{ color: colors.gray, fontSize: '18px' }}>🚧 This section is coming soon!</p>
