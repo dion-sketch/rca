@@ -19,7 +19,8 @@ function MyCart({ session, onBack, profileData }) {
   const [allSubmissions, setAllSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
   
-  // Save success state
+  // Save states
+  const [showConfirm, setShowConfirm] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [savedOpportunity, setSavedOpportunity] = useState(null)
 
@@ -62,12 +63,15 @@ function MyCart({ session, onBack, profileData }) {
   const readyItems = allSubmissions.filter(s => s.status === 'ready')
   const submittedItems = allSubmissions.filter(s => s.status === 'submitted')
 
-  const handleAddManual = async () => {
+  const handleShowConfirm = () => {
     if (!manualEntry.title || !manualEntry.dueDate) {
       alert('Please enter at least a title and due date')
       return
     }
+    setShowConfirm(true)
+  }
 
+  const handleConfirmAdd = async () => {
     try {
       const { data, error } = await supabase
         .from('submissions')
@@ -91,6 +95,7 @@ function MyCart({ session, onBack, profileData }) {
 
       setAllSubmissions([data, ...allSubmissions])
       setSavedOpportunity(data)
+      setShowConfirm(false)
       setSaveSuccess(true)
       setManualEntry({
         title: '',
@@ -105,6 +110,10 @@ function MyCart({ session, onBack, profileData }) {
       console.error('Error adding submission:', err)
       alert('Error adding opportunity. Please try again.')
     }
+  }
+
+  const handleEditEntry = () => {
+    setShowConfirm(false)
   }
 
   const handleViewInCart = () => {
@@ -132,6 +141,7 @@ function MyCart({ session, onBack, profileData }) {
   const closeModal = () => {
     setShowAddManual(false)
     setSaveSuccess(false)
+    setShowConfirm(false)
     setSavedOpportunity(null)
     setManualEntry({
       title: '',
@@ -304,11 +314,11 @@ function MyCart({ session, onBack, profileData }) {
           <div style={{ display: 'grid', gap: '15px' }}>
             <div style={{ marginBottom: '10px' }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                Opportunities you've found and are considering. Click one to review and decide.
+                🛒 Opportunities you've saved. Click one to start bidding.
               </p>
             </div>
             {cartItems.length === 0 ? (
-              renderEmptyState('🛒', 'Your cart is empty', 'Add opportunities you find from Shop Contracts or manually.', true)
+              renderEmptyState('🛒', 'Your cart is empty', 'Add opportunities you find to start bidding on them.', true)
             ) : (
               cartItems.map(sub => renderOpportunityCard(sub))
             )}
@@ -320,11 +330,11 @@ function MyCart({ session, onBack, profileData }) {
           <div style={{ display: 'grid', gap: '15px' }}>
             <div style={{ marginBottom: '10px' }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                Opportunities you're actively working on. Click to continue your response.
+                📝 Bids you're actively writing. Not submitted yet.
               </p>
             </div>
             {inProgressItems.length === 0 ? (
-              renderEmptyState('📝', 'Nothing in progress', 'When you start working on an opportunity, it moves here.')
+              renderEmptyState('📝', 'Nothing in progress', 'When you start writing a bid, it moves here.')
             ) : (
               inProgressItems.map(sub => renderOpportunityCard(sub))
             )}
@@ -336,11 +346,11 @@ function MyCart({ session, onBack, profileData }) {
           <div style={{ display: 'grid', gap: '15px' }}>
             <div style={{ marginBottom: '10px' }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                Responses complete and ready to submit. Review and export.
+                ✅ Bids complete and ready to submit. Review and export.
               </p>
             </div>
             {readyItems.length === 0 ? (
-              renderEmptyState('✅', 'Nothing ready yet', 'Complete your responses to move opportunities here.')
+              renderEmptyState('✅', 'Nothing ready yet', 'Complete your bids to move them here.')
             ) : (
               readyItems.map(sub => renderOpportunityCard(sub))
             )}
@@ -352,11 +362,11 @@ function MyCart({ session, onBack, profileData }) {
           <div style={{ display: 'grid', gap: '15px' }}>
             <div style={{ marginBottom: '10px' }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                Proposals you've submitted. Waiting to hear back.
+                📬 Bids you've submitted. Waiting to hear back.
               </p>
             </div>
             {submittedItems.length === 0 ? (
-              renderEmptyState('📬', 'No submissions yet', 'Your submitted proposals will appear here.')
+              renderEmptyState('📬', 'No submissions yet', 'Your submitted bids will appear here.')
             ) : (
               submittedItems.map(sub => renderOpportunityCard(sub))
             )}
@@ -375,12 +385,19 @@ function MyCart({ session, onBack, profileData }) {
                 <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: `${colors.primary}20`, border: `3px solid ${colors.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' }}>
                   <span style={{ fontSize: '40px' }}>✓</span>
                 </div>
-                <h3 style={{ color: colors.primary, margin: '0 0 10px 0', fontSize: '24px' }}>Added to Cart!</h3>
+                <h3 style={{ color: colors.primary, margin: '0 0 10px 0', fontSize: '24px' }}>Added to Your Cart!</h3>
                 <p style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px', fontWeight: '600' }}>{savedOpportunity.title}</p>
-                <p style={{ color: colors.gray, margin: '0 0 25px 0', fontSize: '14px' }}>Due {new Date(savedOpportunity.due_date).toLocaleDateString()}</p>
+                <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '14px' }}>Due {new Date(savedOpportunity.due_date).toLocaleDateString()}</p>
+                
+                <div style={{ backgroundColor: `${colors.gold}15`, borderRadius: '8px', padding: '12px', marginBottom: '25px', border: `1px solid ${colors.gold}30` }}>
+                  <p style={{ color: colors.gold, margin: 0, fontSize: '13px' }}>
+                    🛒 Your cart holds opportunities you're working on — not submitted yet.
+                  </p>
+                </div>
+
                 <div style={{ display: 'grid', gap: '10px' }}>
                   <button onClick={handleStartNow} style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: 'pointer' }}>
-                    🚀 Start Response Now
+                    🚀 Start Bidding Now
                   </button>
                   <button onClick={handleViewInCart} style={{ width: '100%', padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, fontSize: '14px', cursor: 'pointer' }}>
                     View in Cart
@@ -390,11 +407,68 @@ function MyCart({ session, onBack, profileData }) {
                   </button>
                 </div>
               </div>
+            ) : showConfirm ? (
+              /* CONFIRMATION STATE - Is this the right one? */
+              <div>
+                <h3 style={{ color: colors.white, margin: '0 0 5px 0', textAlign: 'center' }}>🔍 Is this correct?</h3>
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px', textAlign: 'center' }}>Review the details before adding to your cart.</p>
+                
+                <div style={{ backgroundColor: '#1a1a1a', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                  <h4 style={{ color: colors.primary, margin: '0 0 15px 0', fontSize: '18px' }}>{manualEntry.title}</h4>
+                  
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    {manualEntry.rfpNumber && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: colors.gray, fontSize: '13px' }}>RFP/Bid #</span>
+                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.rfpNumber}</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: colors.gray, fontSize: '13px' }}>Due Date</span>
+                      <span style={{ color: colors.white, fontSize: '13px' }}>{new Date(manualEntry.dueDate).toLocaleDateString()}</span>
+                    </div>
+                    {manualEntry.agency && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: colors.gray, fontSize: '13px' }}>Agency</span>
+                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.agency}</span>
+                      </div>
+                    )}
+                    {manualEntry.estimatedValue && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: colors.gray, fontSize: '13px' }}>Value</span>
+                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.estimatedValue}</span>
+                      </div>
+                    )}
+                    {manualEntry.source && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: colors.gray, fontSize: '13px' }}>Source</span>
+                        <span style={{ color: colors.white, fontSize: '13px' }}>{manualEntry.source}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {manualEntry.description && (
+                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: `1px solid ${colors.gray}30` }}>
+                      <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>NOTES</p>
+                      <p style={{ color: colors.white, margin: 0, fontSize: '13px' }}>{manualEntry.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={handleEditEntry} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer', fontSize: '14px' }}>
+                    ✏️ Edit
+                  </button>
+                  <button onClick={handleConfirmAdd} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>
+                    ✓ Yes, Add to Cart
+                  </button>
+                </div>
+              </div>
             ) : (
               /* ENTRY FORM */
               <>
                 <h3 style={{ color: colors.white, margin: '0 0 5px 0' }}>🛒 Add to Cart</h3>
-                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>Found an opportunity? Add it here to track and respond.</p>
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>Found an opportunity? Add it here to start bidding.</p>
                 <div style={{ display: 'grid', gap: '15px' }}>
                   <div>
                     <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Opportunity Title *</label>
@@ -440,7 +514,7 @@ function MyCart({ session, onBack, profileData }) {
                 </div>
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '25px' }}>
                   <button onClick={closeModal} style={{ padding: '12px 24px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer', fontSize: '14px' }}>Cancel</button>
-                  <button onClick={handleAddManual} style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>Add to Cart</button>
+                  <button onClick={handleShowConfirm} style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>Next →</button>
                 </div>
               </>
             )}
