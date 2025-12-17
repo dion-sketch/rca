@@ -15,6 +15,27 @@ const getApiKey = () => {
   return localStorage.getItem('anthropic_api_key') || ''
 }
 
+const industryCategories = [
+  'Healthcare & Social Services',
+  'Professional Services',
+  'Architecture & Engineering',
+  'Construction & Trades',
+  'IT & Technology',
+  'Marketing, Media & Communications',
+  'Training & Education',
+  'Transportation & Logistics',
+  'Facilities & Maintenance',
+  'Landscaping & Environmental',
+  'Food & Catering',
+  'Event Services & Venues',
+  'Apparel & Supplies',
+  'Community & Nonprofit Services',
+  'Real Estate & Property Management',
+  'Beauty & Barber',
+  'Staffing & Employment',
+  'Other'
+]
+
 const sections = [
   { id: 1, title: 'Company Basics', icon: '🏢', description: 'Legal name, DBA, address, contact info' },
   { id: 2, title: 'Mission, Vision & Elevator Pitch', icon: '🎯', description: 'Your company story and value proposition' },
@@ -59,10 +80,13 @@ function BusinessBuilder({ session, onBack }) {
   const [vision, setVision] = useState('')
   const [elevatorPitch, setElevatorPitch] = useState('')
   
-  // NEW: Extra context questions for CR-AI
+  // Extra context questions for CR-AI
   const [whatMakesYouDifferent, setWhatMakesYouDifferent] = useState('')
   const [resultsAchieved, setResultsAchieved] = useState('')
   const [anythingElse, setAnythingElse] = useState('')
+
+  // Services
+  const [services, setServices] = useState([])
 
   // SAM.gov
   const [samRegistered, setSamRegistered] = useState(false)
@@ -108,10 +132,10 @@ function BusinessBuilder({ session, onBack }) {
         setUeiNumber(data.uei_number || '')
         setCageCode(data.cage_code || '')
         setCompletionPercentage(data.completion_percentage || 0)
-        // Load extra context if saved
         setWhatMakesYouDifferent(data.what_makes_you_different || '')
         setResultsAchieved(data.results_achieved || '')
         setAnythingElse(data.anything_else || '')
+        setServices(data.services || [])
       }
     } catch (err) {
       console.error('Error:', err)
@@ -122,7 +146,7 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 14
+    let total = 16
 
     if (companyName) filled++
     if (address) filled++
@@ -138,6 +162,7 @@ function BusinessBuilder({ session, onBack }) {
     if (teamSize) filled++
     if (yearEstablished) filled++
     if (revenueRange) filled++
+    if (services.length > 0) filled += 2
 
     return Math.round((filled / total) * 100)
   }
@@ -172,6 +197,7 @@ function BusinessBuilder({ session, onBack }) {
       what_makes_you_different: whatMakesYouDifferent,
       results_achieved: resultsAchieved,
       anything_else: anythingElse,
+      services: services,
     }
 
     try {
@@ -233,7 +259,6 @@ EXISTING VISION (if any): ${vision || 'None yet'}
       return
     }
 
-    // Check if Company Basics is filled
     if (!companyName) {
       alert('Please fill out Company Basics first so CR-AI has information to work with.')
       return
@@ -284,7 +309,7 @@ Make it:
 - Include a concrete result if provided
 - Sound professional for government audiences
 
-Return ONLY the elevator pitch (3-4 sentences max), no explanations.`
+Return ONLY the elevator pitch (2 sentences max, under 40 words), no explanations.`
       }
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -380,6 +405,86 @@ Return ONLY the improved text, no explanations.`
     }
   }
 
+  // Services functions
+  const addService = () => {
+    if (services.length >= 10) {
+      alert('Maximum 10 services allowed')
+      return
+    }
+    setServices([...services, { category: '', name: '', description: '' }])
+  }
+
+  const removeService = (index) => {
+    setServices(services.filter((_, i) => i !== index))
+  }
+
+  const updateService = (index, field, value) => {
+    const updated = [...services]
+    updated[index][field] = value
+    setServices(updated)
+  }
+
+  const generateServiceDescription = async (index) => {
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      setShowApiKeyModal(true)
+      return
+    }
+
+    const service = services[index]
+    if (!service.name) {
+      alert('Please enter a service name first.')
+      return
+    }
+
+    setAiLoading({ ...aiLoading, [`service_${index}`]: true })
+
+    try {
+      const prompt = `Write a professional 2-3 sentence description for this service offered by a government contractor:
+
+Service Name: ${service.name}
+Industry Category: ${service.category || 'Not specified'}
+Company: ${companyName || 'Not specified'}
+
+Company Context:
+${buildFullContext()}
+
+The description should:
+- Explain what the service includes
+- Highlight benefits to government/public sector clients
+- Sound professional for RFP responses
+- Be specific, not generic
+
+Return ONLY the service description, no explanations.`
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+
+      if (!response.ok) throw new Error(`API error: ${response.status}`)
+      
+      const data = await response.json()
+      updateService(index, 'description', data.content[0].text)
+
+    } catch (err) {
+      console.error('AI Error:', err)
+      alert('Error generating description. Please try again.')
+    } finally {
+      setAiLoading({ ...aiLoading, [`service_${index}`]: false })
+    }
+  }
+
   const saveApiKey = () => {
     localStorage.setItem('anthropic_api_key', tempApiKey)
     setShowApiKeyModal(false)
@@ -403,6 +508,11 @@ Return ONLY the improved text, no explanations.`
         if (profile.vision) mvp += 33
         if (profile.elevator_pitch) mvp += 34
         return mvp
+      case 3:
+        if (profile.services && profile.services.length > 0) {
+          return Math.min(100, profile.services.length * 20)
+        }
+        return 0
       case 6:
         if (profile.sam_registered && profile.uei_number) return 100
         if (profile.sam_registered || profile.uei_number) return 50
@@ -554,7 +664,7 @@ Return ONLY the improved text, no explanations.`
           <div style={{ display: 'grid', gap: '25px' }}>
             <h3 style={{ color: colors.white, margin: 0 }}>Mission, Vision & Elevator Pitch</h3>
 
-            {/* Show data being pulled from Company Basics */}
+            {/* Show data being pulled from BUCKET */}
             {companyName && (
               <div style={{
                 backgroundColor: '#1a1a1a',
@@ -563,9 +673,9 @@ Return ONLY the improved text, no explanations.`
                 border: `1px solid ${colors.primary}30`
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                  <span style={{ fontSize: '20px' }}>📋</span>
+                  <span style={{ fontSize: '20px' }}>🪣</span>
                   <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>
-                    CR-AI is pulling from your Company Basics:
+                    CR-AI is pulling from your BUCKET:
                   </span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -595,7 +705,7 @@ Return ONLY the improved text, no explanations.`
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
                 <span style={{ fontSize: '20px' }}>✨</span>
                 <span style={{ color: colors.gold, fontWeight: '600', fontSize: '14px' }}>
-                  Help CR-AI write better content for you:
+                  Add to your BUCKET — CR-AI uses this to write better content:
                 </span>
               </div>
 
@@ -608,8 +718,8 @@ Return ONLY the improved text, no explanations.`
                     value={whatMakesYouDifferent}
                     onChange={(e) => setWhatMakesYouDifferent(e.target.value)}
                     placeholder="Example: We're the only company that combines mental health services with entertainment events..."
-                    rows={2}
-                    style={{ ...inputStyle, resize: 'vertical' }}
+                    rows={4}
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
                   />
                 </div>
 
@@ -621,8 +731,8 @@ Return ONLY the improved text, no explanations.`
                     value={resultsAchieved}
                     onChange={(e) => setResultsAchieved(e.target.value)}
                     placeholder="Example: Served 50,000 students, operated 25 mobile health units, 15 years in LA County..."
-                    rows={2}
-                    style={{ ...inputStyle, resize: 'vertical' }}
+                    rows={4}
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
                   />
                 </div>
 
@@ -634,8 +744,8 @@ Return ONLY the improved text, no explanations.`
                     value={anythingElse}
                     onChange={(e) => setAnythingElse(e.target.value)}
                     placeholder="Example: We focus on underserved communities, specialize in youth programs..."
-                    rows={2}
-                    style={{ ...inputStyle, resize: 'vertical' }}
+                    rows={4}
+                    style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
                   />
                 </div>
               </div>
@@ -745,6 +855,141 @@ Return ONLY the improved text, no explanations.`
                 style={{ ...inputStyle, resize: 'vertical' }}
               />
             </div>
+          </div>
+        )
+
+      case 3:
+        return (
+          <div style={{ display: 'grid', gap: '25px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ color: colors.white, margin: 0 }}>Services You Offer</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{services.length}/10 services</span>
+            </div>
+
+            {/* Info box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                💡 <strong style={{ color: colors.white }}>Tip:</strong> Add your core services. CR-AI will use these to match you with contracts and write better proposals.
+              </p>
+            </div>
+
+            {/* Existing Services */}
+            {services.map((service, index) => (
+              <div
+                key={index}
+                style={{
+                  backgroundColor: '#1a1a1a',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: `1px solid ${colors.gray}30`
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>
+                    Service #{index + 1}
+                  </span>
+                  <button
+                    onClick={() => removeService(index)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ff4444',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🗑️ Remove
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Industry Category *
+                    </label>
+                    <select
+                      value={service.category}
+                      onChange={(e) => updateService(index, 'category', e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">Select category</option>
+                      {industryCategories.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Service Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={service.name}
+                      onChange={(e) => updateService(index, 'name', e.target.value)}
+                      placeholder="e.g., Mobile Mental Health Counseling"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                      <label style={{ color: colors.gray, fontSize: '14px' }}>
+                        Description
+                      </label>
+                      <button
+                        onClick={() => generateServiceDescription(index)}
+                        disabled={aiLoading[`service_${index}`]}
+                        style={{ ...aiButtonStyle, backgroundColor: colors.primary, color: colors.background, fontSize: '12px', padding: '6px 12px' }}
+                      >
+                        {aiLoading[`service_${index}`] ? '⏳ Generating...' : '✨ Generate with CR-AI'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={service.description}
+                      onChange={(e) => updateService(index, 'description', e.target.value)}
+                      placeholder="Describe what this service includes..."
+                      rows={3}
+                      style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Add Service Button */}
+            {services.length < 10 && (
+              <button
+                onClick={addService}
+                style={{
+                  padding: '15px',
+                  borderRadius: '12px',
+                  border: `2px dashed ${colors.gray}`,
+                  backgroundColor: 'transparent',
+                  color: colors.gray,
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                ➕ Add Service
+              </button>
+            )}
+
+            {services.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
+                <p style={{ fontSize: '16px', margin: 0 }}>No services added yet.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Click "Add Service" to get started.</p>
+              </div>
+            )}
           </div>
         )
 
