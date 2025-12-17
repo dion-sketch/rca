@@ -1,71 +1,122 @@
-// /api/generate.js - CR-AI Response Generator
-// This serverless function powers the RFP question answering
+// /api/generate.js - CR-AI Response Generator with Compliance Enforcement
 
 export default async function handler(req, res) {
-  // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { question, profile, opportunity, previousResponses } = req.body
-
-  // Validate required fields
-  if (!question) {
-    return res.status(400).json({ error: 'Question is required' })
-  }
-
-  // Get API key from environment variable
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured' })
-  }
-
   try {
-    // Build the BUCKET context from profile
+    const { 
+      question, 
+      profile, 
+      opportunity, 
+      previousResponses,
+      charLimit,
+      requirements,
+      isStrategyGeneration,
+      isQAGeneration,
+      isShortening,
+      strategyPlan,
+      mustInclude
+    } = req.body
+
+    if (!question) {
+      return res.status(400).json({ error: 'Question is required' })
+    }
+
+    // Build the context from BUCKET (profile)
     const bucketContext = buildBucketContext(profile)
-    
-    // Build opportunity context
     const opportunityContext = buildOpportunityContext(opportunity)
-    
-    // Build previous responses context (for consistency)
     const previousContext = buildPreviousContext(previousResponses)
 
-    // Create the prompt
-    const systemPrompt = `You are CR-AI, an expert government contracting assistant for Contract Ready. Your job is to help small businesses write compelling RFP responses.
+    // Build character limit instruction
+    const limitInstruction = charLimit 
+      ? `\n\nCRITICAL: Your response MUST be UNDER ${charLimit} characters. Count carefully. Do not exceed ${charLimit} characters under any circumstances. Aim for ${Math.floor(charLimit * 0.9)} characters to leave a safety buffer.`
+      : ''
 
-CRITICAL RULES:
-1. Write in FIRST PERSON ("We provide...", "Our team...", "I have...")
-2. Be SPECIFIC - use actual numbers, names, and details from the BUCKET
-3. Keep responses CONCISE but COMPLETE (2-4 paragraphs typical)
-4. Sound PROFESSIONAL but HUMAN - not robotic or generic
-5. NEVER make up information - only use what's in the BUCKET
-6. If the BUCKET lacks info for the question, write a solid response but note what could be added
-7. Match the TONE to government RFP expectations - professional, confident, specific
+    // Build required elements instruction
+    const elementsInstruction = mustInclude?.length > 0
+      ? `\n\nREQUIRED: Your response MUST include mention of: ${mustInclude.join(', ')}.`
+      : ''
 
-BUCKET (Company Profile):
+    // Different prompts for different generation types
+    let systemPrompt = ''
+    let userPrompt = ''
+
+    if (isShortening) {
+      systemPrompt = `You are an expert editor. Your ONLY job is to shorten text while preserving key information. You must stay UNDER the character limit.`
+      userPrompt = question + limitInstruction
+    } else if (isStrategyGeneration) {
+      systemPrompt = `You are CR-AI, a strategic proposal consultant powered by BUCKET + CR-AI Technology. You help small businesses win government contracts by creating compelling, strategic response plans.
+
 ${bucketContext}
+
+Your role is to create a strategic response plan that positions this business for success.`
+      
+      userPrompt = `${question}
 
 ${opportunityContext}
 
-${previousContext}`
+Create a strategic response plan that includes:
+1. PROGRAM TITLE - A creative, memorable name that connects to the agency's mission
+2. KEY THEMES - 3-4 bullet points on what to emphasize
+3. APPROACH SUMMARY - 2-3 sentences on positioning
+4. DIFFERENTIATORS - What makes this business stand out
 
-    const userPrompt = `Write a compelling response to this RFP question:
+Base this on the business profile and tailor it to the specific opportunity.`
 
-"${question}"
+    } else if (isQAGeneration) {
+      systemPrompt = `You are CR-AI, a proposal response generator powered by BUCKET + CR-AI Technology. You create compliant, compelling RFP responses.
 
-Remember:
-- First person voice
-- Use specific details from the BUCKET
-- Professional government contracting tone
-- 2-4 paragraphs unless the question requires more
-- Include relevant past performance, certifications, or team qualifications if applicable`
+${bucketContext}
 
-    // Call Anthropic API
+CRITICAL RULES:
+- Each answer MUST stay under its character limit
+- Write in first person ("We provide..." not "The company provides...")
+- Be specific, use real details from the BUCKET
+- Sound professional but human`
+
+      userPrompt = `${question}
+
+${opportunityContext}
+
+${strategyPlan ? `STRATEGY TO FOLLOW:\n${strategyPlan}\n` : ''}
+
+Generate questions and answers. For each answer, stay UNDER the specified character limit. Count characters carefully.`
+
+    } else {
+      // Standard question response
+      systemPrompt = `You are CR-AI, a proposal response generator powered by BUCKET + CR-AI Technology. You help small businesses respond to government RFP questions with professional, compelling answers.
+
+${bucketContext}
+
+CRITICAL RULES:
+- Write in first person ("We provide..." "Our team..." "We have...")
+- Be specific - use real company details from the profile
+- Sound confident but not arrogant
+- Match the tone to government proposals
+- If a character limit is specified, you MUST stay under it${charLimit ? `\n- YOUR HARD LIMIT: ${charLimit} characters. Do not exceed this.` : ''}
+${elementsInstruction}`
+
+      userPrompt = `${opportunityContext}
+
+${strategyPlan ? `STRATEGY:\n${strategyPlan}\n\n` : ''}
+
+${previousContext}
+
+QUESTION TO ANSWER:
+${question}
+${limitInstruction}
+
+Write a professional, compelling response using the business profile. ${charLimit ? `STAY UNDER ${charLimit} CHARACTERS.` : ''}`
+    }
+
+    // Call Claude API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
@@ -77,177 +128,147 @@ Remember:
     })
 
     if (!response.ok) {
-      const errorData = await response.json()
-      console.error('Anthropic API error:', errorData)
-      return res.status(500).json({ error: 'Failed to generate response', details: errorData })
+      const errorText = await response.text()
+      console.error('Claude API error:', errorText)
+      throw new Error('Failed to generate response')
     }
 
     const data = await response.json()
-    const generatedResponse = data.content[0].text
+    let generatedText = data.content[0].text
+
+    // ==========================================
+    // HARD ENFORCEMENT LAYER
+    // ==========================================
+    
+    // If there's a character limit, ENFORCE it
+    if (charLimit && generatedText.length > charLimit) {
+      console.log(`Response over limit: ${generatedText.length}/${charLimit}. Auto-truncating.`)
+      
+      // Try to truncate at a sentence boundary
+      let truncated = generatedText.substring(0, charLimit - 3)
+      const lastPeriod = truncated.lastIndexOf('.')
+      const lastQuestion = truncated.lastIndexOf('?')
+      const lastExclaim = truncated.lastIndexOf('!')
+      const lastSentence = Math.max(lastPeriod, lastQuestion, lastExclaim)
+      
+      if (lastSentence > charLimit * 0.7) {
+        // Truncate at sentence if we keep at least 70% of content
+        truncated = truncated.substring(0, lastSentence + 1)
+      } else {
+        // Otherwise just add ellipsis
+        truncated = truncated.substring(0, charLimit - 3) + '...'
+      }
+      
+      generatedText = truncated
+    }
+
+    // Check for required elements (warning only, don't block)
+    if (mustInclude?.length > 0) {
+      const missing = mustInclude.filter(element => 
+        !generatedText.toLowerCase().includes(element.toLowerCase())
+      )
+      if (missing.length > 0) {
+        console.log(`Warning: Response missing required elements: ${missing.join(', ')}`)
+        // Could regenerate here, but for now just log
+      }
+    }
 
     return res.status(200).json({ 
-      response: generatedResponse,
-      model: 'claude-sonnet-4-20250514',
-      usage: data.usage
+      response: generatedText,
+      charCount: generatedText.length,
+      charLimit: charLimit || null,
+      compliant: charLimit ? generatedText.length <= charLimit : true
     })
 
   } catch (error) {
-    console.error('Generation error:', error)
-    return res.status(500).json({ error: 'Internal server error', message: error.message })
+    console.error('Generate error:', error)
+    return res.status(500).json({ error: 'Failed to generate response. Please try again.' })
   }
 }
 
-// Helper: Build BUCKET context from profile
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+
 function buildBucketContext(profile) {
-  if (!profile) {
-    return 'No company profile available. User should build their BUCKET first.'
-  }
+  if (!profile) return 'No business profile available.'
 
-  let context = ''
+  let context = `BUSINESS BUCKET (Profile Data):
+`
 
-  // Company basics
-  if (profile.company_name) {
-    context += `COMPANY: ${profile.company_name}`
-    if (profile.dba) context += ` (DBA: ${profile.dba})`
-    context += '\n'
-  }
-  
-  if (profile.city || profile.state) {
-    context += `LOCATION: ${profile.city || ''}, ${profile.state || ''}\n`
-  }
-  
+  if (profile.company_name) context += `Company: ${profile.company_name}\n`
   if (profile.year_established) {
     const years = new Date().getFullYear() - parseInt(profile.year_established)
-    context += `ESTABLISHED: ${profile.year_established} (${years} years in business)\n`
+    context += `Years in Business: ${years}+ years (established ${profile.year_established})\n`
+  }
+  if (profile.city && profile.state) context += `Location: ${profile.city}, ${profile.state}\n`
+  if (profile.mission) context += `Mission: ${profile.mission}\n`
+  if (profile.elevator_pitch) context += `About: ${profile.elevator_pitch}\n`
+  if (profile.what_makes_you_different) context += `Differentiators: ${profile.what_makes_you_different}\n`
+  
+  if (profile.services?.length > 0) {
+    context += `Services: ${profile.services.map(s => s.name || s).join(', ')}\n`
   }
   
-  if (profile.team_size) {
-    context += `TEAM SIZE: ${profile.team_size}\n`
+  if (profile.naics_codes?.length > 0) {
+    context += `NAICS Codes: ${profile.naics_codes.map(n => `${n.code} (${n.description || 'N/A'})`).join(', ')}\n`
   }
   
-  if (profile.entity_type) {
-    context += `ENTITY TYPE: ${profile.entity_type}\n`
+  if (profile.certifications?.length > 0) {
+    context += `Certifications: ${profile.certifications.map(c => c.name || c.id || c).join(', ')}\n`
   }
   
-  if (profile.is_nonprofit) {
-    context += `NONPROFIT: Yes\n`
-  }
+  if (profile.sam_registered) context += `SAM.gov: Registered\n`
+  if (profile.sam_uei) context += `UEI: ${profile.sam_uei}\n`
+  if (profile.cage_code) context += `CAGE: ${profile.cage_code}\n`
 
-  // Mission & Pitch
-  if (profile.mission) {
-    context += `\nMISSION: ${profile.mission}\n`
-  }
-  
-  if (profile.elevator_pitch) {
-    context += `\nELEVATOR PITCH: ${profile.elevator_pitch}\n`
-  }
-
-  // What makes them different
-  if (profile.what_makes_you_different) {
-    context += `\nDIFFERENTIATORS: ${profile.what_makes_you_different}\n`
-  }
-  
-  if (profile.results_achieved) {
-    context += `\nRESULTS/IMPACT: ${profile.results_achieved}\n`
-  }
-  
-  if (profile.anything_else) {
-    context += `\nADDITIONAL CONTEXT: ${profile.anything_else}\n`
-  }
-
-  // Services
-  if (profile.services && profile.services.length > 0) {
-    context += `\nSERVICES OFFERED:\n`
-    profile.services.forEach((s, i) => {
-      context += `${i + 1}. ${s.category}`
-      if (s.description) context += `: ${s.description}`
-      context += '\n'
-    })
-  }
-
-  // NAICS Codes
-  if (profile.naics_codes && profile.naics_codes.length > 0) {
-    const codes = profile.naics_codes.map(n => `${n.code}${n.description ? ' - ' + n.description : ''}`).join(', ')
-    context += `\nNAICS CODES: ${codes}\n`
-  }
-
-  // Certifications
-  if (profile.certifications && profile.certifications.length > 0) {
-    const certs = profile.certifications.map(c => c.name || c.id).join(', ')
-    context += `\nCERTIFICATIONS: ${certs}\n`
-  }
-
-  // SAM.gov
-  if (profile.sam_registered) {
-    context += `\nSAM.GOV: Registered`
-    if (profile.uei_number) context += ` | UEI: ${profile.uei_number}`
-    if (profile.cage_code) context += ` | CAGE: ${profile.cage_code}`
-    context += '\n'
-  }
-
-  // Past Performance
-  if (profile.past_performance && profile.past_performance.length > 0) {
-    context += `\nPAST PERFORMANCE:\n`
+  if (profile.past_performance?.length > 0) {
+    context += `\nPast Performance:\n`
     profile.past_performance.forEach((pp, i) => {
-      context += `${i + 1}. ${pp.clientName || 'Client'}`
-      if (pp.projectName) context += ` - "${pp.projectName}"`
-      if (pp.contractValue) context += ` ($${pp.contractValue})`
-      if (pp.startYear || pp.endYear) context += ` [${pp.startYear || '?'}-${pp.endYear || 'present'}]`
-      context += '\n'
-      if (pp.description) context += `   What we did: ${pp.description}\n`
-      if (pp.results) context += `   Results: ${pp.results}\n`
+      context += `${i + 1}. ${pp.project_name || pp.title || 'Project'}`
+      if (pp.client) context += ` for ${pp.client}`
+      if (pp.value) context += ` ($${pp.value})`
+      if (pp.description) context += `: ${pp.description}`
+      context += `\n`
     })
   }
 
-  // Team
-  if (profile.team_members && profile.team_members.length > 0) {
-    context += `\nKEY PERSONNEL:\n`
-    profile.team_members.forEach((tm, i) => {
-      context += `${i + 1}. ${tm.name || 'Team Member'} - ${tm.role || 'Staff'}`
-      if (tm.yearsExperience) context += ` (${tm.yearsExperience} yrs exp)`
-      if (tm.type) context += ` [${tm.type}]`
-      context += '\n'
-      if (tm.qualifications) context += `   Qualifications: ${tm.qualifications}\n`
-      if (tm.bio) context += `   Bio: ${tm.bio}\n`
+  if (profile.team_members?.length > 0) {
+    context += `\nKey Personnel:\n`
+    profile.team_members.forEach((member, i) => {
+      context += `${i + 1}. ${member.name || 'Team Member'}`
+      if (member.title || member.role) context += ` - ${member.title || member.role}`
+      if (member.qualifications) context += ` (${member.qualifications})`
+      context += `\n`
     })
   }
 
-  // Pricing
-  if (profile.pricing && profile.pricing.length > 0) {
-    context += `\nRATE STRUCTURE:\n`
-    profile.pricing.forEach(p => {
-      context += `- ${p.role}: $${p.hourlyRate}/hr\n`
-    })
-  }
-
-  return context || 'Limited profile data available.'
+  return context
 }
 
-// Helper: Build opportunity context
 function buildOpportunityContext(opportunity) {
   if (!opportunity) return ''
-  
-  let context = '\nOPPORTUNITY DETAILS:\n'
+
+  let context = `CONTRACT OPPORTUNITY:
+`
   if (opportunity.title) context += `Title: ${opportunity.title}\n`
   if (opportunity.agency) context += `Agency: ${opportunity.agency}\n`
   if (opportunity.due_date) context += `Due: ${opportunity.due_date}\n`
   if (opportunity.estimated_value) context += `Value: ${opportunity.estimated_value}\n`
-  if (opportunity.description) context += `Notes: ${opportunity.description}\n`
-  
+  if (opportunity.description) context += `Description: ${opportunity.description}\n`
+
   return context
 }
 
-// Helper: Build previous responses context for consistency
 function buildPreviousContext(previousResponses) {
-  if (!previousResponses || previousResponses.length === 0) return ''
-  
-  let context = '\nPREVIOUS RESPONSES IN THIS SUBMISSION (maintain consistency):\n'
-  previousResponses.forEach((pr, i) => {
-    if (pr.response) {
-      context += `Q${i + 1}: ${pr.text.substring(0, 100)}...\n`
-      context += `A${i + 1}: ${pr.response.substring(0, 200)}...\n\n`
-    }
+  if (!previousResponses?.length) return ''
+
+  let context = `PREVIOUS RESPONSES (for consistency):
+`
+  previousResponses.forEach((resp, i) => {
+    context += `Q${i + 1}: ${resp.text}\nA: ${resp.response}\n\n`
   })
   
+  context += `Maintain consistency with these previous answers.\n`
   return context
 }
