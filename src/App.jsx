@@ -333,7 +333,8 @@ function App() {
             { label: 'Dashboard', page: 'dashboard' },
             { label: 'Shop Contracts', page: 'shop-contracts' },
             { label: 'Business Builder', page: 'business-builder' },
-            { label: 'My Cart', page: 'my-cart' }
+            { label: 'My Cart', page: 'my-cart' },
+            { label: '🪣 My BUCKET', page: 'my-bucket' }
           ].map((item) => (
             <button
               key={item.page}
@@ -462,6 +463,14 @@ function App() {
             </button>
           </div>
         </div>
+      ) : currentPage === 'my-bucket' ? (
+        /* My BUCKET Page */
+        <MyBucketPage 
+          session={session} 
+          profileData={profileData}
+          onBack={() => setCurrentPage('dashboard')}
+          onEditProfile={() => setCurrentPage('business-builder')}
+        />
       ) : (
         <>
           {/* Stats Bar */}
@@ -628,6 +637,305 @@ function App() {
       }}>
         <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>
           Powered by <span style={{ color: colors.primary }}>Contract Ready</span> • CR-AI Technology
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ==========================================
+// MY BUCKET PAGE COMPONENT
+// Shows everything in the user's BUCKET
+// ==========================================
+function MyBucketPage({ session, profileData, onBack, onEditProfile }) {
+  const [savedAnswers, setSavedAnswers] = useState([])
+  const [submissions, setSubmissions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchBucketData()
+  }, [])
+
+  const fetchBucketData = async () => {
+    try {
+      // Fetch saved answers
+      const { data: answers } = await supabase
+        .from('saved_answers')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+
+      if (answers) setSavedAnswers(answers)
+
+      // Fetch completed submissions
+      const { data: subs } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', 'submitted')
+        .order('submitted_at', { ascending: false })
+
+      if (subs) setSubmissions(subs)
+    } catch (err) {
+      console.error('Error fetching bucket data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const submissionCount = profileData?.submission_count || submissions.length || 0
+  const bucketScore = calculateBucketScore(profileData, submissionCount)
+
+  function calculateBucketScore(profile, subCount) {
+    if (!profile) return 0
+    let score = 0
+    const baseMax = 40
+
+    // Foundation
+    if (profile.company_name) score += 2
+    if (profile.city && profile.state) score += 2
+    if (profile.phone && profile.email) score += 2
+    if (profile.mission) score += 3
+    if (profile.elevator_pitch) score += 2
+    if (profile.services?.length > 0) score += 5
+    if (profile.naics_codes?.length > 0) score += 5
+    if (profile.sam_registered) score += 5
+    if (profile.past_performance?.length > 0) score += 3
+    if (profile.past_performance?.length >= 3) score += 2
+    if (profile.team_members?.length > 0) score += 2
+    if (profile.team_members?.length >= 3) score += 1
+    if (profile.pricing?.length > 0) score += 1
+    if (profile.certifications?.length > 0) score += 1
+
+    // Submission bonus
+    score += subCount * 3
+
+    return Math.round((score / baseMax) * 100)
+  }
+
+  return (
+    <div style={{ padding: '40px 30px', maxWidth: '800px', margin: '0 auto', paddingBottom: '100px' }}>
+      <button 
+        onClick={onBack} 
+        style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px', marginBottom: '20px' }}
+      >
+        ← Back to Dashboard
+      </button>
+
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <div style={{ fontSize: '60px', marginBottom: '15px' }}>🪣</div>
+        <h1 style={{ color: colors.white, margin: '0 0 10px 0' }}>My BUCKET</h1>
+        <p style={{ color: colors.gray, margin: 0 }}>Everything CR-AI knows about your business</p>
+      </div>
+
+      {/* Score Card */}
+      <div style={{
+        backgroundColor: colors.card,
+        borderRadius: '16px',
+        padding: '25px',
+        border: `2px solid ${bucketScore >= 100 ? colors.primary : colors.gold}`,
+        textAlign: 'center',
+        marginBottom: '25px'
+      }}>
+        <div style={{ 
+          color: bucketScore >= 100 ? colors.primary : colors.gold, 
+          fontSize: '48px', 
+          fontWeight: '700',
+          marginBottom: '10px'
+        }}>
+          {bucketScore}%
+        </div>
+        <p style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px', fontWeight: '600' }}>
+          {bucketScore >= 100 
+            ? 'Expert BUCKET — You have a lot to work with!' 
+            : bucketScore >= 80 
+              ? 'Strong BUCKET — CR-AI can help you win'
+              : bucketScore >= 50
+                ? 'Growing BUCKET — Keep submitting!'
+                : 'Building your foundation'
+          }
+        </p>
+        <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
+          {submissionCount} submission{submissionCount !== 1 ? 's' : ''} • {savedAnswers.length} saved answer{savedAnswers.length !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      {/* Company Info */}
+      <div style={{
+        backgroundColor: colors.card,
+        borderRadius: '12px',
+        padding: '20px',
+        border: `1px solid ${colors.gray}30`,
+        marginBottom: '20px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <p style={{ color: colors.gray, margin: 0, fontSize: '12px', fontWeight: '600' }}>COMPANY</p>
+          <button 
+            onClick={onEditProfile}
+            style={{ background: 'none', border: 'none', color: colors.primary, cursor: 'pointer', fontSize: '13px' }}
+          >
+            Edit in Business Builder →
+          </button>
+        </div>
+        <p style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px', fontWeight: '600' }}>
+          {profileData?.company_name || 'Your Company Name'}
+        </p>
+        <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+          {profileData?.city && profileData?.state 
+            ? `${profileData.city}, ${profileData.state}` 
+            : 'Location not set'
+          }
+          {profileData?.year_established && ` • ${new Date().getFullYear() - parseInt(profileData.year_established)}+ years`}
+        </p>
+        {profileData?.sam_registered && (
+          <p style={{ color: colors.primary, margin: '8px 0 0 0', fontSize: '12px' }}>✓ SAM.gov Registered</p>
+        )}
+      </div>
+
+      {/* Experience / Submissions */}
+      <div style={{
+        backgroundColor: colors.card,
+        borderRadius: '12px',
+        padding: '20px',
+        border: `1px solid ${colors.gray}30`,
+        marginBottom: '20px'
+      }}>
+        <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
+          EXPERIENCE ({submissionCount} submission{submissionCount !== 1 ? 's' : ''})
+        </p>
+        
+        {submissions.length > 0 ? (
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {submissions.slice(0, 5).map((sub, i) => (
+              <div key={sub.id} style={{ 
+                backgroundColor: colors.background, 
+                borderRadius: '8px', 
+                padding: '12px',
+                border: `1px solid ${colors.gray}20`
+              }}>
+                <p style={{ color: colors.white, margin: '0 0 4px 0', fontSize: '14px', fontWeight: '500' }}>
+                  {sub.title}
+                </p>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>
+                  {sub.agency || 'No agency'} • {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Submitted'}
+                </p>
+              </div>
+            ))}
+            {submissions.length > 5 && (
+              <p style={{ color: colors.gold, margin: '10px 0 0 0', fontSize: '13px' }}>
+                +{submissions.length - 5} more submissions
+              </p>
+            )}
+          </div>
+        ) : (
+          <p style={{ color: colors.gray, margin: 0, fontSize: '14px', fontStyle: 'italic' }}>
+            No submissions yet. Complete your first submission to grow your BUCKET!
+          </p>
+        )}
+      </div>
+
+      {/* Saved Answers */}
+      <div style={{
+        backgroundColor: colors.card,
+        borderRadius: '12px',
+        padding: '20px',
+        border: `1px solid ${colors.gray}30`,
+        marginBottom: '20px'
+      }}>
+        <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
+          SAVED ANSWERS ({savedAnswers.length})
+        </p>
+        
+        {savedAnswers.length > 0 ? (
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {savedAnswers.slice(0, 5).map((ans, i) => (
+              <div key={ans.id || i} style={{ 
+                backgroundColor: colors.background, 
+                borderRadius: '8px', 
+                padding: '12px',
+                border: `1px solid ${colors.gray}20`
+              }}>
+                <p style={{ color: colors.white, margin: '0 0 4px 0', fontSize: '13px', fontWeight: '500' }}>
+                  {ans.question_text?.substring(0, 60)}...
+                </p>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '11px' }}>
+                  From: {ans.source_contract_title || 'Unknown'} • {ans.answer_text?.length || 0} chars
+                </p>
+              </div>
+            ))}
+            {savedAnswers.length > 5 && (
+              <p style={{ color: colors.gold, margin: '10px 0 0 0', fontSize: '13px' }}>
+                +{savedAnswers.length - 5} more saved answers
+              </p>
+            )}
+          </div>
+        ) : (
+          <p style={{ color: colors.gray, margin: 0, fontSize: '14px', fontStyle: 'italic' }}>
+            Answers you save get stored here for reuse. Submit a contract and choose "Put into my BUCKET" to start building your library.
+          </p>
+        )}
+      </div>
+
+      {/* Services */}
+      {profileData?.services?.length > 0 && (
+        <div style={{
+          backgroundColor: colors.card,
+          borderRadius: '12px',
+          padding: '20px',
+          border: `1px solid ${colors.gray}30`,
+          marginBottom: '20px'
+        }}>
+          <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
+            SERVICES ({profileData.services.length})
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {profileData.services.map((service, i) => (
+              <span key={i} style={{
+                backgroundColor: `${colors.primary}20`,
+                color: colors.primary,
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '12px'
+              }}>
+                {service.name || service}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Team */}
+      {profileData?.team_members?.length > 0 && (
+        <div style={{
+          backgroundColor: colors.card,
+          borderRadius: '12px',
+          padding: '20px',
+          border: `1px solid ${colors.gray}30`,
+          marginBottom: '20px'
+        }}>
+          <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
+            TEAM ({profileData.team_members.length})
+          </p>
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {profileData.team_members.slice(0, 5).map((member, i) => (
+              <p key={i} style={{ color: colors.white, margin: 0, fontSize: '14px' }}>
+                {member.name || 'Team Member'} {member.title && `— ${member.title}`}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tip */}
+      <div style={{
+        backgroundColor: `${colors.gold}15`,
+        borderRadius: '10px',
+        padding: '15px',
+        border: `1px solid ${colors.gold}30`
+      }}>
+        <p style={{ color: colors.white, margin: 0, fontSize: '13px', lineHeight: '1.5' }}>
+          💡 <strong>Your BUCKET grows with every submission.</strong> The more you submit, the smarter CR-AI gets about your business. Keep going!
         </p>
       </div>
     </div>
