@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import BusinessBuilder from './BusinessBuilder'
+import Submissions from './Submissions'
 
 // Contract Ready Brand Colors
 const colors = {
@@ -354,6 +355,11 @@ function App() {
             fetchProfileCompletion(session.user.id)
           }} 
         />
+      ) : currentPage === 'submissions' ? (
+        <Submissions 
+          session={session} 
+          onBack={() => setCurrentPage('dashboard')} 
+        />
       ) : (
         <>
           {/* Stats Bar */}
@@ -365,8 +371,8 @@ function App() {
             borderBottom: `1px solid ${colors.primary}30`
           }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.primary, fontSize: '32px', fontWeight: '700' }}>
-            🪣 {profileCompletion}%
+          <div style={{ color: profileCompletion >= 80 ? colors.primary : colors.gold, fontSize: '32px', fontWeight: '700' }}>
+            {profileCompletion}%
           </div>
           <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Full</div>
         </div>
@@ -445,7 +451,7 @@ function App() {
               fontSize: '12px',
               fontWeight: '600'
             }}>
-              {profileCompletion > 0 ? `🪣 ${profileCompletion}%` : 'START HERE'}
+              {profileCompletion > 0 ? `${profileCompletion}% READY` : 'START HERE'}
             </div>
             <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏗️</div>
             <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Business Builder</h3>
