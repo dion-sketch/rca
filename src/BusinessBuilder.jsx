@@ -2236,54 +2236,57 @@ Return ONLY the service description, no explanations.`
 
                     const hasPastPerformance = pastPerformance.length > 0
 
-                    const prompt = `You are creating a professional CAPABILITY STATEMENT for a government contractor. Generate the content in a structured format that can be placed in a one-page document.
+                    const prompt = `You are creating a ONE-PAGE CAPABILITY STATEMENT for a government contractor. It must be CONCISE and SCANNABLE — no long paragraphs.
 
-COMPANY DATA FROM THEIR BUCKET:
+COMPANY DATA:
 ${JSON.stringify(bucketData, null, 2)}
 
-${hasPastPerformance ? `
-INSTRUCTION: This company HAS past performance. Highlight their proven track record, specific contracts, results achieved, and references.
-` : `
-INSTRUCTION: This company does NOT have past performance yet. DO NOT leave this section empty or say "none". Instead, create a compelling "WHY WE'RE READY" section that highlights:
-- The founder/owner's years of experience in the industry
-- Team members' combined expertise and qualifications
-- Industry trends that show why their services are needed NOW
-- Community needs in their geographic area
-- Their certifications and what advantages they provide
-- What makes them different from competitors
-- Their commitment and readiness to deliver
+CRITICAL FORMATTING RULES:
+- This is a ONE-PAGE document. Be BRIEF.
+- Use short bullet points, not paragraphs
+- NAICS codes: Just list the numbers, no descriptions (e.g., "541820 | 561920 | 541613")
+- No fluff, no filler words
+- Every line should deliver value
+- Certifications: Just list them (e.g., "MBE | SBE | DVBE")
 
-Make them look CONTRACT READY even though they're new to government contracting.
+${hasPastPerformance ? `
+INSTRUCTION: Highlight their proven contracts and results in 2-3 bullet points max.
+` : `
+INSTRUCTION: Create a brief "CONTRACT READY" section with 3-4 bullet points showing why they're ready (experience, team strength, relevant expertise). No long paragraphs.
 `}
 
-Generate the following sections. Be specific, professional, and compelling:
+Generate these sections. Be BRIEF and PUNCHY:
 
-1. COMPANY OVERVIEW (2-3 sentences using their mission/elevator pitch)
+1. COMPANY OVERVIEW (2 sentences MAX)
 
-2. CORE CAPABILITIES (list their services with brief descriptions)
+2. CORE CAPABILITIES (4-6 bullet points, 5-10 words each)
 
-3. ${hasPastPerformance ? 'PAST PERFORMANCE (highlight their best contracts with results)' : 'WHY WE ARE CONTRACT READY (make a compelling case using team experience, industry relevance, and readiness)'}
+3. ${hasPastPerformance ? 'PAST PERFORMANCE (2-3 bullet points with results)' : 'WHY CONTRACT READY (3-4 bullet points)'}
 
-4. DIFFERENTIATORS (what makes them unique - use their "what makes you different" answer)
+4. DIFFERENTIATORS (3-4 bullet points, 5-10 words each)
 
-5. CERTIFICATIONS & CODES (list their certs and NAICS codes)
+5. CERTIFICATIONS & CODES (One line each, no explanations)
 
-6. KEY PERSONNEL (brief bio of key team members with experience)
+6. KEY PERSONNEL (Name, Title, Years Experience — that's it)
 
-7. CONTACT INFORMATION (formatted nicely)
-
-Format your response as JSON with these exact keys:
+Format as JSON:
 {
-  "companyOverview": "...",
-  "coreCapabilities": ["capability 1", "capability 2"],
-  "pastPerformanceOrWhyReady": "...",
-  "differentiators": ["diff 1", "diff 2"],
-  "certificationsAndCodes": "...",
-  "keyPersonnel": "...",
-  "contactInfo": "..."
+  "companyOverview": "Brief 2 sentences",
+  "coreCapabilities": ["short bullet", "short bullet"],
+  "pastPerformanceOrWhyReady": ["bullet 1", "bullet 2"],
+  "differentiators": ["short bullet", "short bullet"],
+  "certifications": "MBE | SBE | DVBE (or N/A)",
+  "naicsCodes": "541820 | 561920 | 541613",
+  "keyPersonnel": ["Name - Title - X years", "Name - Title - X years"],
+  "contact": {
+    "address": "full address",
+    "phone": "phone",
+    "email": "email",
+    "website": "website"
+  }
 }
 
-Return ONLY the JSON, no other text.`
+Return ONLY the JSON.`
 
                     const response = await fetch('https://api.anthropic.com/v1/messages', {
                       method: 'POST',
@@ -2316,61 +2319,83 @@ Return ONLY the JSON, no other text.`
                       }
                     }
 
-                    // Create downloadable text file (Word doc would require additional library)
-                    const capStatement = `
-═══════════════════════════════════════════════════════════════
-                    CAPABILITY STATEMENT
-═══════════════════════════════════════════════════════════════
+                    // Create clean HTML that Word can open
+                    const capStatement = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${companyName} - Capability Statement</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 8.5in; margin: 0 auto; padding: 0.5in; font-size: 11pt; }
+h1 { text-align: center; font-size: 18pt; margin-bottom: 5px; border-bottom: 3px solid #00A86B; padding-bottom: 10px; }
+h2 { font-size: 12pt; background: #00A86B; color: white; padding: 5px 10px; margin: 15px 0 10px 0; }
+.contact-header { text-align: center; font-size: 10pt; color: #666; margin-bottom: 20px; }
+ul { margin: 5px 0; padding-left: 20px; }
+li { margin: 3px 0; }
+.two-col { display: flex; gap: 20px; }
+.col { flex: 1; }
+.codes { font-family: monospace; background: #f5f5f5; padding: 8px; margin: 5px 0; }
+.footer { text-align: center; font-size: 9pt; color: #999; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
+</style>
+</head>
+<body>
 
-${companyName.toUpperCase()}
-${dba ? `DBA: ${dba}` : ''}
-───────────────────────────────────────────────────────────────
+<h1>${companyName.toUpperCase()}</h1>
+<div class="contact-header">
+${content.contact?.address || `${address}, ${city}, ${state} ${zip}`}<br>
+${content.contact?.phone || phone} | ${content.contact?.email || email}${content.contact?.website || website ? ` | ${content.contact?.website || website}` : ''}
+</div>
 
-COMPANY OVERVIEW
-────────────────
-${content.companyOverview}
+<h2>COMPANY OVERVIEW</h2>
+<p>${content.companyOverview}</p>
 
-CORE CAPABILITIES
-─────────────────
-${Array.isArray(content.coreCapabilities) ? content.coreCapabilities.map(c => `• ${c}`).join('\n') : content.coreCapabilities}
+<div class="two-col">
+<div class="col">
+<h2>CORE CAPABILITIES</h2>
+<ul>
+${Array.isArray(content.coreCapabilities) ? content.coreCapabilities.map(c => `<li>${c}</li>`).join('\n') : `<li>${content.coreCapabilities}</li>`}
+</ul>
 
-${hasPastPerformance ? 'PAST PERFORMANCE' : 'WHY WE ARE CONTRACT READY'}
-─────────────────${hasPastPerformance ? '' : '───────────────'}
-${content.pastPerformanceOrWhyReady}
+<h2>${hasPastPerformance ? 'PAST PERFORMANCE' : 'WHY CONTRACT READY'}</h2>
+<ul>
+${Array.isArray(content.pastPerformanceOrWhyReady) ? content.pastPerformanceOrWhyReady.map(p => `<li>${p}</li>`).join('\n') : `<li>${content.pastPerformanceOrWhyReady}</li>`}
+</ul>
+</div>
 
-DIFFERENTIATORS
-───────────────
-${Array.isArray(content.differentiators) ? content.differentiators.map(d => `• ${d}`).join('\n') : content.differentiators}
+<div class="col">
+<h2>DIFFERENTIATORS</h2>
+<ul>
+${Array.isArray(content.differentiators) ? content.differentiators.map(d => `<li>${d}</li>`).join('\n') : `<li>${content.differentiators}</li>`}
+</ul>
 
-CERTIFICATIONS & CODES
-──────────────────────
-${content.certificationsAndCodes}
+<h2>KEY PERSONNEL</h2>
+<ul>
+${Array.isArray(content.keyPersonnel) ? content.keyPersonnel.map(k => `<li>${k}</li>`).join('\n') : `<li>${content.keyPersonnel}</li>`}
+</ul>
+</div>
+</div>
 
-KEY PERSONNEL
-─────────────
-${content.keyPersonnel}
+<h2>CERTIFICATIONS & CODES</h2>
+<p><strong>Certifications:</strong> ${content.certifications || 'N/A'}</p>
+<p class="codes"><strong>NAICS:</strong> ${content.naicsCodes || naicsCodes.map(n => n.code).join(' | ') || 'N/A'}${ueiNumber ? ` | <strong>UEI:</strong> ${ueiNumber}` : ''}${cageCode ? ` | <strong>CAGE:</strong> ${cageCode}` : ''}</p>
 
-CONTACT INFORMATION
-───────────────────
-${content.contactInfo}
+<div class="footer">Generated with ContractReady.com</div>
 
-───────────────────────────────────────────────────────────────
-                Generated with ContractReady.com
-═══════════════════════════════════════════════════════════════
-`
+</body>
+</html>`
 
-                    // Create and download file
-                    const blob = new Blob([capStatement], { type: 'text/plain' })
+                    // Create and download as .doc (Word can open HTML with .doc extension)
+                    const blob = new Blob([capStatement], { type: 'application/msword' })
                     const url = URL.createObjectURL(blob)
                     const a = document.createElement('a')
                     a.href = url
-                    a.download = `${companyName.replace(/[^a-z0-9]/gi, '_')}_Capability_Statement.txt`
+                    a.download = `${companyName.replace(/[^a-z0-9]/gi, '_')}_Capability_Statement.doc`
                     document.body.appendChild(a)
                     a.click()
                     document.body.removeChild(a)
                     URL.revokeObjectURL(url)
 
-                    alert('✅ Capability Statement generated! Check your downloads folder.')
+                    alert('✅ Capability Statement downloaded! Open it in Word to add your logo.')
 
                   } catch (err) {
                     console.error('Error generating:', err)
@@ -2400,7 +2425,7 @@ ${content.contactInfo}
               </button>
 
               <p style={{ color: colors.gray, fontSize: '13px', textAlign: 'center', margin: 0 }}>
-                Downloads as a text file. Open in Word/Google Docs to add your logo and customize formatting.
+                Downloads as a Word document (.doc). Add your logo and customize as needed.
               </p>
             </div>
           )
