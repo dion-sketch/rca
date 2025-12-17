@@ -45,7 +45,7 @@ const sections = [
   { id: 6, title: 'SAM.gov Registration', icon: '✅', description: 'Federal registration status, UEI, CAGE code' },
   { id: 7, title: 'Pricing Snapshot', icon: '💰', description: 'Hourly rates by role' },
   { id: 8, title: 'Past Performance', icon: '📊', description: 'Previous contracts and projects (up to 5)' },
-  { id: 9, title: 'Team', icon: '👥', description: 'Key personnel and their qualifications' },
+  { id: 9, title: 'Team Builder', icon: '👥', description: 'Employees, contractors, vendors — grows as you submit' },
   { id: 10, title: 'Documents', icon: '📁', description: 'Capability statement, W-9, resumes, certifications' },
 ]
 
@@ -601,7 +601,9 @@ Return ONLY the service description, no explanations.`
     setTeamMembers([...teamMembers, { 
       name: '', 
       role: '', 
+      type: '',
       yearsExperience: '', 
+      hourlyRate: '',
       qualifications: '',
       bio: ''
     }])
@@ -1925,8 +1927,8 @@ Return ONLY the service description, no explanations.`
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ color: colors.white, margin: 0 }}>Key Personnel / Team</h3>
-              <span style={{ color: colors.gray, fontSize: '14px' }}>{teamMembers.length}/10 members</span>
+              <h3 style={{ color: colors.white, margin: 0 }}>Team Builder</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{teamMembers.length}/10 people</span>
             </div>
 
             {/* Info box */}
@@ -1937,7 +1939,19 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>Evaluators want to know WHO will do the work.</strong> Add key team members with their experience. Start with yourself and add others as your team grows. You can update this anytime in your BUCKET.
+                💡 <strong style={{ color: colors.white }}>Build your team over time.</strong> Add anyone you work with — employees, contractors, vendors, partners. When you respond to contracts and grants, you'll select from this list. New people you add during submissions automatically save here for future use.
+              </p>
+            </div>
+
+            {/* Growth message */}
+            <div style={{
+              backgroundColor: `${colors.gold}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.gold}30`
+            }}>
+              <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
+                🪣 <strong>This is part of your BUCKET.</strong> Start with 1-2 people now. As you go after more contracts and grants, you'll add plumbers, consultants, specialists — whoever you need. Your Team Builder will grow and you can select from it for future proposals.
               </p>
             </div>
 
@@ -1993,14 +2007,31 @@ Return ONLY the service description, no explanations.`
                         type="text"
                         value={member.role}
                         onChange={(e) => updateTeamMember(index, 'role', e.target.value)}
-                        placeholder="e.g., Project Manager"
+                        placeholder="e.g., Project Manager, Plumber, Consultant"
                         style={inputStyle}
                       />
                     </div>
                   </div>
 
-                  {/* Row 2: Experience and Qualifications */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+                  {/* Row 2: Type, Experience, Rate */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Type
+                      </label>
+                      <select
+                        value={member.type || ''}
+                        onChange={(e) => updateTeamMember(index, 'type', e.target.value)}
+                        style={inputStyle}
+                      >
+                        <option value="">Select type</option>
+                        <option value="owner">Owner / Principal</option>
+                        <option value="employee">Employee</option>
+                        <option value="contractor">Contractor</option>
+                        <option value="vendor">Vendor / Partner</option>
+                        <option value="consultant">Consultant</option>
+                      </select>
+                    </div>
                     <div>
                       <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
                         Years of Experience
@@ -2015,16 +2046,30 @@ Return ONLY the service description, no explanations.`
                     </div>
                     <div>
                       <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                        Key Qualifications / Certifications
+                        Hourly Rate ($)
                       </label>
                       <input
                         type="text"
-                        value={member.qualifications}
-                        onChange={(e) => updateTeamMember(index, 'qualifications', e.target.value)}
-                        placeholder="e.g., PMP, MBA, Licensed Therapist"
+                        value={member.hourlyRate || ''}
+                        onChange={(e) => updateTeamMember(index, 'hourlyRate', e.target.value)}
+                        placeholder="e.g., 85"
                         style={inputStyle}
                       />
                     </div>
+                  </div>
+
+                  {/* Qualifications */}
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Key Qualifications / Certifications / Licenses
+                    </label>
+                    <input
+                      type="text"
+                      value={member.qualifications}
+                      onChange={(e) => updateTeamMember(index, 'qualifications', e.target.value)}
+                      placeholder="e.g., PMP, Licensed Contractor, MBA, LCSW"
+                      style={inputStyle}
+                    />
                   </div>
 
                   {/* Bio */}
@@ -2035,7 +2080,7 @@ Return ONLY the service description, no explanations.`
                     <textarea
                       value={member.bio}
                       onChange={(e) => updateTeamMember(index, 'bio', e.target.value)}
-                      placeholder="Describe their background, expertise, and relevant experience for contracts..."
+                      placeholder="Describe their background and experience. This helps CR-AI write about them in proposals..."
                       rows={3}
                       style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
                     />
@@ -2069,9 +2114,11 @@ Return ONLY the service description, no explanations.`
             {teamMembers.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
                 <p style={{ fontSize: '16px', margin: 0 }}>No team members added yet.</p>
-                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Start with yourself! Add more people as your team grows.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Start with yourself! Add contractors and vendors as you need them for contracts.</p>
               </div>
             )}
+          </div>
+        )
           </div>
         )
 
