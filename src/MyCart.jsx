@@ -30,9 +30,7 @@ function MyCart({ session, onBack, profileData }) {
     dueDate: '',
     source: '',
     estimatedValue: '',
-    description: '',
-    budgetFloor: '',
-    budgetCeiling: ''
+    description: ''
   })
 
   useEffect(() => {
@@ -71,11 +69,6 @@ function MyCart({ session, onBack, profileData }) {
 
   const handleConfirmAdd = async () => {
     try {
-      const requirements = {
-        budget_floor: manualEntry.budgetFloor ? parseInt(manualEntry.budgetFloor.replace(/\D/g, '')) : null,
-        budget_ceiling: manualEntry.budgetCeiling ? parseInt(manualEntry.budgetCeiling.replace(/\D/g, '')) : null,
-      }
-
       const { data, error } = await supabase
         .from('submissions')
         .insert({
@@ -88,8 +81,7 @@ function MyCart({ session, onBack, profileData }) {
           estimated_value: manualEntry.estimatedValue,
           description: manualEntry.description,
           status: 'draft',
-          questions: [],
-          requirements: requirements
+          questions: []
         })
         .select()
         .single()
@@ -100,7 +92,7 @@ function MyCart({ session, onBack, profileData }) {
       setSavedOpportunity(data)
       setShowConfirm(false)
       setSaveSuccess(true)
-      setManualEntry({ title: '', rfpNumber: '', agency: '', dueDate: '', source: '', estimatedValue: '', description: '', budgetFloor: '', budgetCeiling: '' })
+      setManualEntry({ title: '', rfpNumber: '', agency: '', dueDate: '', source: '', estimatedValue: '', description: '' })
     } catch (err) {
       console.error('Error adding submission:', err)
       alert('Error saving opportunity. Please try again.')
@@ -111,28 +103,22 @@ function MyCart({ session, onBack, profileData }) {
     if (!profile) return { percentage: 0, hasItems: [], craiHelps: [] }
     
     const hasItems = []
-    const craiHelps = []
     let score = 0
     const maxScore = 10
 
-    if (profile.company_name) { hasItems.push(`${profile.company_name}`); score += 1 }
-    if (profile.naics_codes?.length > 0) { hasItems.push(`NAICS: ${profile.naics_codes.map(n => n.code).join(', ')}`); score += 1 }
-    if (profile.certifications?.length > 0) { hasItems.push(`${profile.certifications.map(c => c.name || c.id).join(', ')}`); score += 1 }
+    if (profile.company_name) { hasItems.push(profile.company_name); score += 1 }
+    if (profile.naics_codes?.length > 0) { hasItems.push(`NAICS codes on file`); score += 1 }
+    if (profile.certifications?.length > 0) { hasItems.push(`${profile.certifications.length} certification(s)`); score += 1 }
     if (profile.year_established) { hasItems.push(`${new Date().getFullYear() - parseInt(profile.year_established)}+ years in business`); score += 1 }
     if (profile.city && profile.state) { hasItems.push(`Based in ${profile.city}, ${profile.state}`); score += 0.5 }
     if (profile.sam_registered) { hasItems.push('SAM.gov Registered'); score += 1 }
-    if (profile.past_performance?.length > 0) { hasItems.push(`${profile.past_performance.length} past performance record${profile.past_performance.length !== 1 ? 's' : ''}`); score += 1.5 }
-    if (profile.team_members?.length > 0) { hasItems.push(`${profile.team_members.length} key personnel on file`); score += 1 }
-    if (profile.services?.length > 0) { hasItems.push(`${profile.services.length} service area${profile.services.length !== 1 ? 's' : ''} defined`); score += 1 }
+    if (profile.past_performance?.length > 0) { hasItems.push(`${profile.past_performance.length} past performance record(s)`); score += 1.5 }
+    if (profile.team_members?.length > 0) { hasItems.push(`${profile.team_members.length} key personnel`); score += 1 }
+    if (profile.services?.length > 0) { hasItems.push(`${profile.services.length} service area(s)`); score += 1 }
     if (profile.mission) score += 0.5
     if (profile.elevator_pitch) score += 0.5
 
-    craiHelps.push('Tailored response narratives')
-    craiHelps.push('Experience descriptions')
-    if (!profile.past_performance?.length) craiHelps.push('Past performance statements')
-    craiHelps.push('Budget justification language')
-
-    return { percentage: Math.min(Math.round((score / maxScore) * 100), 100), hasItems, craiHelps }
+    return { percentage: Math.min(Math.round((score / maxScore) * 100), 100), hasItems }
   }
 
   const openResponseBuilder = (opp) => {
@@ -180,15 +166,15 @@ function MyCart({ session, onBack, profileData }) {
       <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Dashboard</button>
-          <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>🛒 My Cart</h1>
+          <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>My Cart</h1>
           <button onClick={() => setShowAddManual(true)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>+ Add</button>
         </div>
       </div>
 
       <div style={{ padding: '20px 30px 0 30px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <button onClick={() => setActiveTab('cart')} style={tabStyle(activeTab === 'cart')}>🛒 Considering ({cartItems.length})</button>
-        <button onClick={() => setActiveTab('inprogress')} style={tabStyle(activeTab === 'inprogress')}>✏️ In Progress ({inProgressItems.length})</button>
-        <button onClick={() => setActiveTab('submitted')} style={tabStyle(activeTab === 'submitted')}>✅ Submitted ({submittedItems.length})</button>
+        <button onClick={() => setActiveTab('cart')} style={tabStyle(activeTab === 'cart')}>Considering ({cartItems.length})</button>
+        <button onClick={() => setActiveTab('inprogress')} style={tabStyle(activeTab === 'inprogress')}>In Progress ({inProgressItems.length})</button>
+        <button onClick={() => setActiveTab('submitted')} style={tabStyle(activeTab === 'submitted')}>Submitted ({submittedItems.length})</button>
       </div>
 
       <div style={{ padding: '20px 30px' }}>
@@ -244,7 +230,7 @@ function MyCart({ session, onBack, profileData }) {
                             <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
                           </div>
                           <div style={{ textAlign: 'right' }}>
-                            <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>{answered}/{total}</p>
+                            <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>{answered} of {total}</p>
                             <p style={{ color: colors.gold, margin: 0, fontSize: '12px' }}>Due: {new Date(item.due_date).toLocaleDateString()}</p>
                           </div>
                         </div>
@@ -267,7 +253,7 @@ function MyCart({ session, onBack, profileData }) {
                     <div key={item.id} onClick={() => openResponseBuilder(item)} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}50`, cursor: 'pointer' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
-                          <span style={{ color: colors.primary, fontSize: '14px' }}>✅</span>
+                          <span style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>SUBMITTED</span>
                           <h3 style={{ color: colors.white, margin: '5px 0', fontSize: '16px' }}>{item.title}</h3>
                           <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
                         </div>
@@ -305,8 +291,8 @@ function MyCart({ session, onBack, profileData }) {
                 <input type="text" value={manualEntry.estimatedValue} onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })} placeholder="e.g., $50,000 - $100,000" style={inputStyle} />
               </div>
               <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Notes</label>
-                <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="Any notes..." rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Description</label>
+                <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="What is this contract asking for?" rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
@@ -320,7 +306,6 @@ function MyCart({ session, onBack, profileData }) {
       {showConfirm && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '20px' }}>
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.gold}`, textAlign: 'center' }}>
-            <p style={{ fontSize: '40px', margin: '0 0 15px 0' }}>🛒</p>
             <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Add to Cart?</h3>
             <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '16px' }}>{manualEntry.title}</p>
             <p style={{ color: colors.gold, margin: '0 0 20px 0', fontSize: '14px' }}>Due: {new Date(manualEntry.dueDate).toLocaleDateString()}</p>
@@ -335,8 +320,7 @@ function MyCart({ session, onBack, profileData }) {
       {saveSuccess && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '20px' }}>
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.primary}`, textAlign: 'center' }}>
-            <p style={{ fontSize: '50px', margin: '0 0 15px 0' }}>✅</p>
-            <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Added to Cart!</h3>
+            <h3 style={{ color: colors.primary, margin: '0 0 10px 0' }}>Added to Cart</h3>
             <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>{savedOpportunity?.title}</p>
             <div style={{ display: 'grid', gap: '10px' }}>
               <button onClick={() => { setSaveSuccess(false); setShowAddManual(false); if (savedOpportunity) openResponseBuilder(savedOpportunity) }} style={{ padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Start Working on It</button>
@@ -354,12 +338,11 @@ function MyCart({ session, onBack, profileData }) {
 // RESPONSE BUILDER
 // ==========================================
 function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucketMatch }) {
-  // Phases: overview, strategy, change-approach, answers, review
   const [phase, setPhase] = useState(opportunity.strategy_plan ? 'answers' : 'overview')
   const [localOpportunity, setLocalOpportunity] = useState(opportunity)
   
   // Save status
-  const [saveStatus, setSaveStatus] = useState('saved') // 'saved', 'saving', 'error'
+  const [saveStatus, setSaveStatus] = useState('saved')
 
   // Strategy state
   const [generatingStrategy, setGeneratingStrategy] = useState(false)
@@ -380,7 +363,7 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
   
   // Review state
   const [acknowledged, setAcknowledged] = useState(false)
-  const [submissionNotes, setSubmissionNotes] = useState('')
+  const [showAddToBucket, setShowAddToBucket] = useState(false)
 
   const daysLeft = Math.ceil((new Date(localOpportunity.due_date) - new Date()) / (1000 * 60 * 60 * 24))
   const bucketMatch = calculateBucketMatch(profile)
@@ -419,7 +402,7 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
     }
   }, [questions])
 
-  // Clean text - remove markdown/asterisks
+  // Clean text - remove markdown/asterisks/emojis
   const cleanText = (text) => {
     if (!text) return ''
     return text
@@ -428,6 +411,7 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
       .replace(/^#+\s/gm, '')
       .replace(/^[-•]\s/gm, '')
       .replace(/^\d+\.\s/gm, '')
+      .replace(/[^\w\s.,;:'"!?()-]/g, '') // Remove emojis and special chars
       .trim()
   }
 
@@ -449,7 +433,7 @@ Contract: ${localOpportunity.title}
 Agency: ${localOpportunity.agency || 'Not specified'}
 ${localOpportunity.description ? `Description: ${localOpportunity.description}` : ''}
 
-Return ONLY in this exact format (no asterisks, no bullets, no markdown):
+Return ONLY in this exact format (plain text, no asterisks, no bullets, no emojis):
 TITLE: [creative program title here]
 APPROACH: [1-2 sentence approach here]`,
           profile: profile,
@@ -461,7 +445,6 @@ APPROACH: [1-2 sentence approach here]`,
       if (!response.ok) throw new Error('Failed to generate')
       const data = await response.json()
       
-      // Parse response
       const text = cleanText(data.response)
       const titleMatch = text.match(/TITLE:\s*(.+?)(?=APPROACH:|$)/is)
       const approachMatch = text.match(/APPROACH:\s*(.+)/is)
@@ -469,7 +452,6 @@ APPROACH: [1-2 sentence approach here]`,
       const newTitle = cleanText(titleMatch ? titleMatch[1] : 'Community Initiative Program')
       const newApproach = cleanText(approachMatch ? approachMatch[1] : text.substring(0, 150))
       
-      // Store original if first time
       if (!originalTitle) {
         setOriginalTitle(newTitle)
         setOriginalApproach(newApproach)
@@ -484,7 +466,7 @@ APPROACH: [1-2 sentence approach here]`,
       
     } catch (err) {
       console.error('Error generating strategy:', err)
-      alert('CR-AI had trouble. Please try again.')
+      alert('BUCKET + CR-AI had trouble. Please try again.')
     } finally {
       setGeneratingStrategy(false)
     }
@@ -506,16 +488,16 @@ Contract: ${localOpportunity.title}
 Agency: ${localOpportunity.agency || 'Not specified'}
 
 IMPORTANT: 
-- No asterisks, no bullets, no markdown formatting
-- Each answer should be professional, plain text
+- Plain text only, no asterisks, no bullets, no markdown, no emojis
+- Each answer should be professional
 - Keep answers under 500 characters each
 
 Format each as:
 Q1: [Question]
-A1: [Answer in plain text, no formatting]
+A1: [Answer in plain text]
 
 Q2: [Question]
-A2: [Answer in plain text, no formatting]
+A2: [Answer in plain text]
 
 Continue for all questions.`,
           profile: profile,
@@ -527,12 +509,12 @@ Continue for all questions.`,
       if (!response.ok) throw new Error('Failed to generate')
       const data = await response.json()
       
-      const parsedQuestions = parseQuestionsFromResponse(cleanText(data.response))
+      const parsedQuestions = parseQuestionsFromResponse(data.response)
       setQuestions(parsedQuestions)
       
     } catch (err) {
       console.error('Error generating answers:', err)
-      alert('CR-AI had trouble. Please try again.')
+      alert('BUCKET + CR-AI had trouble. Please try again.')
     } finally {
       setGeneratingAnswers(false)
     }
@@ -559,7 +541,7 @@ Continue for all questions.`,
     if (questions.length === 0) {
       questions.push({
         id: Date.now(),
-        text: 'Describe your organization\'s experience and qualifications.',
+        text: 'Describe your organizations experience and qualifications.',
         response: cleanText(text).substring(0, 497) + '...',
         charLimit: 500,
         source: 'bucket-crai'
@@ -579,7 +561,7 @@ Continue for all questions.`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: `Answer this question in plain text, no formatting, under ${question.charLimit} characters:
+          question: `Answer this question in plain text, no formatting, no emojis, under ${question.charLimit} characters:
 
 ${question.text}
 
@@ -616,7 +598,7 @@ Approach: ${approach}`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question: `Shorten this to under ${question.charLimit - 10} characters. Keep key points. Plain text only, no formatting:
+          question: `Shorten this to under ${question.charLimit - 10} characters. Keep key points. Plain text only, no formatting, no emojis:
 
 ${question.response}`,
           charLimit: question.charLimit,
@@ -667,12 +649,19 @@ ${question.response}`,
       return
     }
 
-    let exportText = `${localOpportunity.title}\n${localOpportunity.agency || ''}\nDue: ${new Date(localOpportunity.due_date).toLocaleDateString()}\n\n`
-    exportText += `Program Title: ${programTitle}\nApproach: ${approach}\n\n`
+    let exportText = `${localOpportunity.title}\n`
+    if (localOpportunity.agency) exportText += `${localOpportunity.agency}\n`
+    exportText += `Due: ${new Date(localOpportunity.due_date).toLocaleDateString()}\n\n`
+    exportText += `Program Title: ${programTitle}\n`
+    exportText += `Approach: ${approach}\n\n`
     exportText += `${'='.repeat(50)}\n\n`
+    
     questions.forEach((q, i) => { 
-      exportText += `Q${i + 1}: ${q.text}\n\nA: ${q.response || '[Not answered]'}\n\n${'-'.repeat(40)}\n\n` 
+      exportText += `Question ${i + 1} of ${questions.length}:\n${q.text}\n\n`
+      exportText += `Answer:\n${q.response || '[Not answered]'}\n\n`
+      exportText += `${'-'.repeat(40)}\n\n`
     })
+    
     exportText += `\nPrepared with BUCKET + CR-AI Technology\nContract Ready`
     
     navigator.clipboard.writeText(exportText).then(() => alert('Copied to clipboard!'))
@@ -689,8 +678,20 @@ ${question.response}`,
       return
     }
     
-    await saveToDatabase({ status: 'submitted', submission_notes: submissionNotes, submitted_at: new Date().toISOString() })
-    alert('Marked as submitted!')
+    await saveToDatabase({ status: 'submitted', submitted_at: new Date().toISOString() })
+    setShowAddToBucket(true)
+  }
+
+  const handleAddToBucket = async () => {
+    // Here you would save responses to the profile for future use
+    // For now, just close and go back
+    alert('Responses saved to your BUCKET for future bids!')
+    setShowAddToBucket(false)
+    onBack()
+  }
+
+  const handleSkipAddToBucket = () => {
+    setShowAddToBucket(false)
     onBack()
   }
 
@@ -702,7 +703,7 @@ ${question.response}`,
   // Save status display
   const SaveIndicator = () => (
     <span style={{ color: saveStatus === 'saved' ? colors.primary : saveStatus === 'saving' ? colors.gold : colors.red, fontSize: '12px' }}>
-      {saveStatus === 'saved' && '✓ Saved'}
+      {saveStatus === 'saved' && 'Saved'}
       {saveStatus === 'saving' && 'Saving...'}
       {saveStatus === 'error' && 'Error saving'}
     </span>
@@ -720,39 +721,46 @@ ${question.response}`,
         </div>
 
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
-          <h1 style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '22px' }}>{localOpportunity.title}</h1>
-          <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>
-            {daysLeft} days left {localOpportunity.estimated_value && ` •  ${localOpportunity.estimated_value}`}
-          </p>
-
-          {/* BUCKET Match */}
-          <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '15px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: colors.white, fontSize: '16px', fontWeight: '600' }}>BUCKET Match</span>
-              <span style={{ backgroundColor: colors.primary, color: colors.background, padding: '6px 14px', borderRadius: '20px', fontWeight: '700' }}>{bucketMatch.percentage}%</span>
+          {/* Contract Details */}
+          <h1 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '22px' }}>{localOpportunity.title}</h1>
+          {localOpportunity.agency && (
+            <p style={{ color: colors.primary, margin: '0 0 15px 0', fontSize: '16px' }}>{localOpportunity.agency}</p>
+          )}
+          
+          <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ color: colors.gray, margin: '0 0 2px 0', fontSize: '12px' }}>Due</p>
+              <p style={{ color: colors.gold, margin: 0, fontSize: '16px', fontWeight: '600' }}>{daysLeft} days left</p>
             </div>
+            {localOpportunity.estimated_value && (
+              <div>
+                <p style={{ color: colors.gray, margin: '0 0 2px 0', fontSize: '12px' }}>Value</p>
+                <p style={{ color: colors.white, margin: 0, fontSize: '16px', fontWeight: '600' }}>{localOpportunity.estimated_value}</p>
+              </div>
+            )}
           </div>
 
-          {/* YOUR BUCKET HAS */}
-          {bucketMatch.hasItems.length > 0 && (
-            <div style={{ backgroundColor: '#0a1a0a', borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}20`, marginBottom: '15px' }}>
-              <p style={{ color: colors.primary, fontSize: '14px', fontWeight: '600', margin: '0 0 12px 0' }}>YOUR BUCKET HAS:</p>
-              <div style={{ display: 'grid', gap: '6px' }}>
-                {bucketMatch.hasItems.slice(0, 4).map((item, i) => (
-                  <p key={i} style={{ color: colors.white, margin: 0, fontSize: '13px' }}>{item}</p>
-                ))}
-              </div>
+          {/* Description */}
+          {localOpportunity.description && (
+            <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.gray}30`, marginBottom: '20px' }}>
+              <p style={{ color: colors.gray, margin: '0 0 8px 0', fontSize: '12px' }}>ABOUT THIS CONTRACT</p>
+              <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>{localOpportunity.description}</p>
             </div>
           )}
 
-          {/* CR-AI WILL HELP */}
-          <div style={{ backgroundColor: `${colors.gold}08`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.gold}30`, marginBottom: '25px' }}>
-            <p style={{ color: colors.gold, fontSize: '14px', fontWeight: '600', margin: '0 0 12px 0' }}>CR-AI WILL HELP YOU WITH:</p>
-            <div style={{ display: 'grid', gap: '6px' }}>
-              {bucketMatch.craiHelps.map((item, i) => (
-                <p key={i} style={{ color: colors.white, margin: 0, fontSize: '13px' }}>{item}</p>
-              ))}
+          {/* BUCKET Match */}
+          <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '25px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ color: colors.white, fontSize: '16px', fontWeight: '600' }}>BUCKET Match</span>
+              <span style={{ backgroundColor: colors.primary, color: colors.background, padding: '6px 14px', borderRadius: '20px', fontWeight: '700' }}>{bucketMatch.percentage}%</span>
             </div>
+            {bucketMatch.hasItems.length > 0 && (
+              <div style={{ display: 'grid', gap: '4px' }}>
+                {bucketMatch.hasItems.slice(0, 4).map((item, i) => (
+                  <p key={i} style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>{item}</p>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
@@ -781,18 +789,17 @@ ${question.response}`,
         </div>
 
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
-          {/* Contract Info */}
           <div style={{ marginBottom: '25px' }}>
             <h1 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '20px' }}>{localOpportunity.title}</h1>
             <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-              {daysLeft} days left  •  {totalQuestions || '~8'} questions {localOpportunity.estimated_value && ` •  ${localOpportunity.estimated_value}`}
+              {daysLeft} days left {localOpportunity.estimated_value && ` •  ${localOpportunity.estimated_value}`}
             </p>
           </div>
 
           {generatingStrategy ? (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <p style={{ color: colors.primary, fontSize: '18px', margin: '0 0 10px 0' }}>Generating strategy...</p>
-              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>CR-AI is pulling from your BUCKET</p>
+              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>BUCKET + CR-AI is working</p>
             </div>
           ) : (
             <>
@@ -801,15 +808,9 @@ ${question.response}`,
                 <p style={{ color: colors.gray, fontSize: '12px', margin: '0 0 8px 0' }}>PROGRAM TITLE</p>
                 {editingTitle ? (
                   <div>
-                    <input
-                      type="text"
-                      value={programTitle}
-                      onChange={(e) => setProgramTitle(e.target.value)}
-                      style={inputStyle}
-                      autoFocus
-                    />
+                    <input type="text" value={programTitle} onChange={(e) => setProgramTitle(e.target.value)} style={inputStyle} autoFocus />
                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                      <button onClick={() => { setEditingTitle(false); saveToDatabase({ strategy_plan: { title: programTitle, approach, generatedAt: new Date().toISOString() } }) }} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '13px', cursor: 'pointer' }}>Save</button>
+                      <button onClick={() => { setEditingTitle(false); saveToDatabase({ strategy_plan: { title: programTitle, approach } }) }} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '13px', cursor: 'pointer' }}>Save</button>
                       <button onClick={() => { setProgramTitle(originalTitle || programTitle); setEditingTitle(false) }} style={{ padding: '8px 16px', borderRadius: '6px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
                     </div>
                   </div>
@@ -826,15 +827,9 @@ ${question.response}`,
                 <p style={{ color: colors.gray, fontSize: '12px', margin: '0 0 8px 0' }}>APPROACH</p>
                 {editingApproach ? (
                   <div>
-                    <textarea
-                      value={approach}
-                      onChange={(e) => setApproach(e.target.value)}
-                      rows={3}
-                      style={{ ...inputStyle, resize: 'vertical' }}
-                      autoFocus
-                    />
+                    <textarea value={approach} onChange={(e) => setApproach(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} autoFocus />
                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                      <button onClick={() => { setEditingApproach(false); saveToDatabase({ strategy_plan: { title: programTitle, approach, generatedAt: new Date().toISOString() } }) }} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '13px', cursor: 'pointer' }}>Save</button>
+                      <button onClick={() => { setEditingApproach(false); saveToDatabase({ strategy_plan: { title: programTitle, approach } }) }} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '13px', cursor: 'pointer' }}>Save</button>
                       <button onClick={() => { setApproach(originalApproach || approach); setEditingApproach(false) }} style={{ padding: '8px 16px', borderRadius: '6px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
                     </div>
                   </div>
@@ -846,14 +841,12 @@ ${question.response}`,
                 )}
               </div>
 
-              {/* Change Approach Button */}
               <button onClick={() => setPhase('change-approach')} style={{ width: '100%', padding: '12px', borderRadius: '10px', border: `1px solid ${colors.gray}50`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer', marginBottom: '15px' }}>
                 Change Approach
               </button>
 
-              {/* Accept & Start */}
               <button onClick={() => { if (questions.length === 0) handleGenerateAllAnswers(); setPhase('answers') }} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
-                Accept & Start
+                Accept and Start
               </button>
             </>
           )}
@@ -875,7 +868,7 @@ ${question.response}`,
         <div style={{ padding: '25px 20px', maxWidth: '600px', margin: '0 auto' }}>
           <h2 style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '20px' }}>What direction do you want to go?</h2>
           <p style={{ color: colors.gray, margin: '0 0 25px 0', fontSize: '14px' }}>
-            (This is not the title — CR-AI will generate a title based on your direction and the contract/grant focus)
+            This is not the title. BUCKET + CR-AI will generate a title based on your direction and the contract/grant focus.
           </p>
 
           <textarea
@@ -901,7 +894,7 @@ ${question.response}`,
               disabled={generatingStrategy}
               style={{ flex: 1, padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
             >
-              {generatingStrategy ? 'Generating...' : 'Ask CR-AI'}
+              {generatingStrategy ? 'Generating...' : 'Ask BUCKET + CR-AI'}
             </button>
             <button onClick={() => { setNewDirection(''); setPhase('strategy') }} style={{ flex: 1, padding: '14px', borderRadius: '10px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer' }}>
               Go Back
@@ -918,21 +911,18 @@ ${question.response}`,
   if (phase === 'answers') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
-        {/* Header with Progress */}
         <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, position: 'sticky', top: 0, zIndex: 100 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <button onClick={() => setPhase('strategy')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Strategy</button>
-            <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>{answeredCount}/{totalQuestions} ({progressPercent}%)</span>
+            <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>{answeredCount} of {totalQuestions} ({progressPercent}%)</span>
             <SaveIndicator />
           </div>
-          {/* Progress Bar */}
           <div style={{ height: '4px', backgroundColor: '#1a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${progressPercent}%`, backgroundColor: colors.primary, transition: 'width 0.3s' }} />
           </div>
         </div>
 
         <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
-          {/* Title & Approach Summary */}
           <div style={{ backgroundColor: colors.card, borderRadius: '10px', padding: '15px', marginBottom: '20px', border: `1px solid ${colors.gray}30` }}>
             <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>{programTitle}</p>
             <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>{approach}</p>
@@ -941,7 +931,7 @@ ${question.response}`,
           {generatingAnswers && (
             <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px', marginBottom: '20px' }}>
               <p style={{ color: colors.primary, fontSize: '18px', margin: '0 0 10px 0' }}>Generating answers...</p>
-              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>CR-AI is pulling from your BUCKET</p>
+              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>BUCKET + CR-AI is working</p>
             </div>
           )}
 
@@ -957,7 +947,7 @@ ${question.response}`,
             return (
               <div key={q.id} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${overLimit ? colors.red : colors.gray}30`, marginBottom: '15px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <span style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>Q{index + 1}</span>
+                  <span style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>{index + 1} of {totalQuestions}</span>
                   <span style={{ fontSize: '10px', backgroundColor: `${colors.primary}20`, color: colors.primary, padding: '3px 8px', borderRadius: '4px' }}>BUCKET + CR-AI</span>
                 </div>
 
@@ -968,7 +958,7 @@ ${question.response}`,
                     <textarea value={editingText} onChange={(e) => setEditingText(e.target.value)} rows={5} style={{ ...inputStyle, marginBottom: '10px', resize: 'vertical' }} autoFocus />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ color: editingText.length > q.charLimit ? colors.red : colors.gray, fontSize: '12px' }}>
-                        {editingText.length}/{q.charLimit}
+                        {editingText.length}/{q.charLimit} characters
                       </span>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button onClick={() => { setEditingIndex(null); setEditingText('') }} style={{ padding: '8px 16px', borderRadius: '6px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '12px', cursor: 'pointer' }}>Cancel</button>
@@ -982,7 +972,6 @@ ${question.response}`,
                       <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>{q.response || 'No response yet'}</p>
                     </div>
                     
-                    {/* Character count */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <span style={{ color: overLimit ? colors.red : colors.gray, fontSize: '12px' }}>
                         {q.response?.length || 0}/{q.charLimit} characters {overLimit && '- over limit'}
@@ -993,7 +982,7 @@ ${question.response}`,
                       <div style={{ backgroundColor: `${colors.red}15`, borderRadius: '8px', padding: '12px', marginBottom: '12px', border: `1px solid ${colors.red}30` }}>
                         <p style={{ color: colors.red, margin: '0 0 10px 0', fontSize: '13px' }}>This answer is {q.response.length - q.charLimit} characters over the limit.</p>
                         <button onClick={() => handleAutoShorten(index)} disabled={shorteningIndex === index} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '12px', cursor: 'pointer' }}>
-                          {shorteningIndex === index ? 'Shortening...' : 'Auto-shorten with CR-AI'}
+                          {shorteningIndex === index ? 'Shortening...' : 'Auto-shorten with BUCKET + CR-AI'}
                         </button>
                       </div>
                     )}
@@ -1010,7 +999,7 @@ ${question.response}`,
 
           {questions.length > 0 && !generatingAnswers && (
             <button onClick={() => setPhase('review')} disabled={issueCount > 0} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: issueCount > 0 ? `2px solid ${colors.red}` : 'none', backgroundColor: issueCount > 0 ? 'transparent' : colors.primary, color: issueCount > 0 ? colors.red : colors.background, fontSize: '16px', fontWeight: '600', cursor: issueCount > 0 ? 'not-allowed' : 'pointer', marginTop: '10px' }}>
-              {issueCount > 0 ? `Fix ${issueCount} issue${issueCount > 1 ? 's' : ''} to continue` : 'Review & Export'}
+              {issueCount > 0 ? `Fix ${issueCount} issue${issueCount > 1 ? 's' : ''} to continue` : 'Review and Export'}
             </button>
           )}
         </div>
@@ -1026,7 +1015,7 @@ ${question.response}`,
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={() => setPhase('answers')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back</button>
-          <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>Review & Submit</span>
+          <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>Review and Submit</span>
           <SaveIndicator />
         </div>
 
@@ -1037,16 +1026,11 @@ ${question.response}`,
 
           <button onClick={handleExport} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.gold, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: 'pointer', marginBottom: '20px' }}>Copy All Responses</button>
 
-          <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '15px' }}>
+          <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '20px' }}>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
               <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} style={{ marginTop: '2px', width: '18px', height: '18px', accentColor: colors.primary }} />
-              <span style={{ color: colors.white, fontSize: '13px', lineHeight: '1.5' }}>I understand CR-AI is an assistant tool. I am responsible for reviewing all information before submission.</span>
+              <span style={{ color: colors.white, fontSize: '13px', lineHeight: '1.5' }}>I understand BUCKET + CR-AI is an assistant tool. I am responsible for reviewing all information before submission.</span>
             </label>
-          </div>
-
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '6px' }}>Notes (optional)</label>
-            <textarea value={submissionNotes} onChange={(e) => setSubmissionNotes(e.target.value)} placeholder="Anything to remember..." rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
           </div>
 
           <button onClick={handleMarkSubmitted} disabled={!acknowledged} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: acknowledged ? 'none' : `2px solid ${colors.gray}50`, backgroundColor: acknowledged ? colors.primary : 'transparent', color: acknowledged ? colors.background : colors.gray, fontSize: '16px', fontWeight: '600', cursor: acknowledged ? 'pointer' : 'not-allowed' }}>
@@ -1057,6 +1041,21 @@ ${question.response}`,
             <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>Prepared with BUCKET + CR-AI Technology</p>
           </div>
         </div>
+
+        {/* Add to BUCKET Modal */}
+        {showAddToBucket && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.primary}`, textAlign: 'center' }}>
+              <h3 style={{ color: colors.primary, margin: '0 0 15px 0', fontSize: '20px' }}>Marked as Submitted</h3>
+              <p style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '16px' }}>Would you like to add these responses to your BUCKET for future bids?</p>
+              <p style={{ color: colors.gray, margin: '0 0 25px 0', fontSize: '14px' }}>This helps BUCKET + CR-AI give better suggestions next time.</p>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <button onClick={handleAddToBucket} style={{ padding: '14px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>Yes, Add to BUCKET</button>
+                <button onClick={handleSkipAddToBucket} style={{ padding: '14px', borderRadius: '10px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '14px', cursor: 'pointer' }}>No Thanks</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
