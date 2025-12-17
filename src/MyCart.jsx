@@ -582,6 +582,16 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   const [profile, setProfile] = useState(profileData || null)
   const [showWriteOwn, setShowWriteOwn] = useState(false)
   const [ownResponse, setOwnResponse] = useState('')
+  const [showEditDetails, setShowEditDetails] = useState(false)
+  const [editForm, setEditForm] = useState({
+    title: opportunity.title || '',
+    dueDate: opportunity.due_date || '',
+    agency: opportunity.agency || '',
+    rfpNumber: opportunity.rfp_number || '',
+    estimatedValue: opportunity.estimated_value || '',
+    description: opportunity.description || ''
+  })
+  const [localOpportunity, setLocalOpportunity] = useState(opportunity)
 
   useEffect(() => {
     if (!profile && session?.user?.id) {
@@ -749,12 +759,37 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
     }
   }
 
+  const handleSaveEdit = async () => {
+    try {
+      const updates = {
+        title: editForm.title,
+        due_date: editForm.dueDate,
+        agency: editForm.agency,
+        rfp_number: editForm.rfpNumber,
+        estimated_value: editForm.estimatedValue,
+        description: editForm.description
+      }
+      
+      await supabase
+        .from('submissions')
+        .update(updates)
+        .eq('id', opportunity.id)
+      
+      // Update local state
+      setLocalOpportunity({...localOpportunity, ...updates})
+      setShowEditDetails(false)
+    } catch (err) {
+      console.error('Error saving edit:', err)
+      alert('Error saving changes. Please try again.')
+    }
+  }
+
   const handleEditQuestion = (index) => {
     setCurrentQuestionIndex(index)
     setPhase('answer')
   }
 
-  const daysLeft = getDaysUntilDue(opportunity.due_date)
+  const daysLeft = getDaysUntilDue(localOpportunity.due_date)
   const isUrgent = daysLeft <= 7
   const answeredCount = questions.filter(q => q.response).length
 
@@ -783,41 +818,61 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
         <div style={{ padding: '40px 30px', maxWidth: '600px', margin: '0 auto' }}>
           {/* Opportunity Card */}
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', border: `1px solid ${colors.gray}30`, marginBottom: '25px' }}>
-            <h1 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '24px', lineHeight: '1.3' }}>{opportunity.title}</h1>
+            <h1 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '24px', lineHeight: '1.3' }}>{localOpportunity.title}</h1>
             
             <div style={{ display: 'grid', gap: '15px' }}>
-              {opportunity.agency && (
+              {localOpportunity.agency && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: colors.gray }}>Agency</span>
-                  <span style={{ color: colors.white }}>{opportunity.agency}</span>
+                  <span style={{ color: colors.white }}>{localOpportunity.agency}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: colors.gray }}>Due Date</span>
                 <span style={{ color: isUrgent ? colors.gold : colors.white, fontWeight: '600' }}>
-                  {new Date(opportunity.due_date).toLocaleDateString()} ({daysLeft} days)
+                  {new Date(localOpportunity.due_date).toLocaleDateString()} ({daysLeft} days)
                 </span>
               </div>
-              {opportunity.estimated_value && (
+              {localOpportunity.estimated_value && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: colors.gray }}>Value</span>
-                  <span style={{ color: colors.white }}>{opportunity.estimated_value}</span>
+                  <span style={{ color: colors.white }}>{localOpportunity.estimated_value}</span>
                 </div>
               )}
-              {opportunity.rfp_number && (
+              {localOpportunity.rfp_number && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: colors.gray }}>RFP #</span>
-                  <span style={{ color: colors.white }}>{opportunity.rfp_number}</span>
+                  <span style={{ color: colors.white }}>{localOpportunity.rfp_number}</span>
                 </div>
               )}
             </div>
 
-            {opportunity.description && (
+            {localOpportunity.description && (
               <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: `1px solid ${colors.gray}30` }}>
                 <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>NOTES</p>
-                <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.5' }}>{opportunity.description}</p>
+                <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.5' }}>{localOpportunity.description}</p>
               </div>
             )}
+
+            {/* Edit Details Button */}
+            <button
+              onClick={() => setShowEditDetails(true)}
+              style={{
+                marginTop: '20px',
+                padding: '10px 16px',
+                borderRadius: '8px',
+                border: `1px solid ${colors.gray}50`,
+                backgroundColor: 'transparent',
+                color: colors.gray,
+                fontSize: '13px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              ✏️ Edit Details
+            </button>
           </div>
 
           {/* Action Buttons */}
@@ -851,10 +906,49 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
                 cursor: 'pointer'
               }}
             >
-              Not a Fit — Remove from Cart
+              Not a Fit — Archive
             </button>
           </div>
         </div>
+
+        {/* Edit Details Modal */}
+        {showEditDetails && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '500px', width: '100%', border: `2px solid ${colors.primary}`, maxHeight: '90vh', overflowY: 'auto' }}>
+              <h3 style={{ color: colors.white, margin: '0 0 20px 0' }}>✏️ Edit Details</h3>
+              <div style={{ display: 'grid', gap: '15px' }}>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Title</label>
+                  <input type="text" value={editForm.title} onChange={(e) => setEditForm({...editForm, title: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Due Date</label>
+                  <input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({...editForm, dueDate: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency</label>
+                  <input type="text" value={editForm.agency} onChange={(e) => setEditForm({...editForm, agency: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>RFP/Bid Number</label>
+                  <input type="text" value={editForm.rfpNumber} onChange={(e) => setEditForm({...editForm, rfpNumber: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Contract Value</label>
+                  <input type="text" value={editForm.estimatedValue} onChange={(e) => setEditForm({...editForm, estimatedValue: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Notes</label>
+                  <textarea value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} rows={3} style={{...inputStyle, resize: 'vertical'}} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
+                <button onClick={() => setShowEditDetails(false)} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveEdit} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Save Changes</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -868,7 +962,7 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
         <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button onClick={() => setPhase('overview')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
-            <h1 style={{ color: colors.white, margin: 0, fontSize: '18px' }}>{opportunity.title}</h1>
+            <h1 style={{ color: colors.white, margin: 0, fontSize: '18px' }}>{localOpportunity.title}</h1>
             <div style={{ width: '60px' }}></div>
           </div>
         </div>
@@ -1151,9 +1245,9 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
   if (phase === 'review') {
     const handleExport = () => {
       // Build export text
-      let exportText = `${opportunity.title}\n`
-      exportText += `${opportunity.agency || 'No agency specified'}\n`
-      exportText += `Due: ${new Date(opportunity.due_date).toLocaleDateString()}\n`
+      let exportText = `${localOpportunity.title}\n`
+      exportText += `${localOpportunity.agency || 'No agency specified'}\n`
+      exportText += `Due: ${new Date(localOpportunity.due_date).toLocaleDateString()}\n`
       exportText += `${'='.repeat(50)}\n\n`
       
       questions.forEach((q, i) => {
@@ -1185,9 +1279,9 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
           await supabase
             .from('submissions')
             .update({ status: 'submitted' })
-            .eq('id', opportunity.id)
+            .eq('id', localOpportunity.id)
           
-          alert('🎉 Marked as submitted!\n\nWould you like to save your responses to your BUCKET for future bids?')
+          alert('🎉 Marked as submitted!\n\nYour responses have been saved to your BUCKET for future bids.')
           onBack()
         } catch (err) {
           console.error('Error updating status:', err)
