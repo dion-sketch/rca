@@ -2567,25 +2567,22 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
           <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🏗️ Business Builder</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          {(() => {
-            const status = getContractReadyStatus()
-            return (
-              <div 
-                style={{ 
-                  backgroundColor: `${status.statusColor}20`, 
-                  padding: '8px 16px', 
-                  borderRadius: '20px', 
-                  border: `1px solid ${status.statusColor}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>{status.statusIcon}</span>
-                <span style={{ color: status.statusColor, fontWeight: '600' }}>{status.statusLabel}</span>
-              </div>
-            )
-          })()}
+          <div 
+            style={{ 
+              backgroundColor: `${colors.primary}20`, 
+              padding: '8px 16px', 
+              borderRadius: '20px', 
+              border: `1px solid ${colors.primary}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>🪣</span>
+            <span style={{ color: colors.primary, fontWeight: '600', fontSize: '16px' }}>
+              {completionPercentage}% Full
+            </span>
+          </div>
         </div>
       </div>
 
@@ -2601,113 +2598,87 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
           </div>
         ) : (
           <>
-            {/* Contract Ready Status Box */}
-            {(() => {
-              const status = getContractReadyStatus()
-              return (
-                <div style={{
-                  backgroundColor: `${status.statusColor}10`,
-                  border: `2px solid ${status.statusColor}50`,
-                  borderRadius: '16px',
-                  padding: '20px',
-                  marginBottom: '25px'
-                }}>
-                  {/* Status Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
-                    <span style={{ fontSize: '32px' }}>{status.statusIcon}</span>
-                    <div>
-                      <h3 style={{ color: status.statusColor, margin: 0, fontSize: '20px', fontWeight: '700' }}>
-                        {status.statusLabel}
-                      </h3>
-                      <p style={{ color: colors.gray, margin: '3px 0 0 0', fontSize: '13px' }}>
-                        {status.status === 'contract-ready' 
-                          ? "You're ready to start bidding on contracts!"
-                          : status.status === 'almost-ready'
-                            ? "Just a few more items to become Contract Ready"
-                            : "Complete the required items below to get started"
-                        }
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Required Items */}
-                  {status.required.some(r => !r.has) && (
-                    <div style={{ marginBottom: '15px' }}>
-                      <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
-                        ⚠️ Required to become Contract Ready:
-                      </p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {status.required.filter(r => !r.has).map((item, i) => (
-                          <span 
-                            key={i} 
-                            onClick={() => setActiveSection(item.section)}
-                            style={{
-                              backgroundColor: '#ff444420',
-                              color: '#ff6b6b',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              cursor: 'pointer',
-                              border: '1px solid #ff444440'
-                            }}
-                          >
-                            ⬜ {item.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recommended Items */}
-                  {status.recommended.some(r => !r.has) && status.required.every(r => r.has) && (
-                    <div style={{ marginBottom: '15px' }}>
-                      <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
-                        📈 Recommended to strengthen your bids:
-                      </p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {status.recommended.filter(r => !r.has).map((item, i) => (
-                          <span 
-                            key={i}
-                            onClick={() => setActiveSection(item.section)}
-                            style={{
-                              backgroundColor: `${colors.gold}20`,
-                              color: colors.gold,
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              cursor: 'pointer',
-                              border: `1px solid ${colors.gold}40`
-                            }}
-                          >
-                            ⬜ {item.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Completed Items */}
-                  <div>
-                    <p style={{ color: colors.gray, margin: '0 0 8px 0', fontSize: '12px' }}>
-                      ✅ Completed:
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {[...status.required, ...status.recommended, ...status.optional].filter(r => r.has).map((item, i) => (
-                        <span key={i} style={{
-                          backgroundColor: `${colors.primary}15`,
-                          color: colors.primary,
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '11px'
-                        }}>
-                          ✓ {item.label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+            {/* Bucket Progress Box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              border: `2px solid ${colors.primary}50`,
+              borderRadius: '16px',
+              padding: '20px',
+              marginBottom: '25px'
+            }}>
+              {/* Progress Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
+                <span style={{ fontSize: '32px' }}>🪣</span>
+                <div>
+                  <h3 style={{ color: colors.primary, margin: 0, fontSize: '20px', fontWeight: '700' }}>
+                    Your Bucket is {completionPercentage}% Full
+                  </h3>
+                  <p style={{ color: colors.gray, margin: '3px 0 0 0', fontSize: '13px' }}>
+                    Start bidding anytime — your bucket grows as you go!
+                  </p>
                 </div>
-              )
-            })()}
+              </div>
+
+              {/* What they can add - always optional */}
+              {(() => {
+                const status = getContractReadyStatus()
+                const missing = [...status.required, ...status.recommended, ...status.optional].filter(r => !r.has)
+                const completed = [...status.required, ...status.recommended, ...status.optional].filter(r => r.has)
+                
+                return (
+                  <>
+                    {missing.length > 0 && (
+                      <div style={{ marginBottom: '15px' }}>
+                        <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
+                          💡 Fill your bucket more:
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                          {missing.map((item, i) => (
+                            <span 
+                              key={i} 
+                              onClick={() => setActiveSection(item.section)}
+                              style={{
+                                backgroundColor: `${colors.gold}20`,
+                                color: colors.gold,
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                border: `1px solid ${colors.gold}40`
+                              }}
+                            >
+                              + {item.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Completed Items */}
+                    {completed.length > 0 && (
+                      <div>
+                        <p style={{ color: colors.gray, margin: '0 0 8px 0', fontSize: '12px' }}>
+                          ✅ In your bucket:
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {completed.map((item, i) => (
+                            <span key={i} style={{
+                              backgroundColor: `${colors.primary}15`,
+                              color: colors.primary,
+                              padding: '4px 10px',
+                              borderRadius: '8px',
+                              fontSize: '11px'
+                            }}>
+                              ✓ {item.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
 
             {/* All Sections */}
             <div style={{ display: 'grid', gap: '15px' }}>
