@@ -166,8 +166,9 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 26
+    let total = 22
 
+    // CORE - What you need to get started (1 point each)
     if (companyName) filled++
     if (address) filled++
     if (city) filled++
@@ -176,18 +177,18 @@ function BusinessBuilder({ session, onBack }) {
     if (email) filled++
     if (entityType) filled++
     if (mission) filled++
-    if (vision) filled++
     if (elevatorPitch) filled++
-    if (samRegistered || ueiNumber) filled++
-    if (teamSize) filled++
-    if (yearEstablished) filled++
-    if (revenueRange) filled++
+    if (samRegistered || ueiNumber) filled += 2
+
+    // CRITICAL SECTIONS (2 points each)
     if (services.length > 0) filled += 2
-    if (pastPerformance.length > 0) filled += 2
     if (naicsCodes.length > 0) filled += 2
-    if (certifications.length > 0) filled += 2
-    if (pricing.length > 0) filled += 2
-    if (teamMembers.length > 0) filled += 2
+
+    // GROWS OVER TIME as they submit (1 point each)
+    if (pastPerformance.length > 0) filled += 2
+    if (teamMembers.length > 0) filled += 1
+    if (pricing.length > 0) filled += 1
+    if (certifications.length > 0) filled += 1
 
     return Math.round((filled / total) * 100)
   }
