@@ -1096,7 +1096,22 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>This is what evaluators look at most.</strong> Add your best contracts, grants, or projects. Include results and numbers if you have them.
+                💡 <strong style={{ color: colors.white }}>This is what evaluators look at most.</strong> Add ANY projects — government contracts, private clients, grants, volunteer work. Start with what you have and build over time. You can always update this in your BUCKET.
+              </p>
+            </div>
+
+            {/* Important clarification */}
+            <div style={{
+              backgroundColor: `${colors.gold}15`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.gold}50`
+            }}>
+              <p style={{ color: colors.gold, margin: 0, fontSize: '14px', fontWeight: '600' }}>
+                ⚠️ This can be ANY work you've done — government OR private!
+              </p>
+              <p style={{ color: colors.gray, margin: '8px 0 0 0', fontSize: '13px' }}>
+                Include projects for businesses, nonprofits, churches, schools, or anyone. If you've done the work, it counts. Evaluators want to see you can deliver — doesn't matter if it was public or private.
               </p>
             </div>
 
@@ -1134,13 +1149,13 @@ Return ONLY the service description, no explanations.`
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                     <div>
                       <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                        Who was it for? *
+                        Who did you do this work for? *
                       </label>
                       <input
                         type="text"
                         value={pp.clientName}
                         onChange={(e) => updatePastPerformance(index, 'clientName', e.target.value)}
-                        placeholder="e.g., LA County Dept of Mental Health"
+                        placeholder="e.g., LA County, ABC Church, Smith Construction, Local Nonprofit"
                         style={inputStyle}
                       />
                     </div>
@@ -1289,7 +1304,7 @@ Return ONLY the service description, no explanations.`
             {pastPerformance.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
                 <p style={{ fontSize: '16px', margin: 0 }}>No past performance added yet.</p>
-                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Click "Add Past Project" to get started. Even 1-2 examples help!</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Add any project — public or private. Even 1-2 examples help you get started!</p>
               </div>
             )}
           </div>
