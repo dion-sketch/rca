@@ -24,6 +24,7 @@ function App() {
   const [profileCompletion, setProfileCompletion] = useState(0)
   const [opportunities, setOpportunities] = useState(5)
   const [submissions, setSubmissions] = useState(0)
+  const [contractReadyStatus, setContractReadyStatus] = useState({ status: 'getting-started', label: 'Getting Started', icon: '⬜', color: colors.gray })
 
   useEffect(() => {
     // Check for existing session
@@ -49,12 +50,39 @@ function App() {
   const fetchProfileCompletion = async (userId) => {
     const { data } = await supabase
       .from('business_profiles')
-      .select('completion_percentage')
+      .select('completion_percentage, company_name, address, phone, email, services, naics_codes, mission, sam_registered, uei_number, past_performance')
       .eq('user_id', userId)
       .single()
     
-    if (data?.completion_percentage) {
-      setProfileCompletion(data.completion_percentage)
+    if (data) {
+      setProfileCompletion(data.completion_percentage || 0)
+      
+      // Determine Contract Ready status
+      const required = [
+        !!data.company_name,
+        !!data.address,
+        !!data.phone,
+        !!data.email,
+        data.services && data.services.length > 0,
+        data.naics_codes && data.naics_codes.length > 0,
+      ]
+      
+      const recommended = [
+        !!data.mission,
+        !!(data.sam_registered || data.uei_number),
+        data.past_performance && data.past_performance.length > 0,
+      ]
+      
+      const requiredComplete = required.filter(Boolean).length
+      const recommendedComplete = recommended.filter(Boolean).length
+      
+      if (requiredComplete === required.length && recommendedComplete >= 2) {
+        setContractReadyStatus({ status: 'contract-ready', label: 'Contract Ready', icon: '✅', color: colors.primary })
+      } else if (requiredComplete === required.length || requiredComplete >= 4) {
+        setContractReadyStatus({ status: 'almost-ready', label: 'Almost Ready', icon: '🟡', color: colors.gold })
+      } else {
+        setContractReadyStatus({ status: 'getting-started', label: 'Getting Started', icon: '⬜', color: colors.gray })
+      }
     }
   }
 
@@ -353,10 +381,10 @@ function App() {
         borderBottom: `1px solid ${colors.primary}30`
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.primary, fontSize: '32px', fontWeight: '700' }}>
-            📊 {profileCompletion}%
+          <div style={{ color: contractReadyStatus.color, fontSize: '28px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <span>{contractReadyStatus.icon}</span>
           </div>
-          <div style={{ color: colors.gray, fontSize: '12px' }}>Contract Readiness</div>
+          <div style={{ color: contractReadyStatus.color, fontSize: '14px', fontWeight: '600' }}>{contractReadyStatus.label}</div>
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
@@ -426,14 +454,14 @@ function App() {
               position: 'absolute',
               top: '-10px',
               right: '20px',
-              backgroundColor: colors.primary,
+              backgroundColor: contractReadyStatus.color,
               color: colors.background,
               padding: '4px 12px',
               borderRadius: '12px',
               fontSize: '12px',
               fontWeight: '600'
             }}>
-              {profileCompletion > 0 ? `${profileCompletion}% COMPLETE` : 'START HERE'}
+              {contractReadyStatus.status === 'getting-started' ? 'START HERE' : contractReadyStatus.label.toUpperCase()}
             </div>
             <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏗️</div>
             <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Business Builder</h3>
