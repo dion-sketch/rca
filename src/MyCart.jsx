@@ -8,10 +8,10 @@ const colors = {
   card: '#0A1F0A',
   white: '#FFFFFF',
   gray: '#888888',
+  red: '#FF4444',
 }
 
 function MyCart({ session, onBack, profileData }) {
-  // Tabs: 'cart' (considering), 'inprogress' (working on), 'ready' (ready to submit), 'submitted'
   const [activeTab, setActiveTab] = useState('cart')
   const [showAddManual, setShowAddManual] = useState(false)
   const [showResponseBuilder, setShowResponseBuilder] = useState(false)
@@ -19,12 +19,10 @@ function MyCart({ session, onBack, profileData }) {
   const [allSubmissions, setAllSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
   
-  // Save states
   const [showConfirm, setShowConfirm] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [savedOpportunity, setSavedOpportunity] = useState(null)
 
-  // Manual entry form
   const [manualEntry, setManualEntry] = useState({
     title: '',
     rfpNumber: '',
@@ -32,7 +30,9 @@ function MyCart({ session, onBack, profileData }) {
     dueDate: '',
     source: '',
     estimatedValue: '',
-    description: ''
+    description: '',
+    budgetFloor: '',
+    budgetCeiling: ''
   })
 
   useEffect(() => {
@@ -57,10 +57,8 @@ function MyCart({ session, onBack, profileData }) {
     }
   }
 
-  // Filter submissions by status
-  const cartItems = allSubmissions.filter(s => s.status === 'draft' && (!s.questions || s.questions.length === 0))
-  const inProgressItems = allSubmissions.filter(s => s.status === 'draft' && s.questions && s.questions.length > 0)
-  const readyItems = allSubmissions.filter(s => s.status === 'ready')
+  const cartItems = allSubmissions.filter(s => s.status === 'draft' && (!s.strategy_plan))
+  const inProgressItems = allSubmissions.filter(s => s.status === 'draft' && s.strategy_plan)
   const submittedItems = allSubmissions.filter(s => s.status === 'submitted')
 
   const handleShowConfirm = () => {
@@ -73,6 +71,12 @@ function MyCart({ session, onBack, profileData }) {
 
   const handleConfirmAdd = async () => {
     try {
+      const requirements = {
+        budget_floor: manualEntry.budgetFloor ? parseInt(manualEntry.budgetFloor.replace(/\D/g, '')) : null,
+        budget_ceiling: manualEntry.budgetCeiling ? parseInt(manualEntry.budgetCeiling.replace(/\D/g, '')) : null,
+        required_elements: ['past_performance', 'qualifications']
+      }
+
       const { data, error } = await supabase
         .from('submissions')
         .insert({
@@ -86,7 +90,8 @@ function MyCart({ session, onBack, profileData }) {
           description: manualEntry.description,
           status: 'draft',
           questions: [],
-          responses: []
+          responses: [],
+          requirements: requirements
         })
         .select()
         .single()
@@ -98,13 +103,9 @@ function MyCart({ session, onBack, profileData }) {
       setShowConfirm(false)
       setSaveSuccess(true)
       setManualEntry({
-        title: '',
-        rfpNumber: '',
-        agency: '',
-        dueDate: '',
-        source: '',
-        estimatedValue: '',
-        description: ''
+        title: '', rfpNumber: '', agency: '', dueDate: '',
+        source: '', estimatedValue: '', description: '',
+        budgetFloor: '', budgetCeiling: ''
       })
     } catch (err) {
       console.error('Error adding submission:', err)
@@ -112,7 +113,6 @@ function MyCart({ session, onBack, profileData }) {
     }
   }
 
-  // Helper function to calculate BUCKET match
   const calculateBucketMatch = (profile) => {
     if (!profile) return { percentage: 0, hasItems: [], craiHelps: [] }
     
@@ -121,67 +121,26 @@ function MyCart({ session, onBack, profileData }) {
     let score = 0
     const maxScore = 10
 
-    // Check what they have
-    if (profile.company_name) {
-      hasItems.push(`${profile.company_name}`)
-      score += 1
-    }
-    if (profile.naics_codes && profile.naics_codes.length > 0) {
-      hasItems.push(`NAICS: ${profile.naics_codes.map(n => n.code).join(', ')}`)
-      score += 1
-    }
-    if (profile.certifications && profile.certifications.length > 0) {
-      hasItems.push(`${profile.certifications.map(c => c.name || c.id).join(', ')}`)
-      score += 1
-    }
-    if (profile.year_established) {
-      const years = new Date().getFullYear() - parseInt(profile.year_established)
-      hasItems.push(`${years}+ years in business`)
-      score += 1
-    }
-    if (profile.city && profile.state) {
-      hasItems.push(`Based in ${profile.city}, ${profile.state}`)
-      score += 0.5
-    }
-    if (profile.sam_registered) {
-      hasItems.push('SAM.gov Registered')
-      score += 1
-    }
-    if (profile.past_performance && profile.past_performance.length > 0) {
-      hasItems.push(`${profile.past_performance.length} past performance record${profile.past_performance.length !== 1 ? 's' : ''}`)
-      score += 1.5
-    }
-    if (profile.team_members && profile.team_members.length > 0) {
-      hasItems.push(`${profile.team_members.length} key personnel on file`)
-      score += 1
-    }
-    if (profile.services && profile.services.length > 0) {
-      hasItems.push(`${profile.services.length} service area${profile.services.length !== 1 ? 's' : ''} defined`)
-      score += 1
-    }
-    if (profile.mission) {
-      score += 0.5
-    }
-    if (profile.elevator_pitch) {
-      score += 0.5
-    }
+    if (profile.company_name) { hasItems.push(`${profile.company_name}`); score += 1 }
+    if (profile.naics_codes?.length > 0) { hasItems.push(`NAICS: ${profile.naics_codes.map(n => n.code).join(', ')}`); score += 1 }
+    if (profile.certifications?.length > 0) { hasItems.push(`${profile.certifications.map(c => c.name || c.id).join(', ')}`); score += 1 }
+    if (profile.year_established) { hasItems.push(`${new Date().getFullYear() - parseInt(profile.year_established)}+ years in business`); score += 1 }
+    if (profile.city && profile.state) { hasItems.push(`Based in ${profile.city}, ${profile.state}`); score += 0.5 }
+    if (profile.sam_registered) { hasItems.push('SAM.gov Registered'); score += 1 }
+    if (profile.past_performance?.length > 0) { hasItems.push(`${profile.past_performance.length} past performance record${profile.past_performance.length !== 1 ? 's' : ''}`); score += 1.5 }
+    if (profile.team_members?.length > 0) { hasItems.push(`${profile.team_members.length} key personnel on file`); score += 1 }
+    if (profile.services?.length > 0) { hasItems.push(`${profile.services.length} service area${profile.services.length !== 1 ? 's' : ''} defined`); score += 1 }
+    if (profile.mission) score += 0.5
+    if (profile.elevator_pitch) score += 0.5
 
-    // What CR-AI will help with (things that might be missing or need to be written)
     craiHelps.push('Tailored response narratives')
     craiHelps.push('Experience descriptions')
-    
-    if (!profile.past_performance || profile.past_performance.length === 0) {
-      craiHelps.push('Past performance statements')
-    }
-    if (!profile.what_makes_you_different) {
-      craiHelps.push('Differentiator highlights')
-    }
+    if (!profile.past_performance?.length) craiHelps.push('Past performance statements')
+    if (!profile.what_makes_you_different) craiHelps.push('Differentiator highlights')
     craiHelps.push('Budget justification language')
     craiHelps.push('Staffing & approach sections')
 
-    const percentage = Math.min(Math.round((score / maxScore) * 100), 100)
-
-    return { percentage, hasItems, craiHelps }
+    return { percentage: Math.min(Math.round((score / maxScore) * 100), 100), hasItems, craiHelps }
   }
 
   const openResponseBuilder = (opp) => {
@@ -189,20 +148,13 @@ function MyCart({ session, onBack, profileData }) {
     setShowResponseBuilder(true)
   }
 
-  // ==========================================
-  // RESPONSE BUILDER COMPONENT
-  // ==========================================
   if (showResponseBuilder && selectedOpportunity) {
     return (
       <ResponseBuilder
         opportunity={selectedOpportunity}
         profile={profileData}
         session={session}
-        onBack={() => {
-          setShowResponseBuilder(false)
-          setSelectedOpportunity(null)
-          fetchSubmissions()
-        }}
+        onBack={() => { setShowResponseBuilder(false); setSelectedOpportunity(null); fetchSubmissions() }}
         calculateBucketMatch={calculateBucketMatch}
       />
     )
@@ -231,77 +183,46 @@ function MyCart({ session, onBack, profileData }) {
     boxSizing: 'border-box'
   }
 
-  // ==========================================
-  // MAIN CART VIEW
-  // ==========================================
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
-      {/* Header */}
       <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Dashboard</button>
           <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>🛒 My Cart</h1>
-          <button
-            onClick={() => setShowAddManual(true)}
-            style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}
-          >
-            + Add
-          </button>
+          <button onClick={() => setShowAddManual(true)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>+ Add</button>
         </div>
       </div>
 
-      {/* Tabs */}
       <div style={{ padding: '20px 30px 0 30px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <button onClick={() => setActiveTab('cart')} style={tabStyle(activeTab === 'cart')}>
-          🛒 Considering ({cartItems.length})
-        </button>
-        <button onClick={() => setActiveTab('inprogress')} style={tabStyle(activeTab === 'inprogress')}>
-          ✏️ In Progress ({inProgressItems.length})
-        </button>
-        <button onClick={() => setActiveTab('submitted')} style={tabStyle(activeTab === 'submitted')}>
-          ✅ Submitted ({submittedItems.length})
-        </button>
+        <button onClick={() => setActiveTab('cart')} style={tabStyle(activeTab === 'cart')}>🛒 Considering ({cartItems.length})</button>
+        <button onClick={() => setActiveTab('inprogress')} style={tabStyle(activeTab === 'inprogress')}>✏️ In Progress ({inProgressItems.length})</button>
+        <button onClick={() => setActiveTab('submitted')} style={tabStyle(activeTab === 'submitted')}>✅ Submitted ({submittedItems.length})</button>
       </div>
 
-      {/* Content */}
       <div style={{ padding: '20px 30px' }}>
         {loading ? (
           <p style={{ color: colors.gray, textAlign: 'center' }}>Loading...</p>
         ) : (
           <>
-            {/* Cart Tab */}
             {activeTab === 'cart' && (
               cartItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
                   <p style={{ color: colors.gray, fontSize: '18px', margin: '0 0 10px 0' }}>No opportunities yet</p>
                   <p style={{ color: colors.gray, fontSize: '14px', margin: '0 0 20px 0' }}>Add contracts you're considering</p>
-                  <button
-                    onClick={() => setShowAddManual(true)}
-                    style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
-                  >
-                    + Add Opportunity
-                  </button>
+                  <button onClick={() => setShowAddManual(true)} style={{ padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>+ Add Opportunity</button>
                 </div>
               ) : (
                 <div style={{ display: 'grid', gap: '15px' }}>
                   {cartItems.map(item => (
-                    <div
-                      key={item.id}
-                      onClick={() => openResponseBuilder(item)}
-                      style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, cursor: 'pointer' }}
-                    >
+                    <div key={item.id} onClick={() => openResponseBuilder(item)} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, cursor: 'pointer' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
                           <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <p style={{ color: colors.gold, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>
-                            Due: {new Date(item.due_date).toLocaleDateString()}
-                          </p>
-                          {item.estimated_value && (
-                            <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>{item.estimated_value}</p>
-                          )}
+                          <p style={{ color: colors.gold, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>Due: {new Date(item.due_date).toLocaleDateString()}</p>
+                          {item.estimated_value && <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>{item.estimated_value}</p>}
                         </div>
                       </div>
                     </div>
@@ -310,7 +231,6 @@ function MyCart({ session, onBack, profileData }) {
               )
             )}
 
-            {/* In Progress Tab */}
             {activeTab === 'inprogress' && (
               inProgressItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
@@ -323,28 +243,17 @@ function MyCart({ session, onBack, profileData }) {
                     const answered = item.questions?.filter(q => q.response).length || 0
                     const total = item.questions?.length || 0
                     return (
-                      <div
-                        key={item.id}
-                        onClick={() => openResponseBuilder(item)}
-                        style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}30`, cursor: 'pointer' }}
-                      >
+                      <div key={item.id} onClick={() => openResponseBuilder(item)} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}30`, cursor: 'pointer' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                           <div>
-                            <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
+                            <span style={{ fontSize: '11px', backgroundColor: `${colors.primary}20`, color: colors.primary, padding: '2px 8px', borderRadius: '4px', marginBottom: '5px', display: 'inline-block' }}>🪣+🤖 In Progress</span>
+                            <h3 style={{ color: colors.white, margin: '5px 0', fontSize: '16px' }}>{item.title}</h3>
                             <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
                           </div>
                           <div style={{ textAlign: 'right' }}>
-                            <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>
-                              {answered}/{total} Questions
-                            </p>
-                            <p style={{ color: colors.gold, margin: 0, fontSize: '12px' }}>
-                              Due: {new Date(item.due_date).toLocaleDateString()}
-                            </p>
+                            <p style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>{answered}/{total} Answers</p>
+                            <p style={{ color: colors.gold, margin: 0, fontSize: '12px' }}>Due: {new Date(item.due_date).toLocaleDateString()}</p>
                           </div>
-                        </div>
-                        {/* Progress Bar */}
-                        <div style={{ marginTop: '15px', height: '4px', backgroundColor: '#1a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${total > 0 ? (answered / total) * 100 : 0}%`, backgroundColor: colors.primary }} />
                         </div>
                       </div>
                     )
@@ -353,7 +262,6 @@ function MyCart({ session, onBack, profileData }) {
               )
             )}
 
-            {/* Submitted Tab */}
             {activeTab === 'submitted' && (
               submittedItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px' }}>
@@ -363,24 +271,14 @@ function MyCart({ session, onBack, profileData }) {
               ) : (
                 <div style={{ display: 'grid', gap: '15px' }}>
                   {submittedItems.map(item => (
-                    <div
-                      key={item.id}
-                      onClick={() => openResponseBuilder(item)}
-                      style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}50`, cursor: 'pointer' }}
-                    >
+                    <div key={item.id} onClick={() => openResponseBuilder(item)} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}50`, cursor: 'pointer' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                            <span style={{ color: colors.primary, fontSize: '14px' }}>✅</span>
-                            <h3 style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{item.title}</h3>
-                          </div>
+                          <span style={{ color: colors.primary, fontSize: '14px' }}>✅</span>
+                          <h3 style={{ color: colors.white, margin: '5px 0', fontSize: '16px' }}>{item.title}</h3>
                           <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency'}</p>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ color: colors.gray, margin: '0', fontSize: '12px' }}>
-                            {item.questions?.length || 0} responses saved
-                          </p>
-                        </div>
+                        <p style={{ color: colors.gray, margin: '0', fontSize: '12px' }}>{item.questions?.length || 0} responses</p>
                       </div>
                     </div>
                   ))}
@@ -399,83 +297,49 @@ function MyCart({ session, onBack, profileData }) {
             <div style={{ display: 'grid', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Title / Contract Name *</label>
-                <input
-                  type="text"
-                  value={manualEntry.title}
-                  onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })}
-                  placeholder="e.g., Mental Health Services RFP"
-                  style={inputStyle}
-                />
+                <input type="text" value={manualEntry.title} onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })} placeholder="e.g., Mental Health Services RFP" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Due Date *</label>
-                <input
-                  type="date"
-                  value={manualEntry.dueDate}
-                  onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })}
-                  style={inputStyle}
-                />
+                <input type="date" value={manualEntry.dueDate} onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })} style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency / Organization</label>
-                <input
-                  type="text"
-                  value={manualEntry.agency}
-                  onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })}
-                  placeholder="e.g., LA County DMH"
-                  style={inputStyle}
-                />
+                <input type="text" value={manualEntry.agency} onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })} placeholder="e.g., LA County DMH" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>RFP / Bid Number</label>
-                <input
-                  type="text"
-                  value={manualEntry.rfpNumber}
-                  onChange={(e) => setManualEntry({ ...manualEntry, rfpNumber: e.target.value })}
-                  placeholder="e.g., RFP-2024-001"
-                  style={inputStyle}
-                />
+                <input type="text" value={manualEntry.rfpNumber} onChange={(e) => setManualEntry({ ...manualEntry, rfpNumber: e.target.value })} placeholder="e.g., RFP-2024-001" style={inputStyle} />
               </div>
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Estimated Value</label>
-                <input
-                  type="text"
-                  value={manualEntry.estimatedValue}
-                  onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })}
-                  placeholder="e.g., $50,000 - $100,000"
-                  style={inputStyle}
-                />
+              
+              {/* Budget Requirements */}
+              <div style={{ backgroundColor: `${colors.gold}10`, borderRadius: '10px', padding: '15px', border: `1px solid ${colors.gold}30` }}>
+                <p style={{ color: colors.gold, fontSize: '13px', fontWeight: '600', margin: '0 0 10px 0' }}>💰 Budget Requirements (if known)</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '4px' }}>Floor (minimum)</label>
+                    <input type="text" value={manualEntry.budgetFloor} onChange={(e) => setManualEntry({ ...manualEntry, budgetFloor: e.target.value })} placeholder="$100,000" style={{ ...inputStyle, fontSize: '14px', padding: '10px' }} />
+                  </div>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '4px' }}>Ceiling (maximum)</label>
+                    <input type="text" value={manualEntry.budgetCeiling} onChange={(e) => setManualEntry({ ...manualEntry, budgetCeiling: e.target.value })} placeholder="$500,000" style={{ ...inputStyle, fontSize: '14px', padding: '10px' }} />
+                  </div>
+                </div>
               </div>
+
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Notes</label>
-                <textarea
-                  value={manualEntry.description}
-                  onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })}
-                  placeholder="Any notes about this opportunity..."
-                  rows={3}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
+                <textarea value={manualEntry.description} onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })} placeholder="Any notes about this opportunity..." rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
-              <button
-                onClick={() => setShowAddManual(false)}
-                style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleShowConfirm}
-                style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
-              >
-                Add to Cart
-              </button>
+              <button onClick={() => setShowAddManual(false)} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleShowConfirm} style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Add to Cart</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirm Modal */}
       {showConfirm && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '20px' }}>
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.gold}`, textAlign: 'center' }}>
@@ -491,7 +355,6 @@ function MyCart({ session, onBack, profileData }) {
         </div>
       )}
 
-      {/* Success Modal */}
       {saveSuccess && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '20px' }}>
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '400px', width: '100%', border: `2px solid ${colors.primary}`, textAlign: 'center' }}>
@@ -499,27 +362,8 @@ function MyCart({ session, onBack, profileData }) {
             <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Added to Cart!</h3>
             <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>{savedOpportunity?.title}</p>
             <div style={{ display: 'grid', gap: '10px' }}>
-              <button
-                onClick={() => {
-                  setSaveSuccess(false)
-                  setShowAddManual(false)
-                  if (savedOpportunity) {
-                    openResponseBuilder(savedOpportunity)
-                  }
-                }}
-                style={{ padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
-              >
-                🚀 Start Working on It
-              </button>
-              <button
-                onClick={() => {
-                  setSaveSuccess(false)
-                  setShowAddManual(false)
-                }}
-                style={{ padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer' }}
-              >
-                Add Another
-              </button>
+              <button onClick={() => { setSaveSuccess(false); setShowAddManual(false); if (savedOpportunity) openResponseBuilder(savedOpportunity) }} style={{ padding: '14px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>🚀 Start Working on It</button>
+              <button onClick={() => { setSaveSuccess(false); setShowAddManual(false) }} style={{ padding: '14px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, cursor: 'pointer' }}>Add Another</button>
             </div>
           </div>
         </div>
@@ -530,18 +374,13 @@ function MyCart({ session, onBack, profileData }) {
 
 
 // ==========================================
-// RESPONSE BUILDER COMPONENT (Separate component for clarity)
+// RESPONSE BUILDER
 // ==========================================
 function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucketMatch }) {
-  const [phase, setPhase] = useState('overview') // overview, add-questions, answer, review
-  const [questions, setQuestions] = useState(opportunity.questions || [])
-  const [newQuestion, setNewQuestion] = useState('')
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [generating, setGenerating] = useState(false)
-  const [showWriteOwn, setShowWriteOwn] = useState(false)
-  const [ownResponse, setOwnResponse] = useState('')
+  const [phase, setPhase] = useState(opportunity.strategy_plan ? 'answers' : 'overview')
   const [localOpportunity, setLocalOpportunity] = useState(opportunity)
   const [showEditDetails, setShowEditDetails] = useState(false)
+  const [showRequirements, setShowRequirements] = useState(false)
   const [editForm, setEditForm] = useState({
     title: opportunity.title || '',
     dueDate: opportunity.due_date || '',
@@ -550,184 +389,33 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
     estimatedValue: opportunity.estimated_value || '',
     description: opportunity.description || ''
   })
+
+  // Requirements
+  const [requirements, setRequirements] = useState(opportunity.requirements || {
+    budget_floor: null,
+    budget_ceiling: null,
+    required_elements: []
+  })
+
+  // Strategy state
+  const [generatingStrategy, setGeneratingStrategy] = useState(false)
+  const [strategyPlan, setStrategyPlan] = useState(opportunity.strategy_plan || null)
+  
+  // Answers state
+  const [questions, setQuestions] = useState(opportunity.questions || [])
+  const [generatingAnswers, setGeneratingAnswers] = useState(false)
+  const [editingIndex, setEditingIndex] = useState(null)
+  const [editingText, setEditingText] = useState('')
+  const [shorteningIndex, setShorteningIndex] = useState(null)
+  
+  // Review state
   const [acknowledged, setAcknowledged] = useState(false)
   const [submissionNotes, setSubmissionNotes] = useState('')
+  const [complianceIssues, setComplianceIssues] = useState([])
 
-  // Calculate days left
   const daysLeft = Math.ceil((new Date(localOpportunity.due_date) - new Date()) / (1000 * 60 * 60 * 24))
   const isUrgent = daysLeft <= 7
-
-  // Calculate BUCKET match
   const bucketMatch = calculateBucketMatch(profile)
-
-  // Save questions to database
-  const saveQuestions = async (updatedQuestions) => {
-    try {
-      await supabase
-        .from('submissions')
-        .update({ questions: updatedQuestions })
-        .eq('id', localOpportunity.id)
-    } catch (err) {
-      console.error('Error saving questions:', err)
-    }
-  }
-
-  const handleAddQuestion = () => {
-    if (!newQuestion.trim()) return
-    const updated = [...questions, { id: Date.now(), text: newQuestion.trim(), response: '' }]
-    setQuestions(updated)
-    saveQuestions(updated)
-    setNewQuestion('')
-  }
-
-  const handleStartAnswering = () => {
-    if (questions.length === 0) {
-      alert('Add at least one question first')
-      return
-    }
-    setCurrentQuestionIndex(0)
-    setPhase('answer')
-  }
-
-  const handleGenerateResponse = async () => {
-    const question = questions[currentQuestionIndex]
-    if (!question) return
-
-    setGenerating(true)
-    try {
-      // Get previous responses for consistency
-      const previousResponses = questions.slice(0, currentQuestionIndex).filter(q => q.response)
-      
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: question.text,
-          profile: profile,
-          opportunity: {
-            title: localOpportunity.title,
-            agency: localOpportunity.agency,
-            due_date: localOpportunity.due_date,
-            estimated_value: localOpportunity.estimated_value,
-            description: localOpportunity.description
-          },
-          previousResponses: previousResponses
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to generate')
-      }
-      
-      const data = await response.json()
-      const updated = questions.map((q, i) => 
-        i === currentQuestionIndex ? { ...q, response: data.response } : q
-      )
-      setQuestions(updated)
-      saveQuestions(updated)
-      
-      // Auto advance after a brief pause
-      setTimeout(() => {
-        goToNextQuestion()
-      }, 500)
-    } catch (err) {
-      console.error('Error generating:', err)
-      alert('CR-AI had trouble connecting. Try again or write your own response.')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const handleWriteOwn = () => {
-    setOwnResponse(questions[currentQuestionIndex]?.response || '')
-    setShowWriteOwn(true)
-  }
-
-  const handleSaveOwnResponse = () => {
-    const updated = questions.map((q, i) => 
-      i === currentQuestionIndex ? { ...q, response: ownResponse } : q
-    )
-    setQuestions(updated)
-    saveQuestions(updated)
-    setShowWriteOwn(false)
-    setOwnResponse('')
-    goToNextQuestion()
-  }
-
-  const handleSkip = () => {
-    goToNextQuestion()
-  }
-
-  const goToNextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1)
-    } else {
-      setPhase('review')
-    }
-  }
-
-  const goToPrevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1)
-    }
-  }
-
-  const handleArchive = async () => {
-    if (confirm('Archive this opportunity? You can find it later if needed.')) {
-      try {
-        await supabase
-          .from('submissions')
-          .update({ status: 'archived' })
-          .eq('id', localOpportunity.id)
-        onBack()
-      } catch (err) {
-        console.error('Error archiving:', err)
-      }
-    }
-  }
-
-  const handleSaveForLater = async () => {
-    alert('Saved! You can find this in your Cart when you\'re ready.')
-    onBack()
-  }
-
-  const handleSaveEdit = async () => {
-    try {
-      await supabase
-        .from('submissions')
-        .update({
-          title: editForm.title,
-          due_date: editForm.dueDate,
-          agency: editForm.agency,
-          rfp_number: editForm.rfpNumber,
-          estimated_value: editForm.estimatedValue,
-          description: editForm.description
-        })
-        .eq('id', localOpportunity.id)
-      
-      setLocalOpportunity({
-        ...localOpportunity,
-        title: editForm.title,
-        due_date: editForm.dueDate,
-        agency: editForm.agency,
-        rfp_number: editForm.rfpNumber,
-        estimated_value: editForm.estimatedValue,
-        description: editForm.description
-      })
-      setShowEditDetails(false)
-    } catch (err) {
-      console.error('Error updating:', err)
-      alert('Error saving changes. Please try again.')
-    }
-  }
-
-  const handleEditQuestion = (index) => {
-    setCurrentQuestionIndex(index)
-    setPhase('answer')
-  }
-
-  const answeredCount = questions.filter(q => q.response).length
 
   const inputStyle = {
     width: '100%',
@@ -741,250 +429,461 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
     boxSizing: 'border-box'
   }
 
+  // Check if answer is over limit
+  const isOverLimit = (text, limit) => text && limit && text.length > limit
+  const isNearLimit = (text, limit) => text && limit && text.length > limit * 0.9 && text.length <= limit
+
+  // Run compliance check
+  const runComplianceCheck = () => {
+    const issues = []
+    
+    questions.forEach((q, i) => {
+      if (isOverLimit(q.response, q.charLimit)) {
+        issues.push({
+          type: 'over_limit',
+          question: i + 1,
+          message: `Q${i + 1} is ${q.response.length - q.charLimit} characters over limit`,
+          current: q.response.length,
+          limit: q.charLimit
+        })
+      }
+    })
+
+    // Check budget if we have requirements
+    if (requirements.budget_floor && localOpportunity.proposed_budget) {
+      const budget = parseInt(localOpportunity.proposed_budget.replace(/\D/g, ''))
+      if (budget < requirements.budget_floor) {
+        issues.push({
+          type: 'budget_low',
+          message: `Budget is below minimum ($${requirements.budget_floor.toLocaleString()})`,
+          current: budget,
+          floor: requirements.budget_floor
+        })
+      }
+    }
+
+    if (requirements.budget_ceiling && localOpportunity.proposed_budget) {
+      const budget = parseInt(localOpportunity.proposed_budget.replace(/\D/g, ''))
+      if (budget > requirements.budget_ceiling) {
+        issues.push({
+          type: 'budget_high',
+          message: `Budget exceeds maximum ($${requirements.budget_ceiling.toLocaleString()})`,
+          current: budget,
+          ceiling: requirements.budget_ceiling
+        })
+      }
+    }
+
+    setComplianceIssues(issues)
+    return issues
+  }
+
+  // Save to database
+  const saveToDatabase = async (updates) => {
+    try {
+      await supabase.from('submissions').update(updates).eq('id', localOpportunity.id)
+    } catch (err) {
+      console.error('Error saving:', err)
+    }
+  }
+
+  useEffect(() => {
+    if (questions.length > 0) {
+      saveToDatabase({ questions })
+      runComplianceCheck()
+    }
+  }, [questions])
+
+  // Generate Strategy Plan
+  const handleGenerateStrategy = async () => {
+    setGeneratingStrategy(true)
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: `Generate a strategic response plan for this government contract opportunity. Include:
+1. A compelling PROGRAM TITLE (creative, memorable, aligned with their mission)
+2. KEY THEMES to emphasize (3-4 bullet points)
+3. APPROACH SUMMARY (2-3 sentences on how they should position themselves)
+4. DIFFERENTIATORS to highlight
+
+Contract: ${localOpportunity.title}
+Agency: ${localOpportunity.agency || 'Not specified'}
+${localOpportunity.description ? `Description: ${localOpportunity.description}` : ''}`,
+          profile: profile,
+          opportunity: { title: localOpportunity.title, agency: localOpportunity.agency, due_date: localOpportunity.due_date, estimated_value: localOpportunity.estimated_value, description: localOpportunity.description },
+          isStrategyGeneration: true
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to generate strategy')
+      const data = await response.json()
+      const plan = { raw: data.response, generatedAt: new Date().toISOString() }
+      setStrategyPlan(plan)
+      await saveToDatabase({ strategy_plan: plan })
+    } catch (err) {
+      console.error('Error generating strategy:', err)
+      alert('CR-AI had trouble generating the strategy. Please try again.')
+    } finally {
+      setGeneratingStrategy(false)
+    }
+  }
+
+  // Generate All Answers
+  const handleGenerateAllAnswers = async () => {
+    setGeneratingAnswers(true)
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: `Generate typical RFP questions and answers for this government contract. Create 6-8 common questions with comprehensive answers.
+
+IMPORTANT: Each answer MUST stay under its character limit. Format:
+
+Q1: [Question text]
+A1: [Answer - MUST be under 500 characters]
+LIMIT: 500
+
+Q2: [Question text]  
+A2: [Answer - MUST be under 750 characters]
+LIMIT: 750
+
+Continue for all questions.
+
+Contract: ${localOpportunity.title}
+Agency: ${localOpportunity.agency || 'Not specified'}
+Strategy: ${strategyPlan?.raw || 'Not yet defined'}`,
+          profile: profile,
+          opportunity: { title: localOpportunity.title, agency: localOpportunity.agency, due_date: localOpportunity.due_date, estimated_value: localOpportunity.estimated_value, description: localOpportunity.description },
+          requirements: requirements,
+          isQAGeneration: true
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to generate answers')
+      const data = await response.json()
+      const parsedQuestions = parseQuestionsFromResponse(data.response)
+      setQuestions(parsedQuestions)
+    } catch (err) {
+      console.error('Error generating answers:', err)
+      alert('CR-AI had trouble generating answers. Please try again.')
+    } finally {
+      setGeneratingAnswers(false)
+    }
+  }
+
+  const parseQuestionsFromResponse = (text) => {
+    const questions = []
+    const regex = /Q(\d+):\s*(.*?)\nA\1:\s*([\s\S]*?)(?=LIMIT:|Q\d+:|$)/gi
+    let match
+    
+    while ((match = regex.exec(text)) !== null) {
+      const limitMatch = text.substring(match.index).match(/LIMIT:\s*(\d+)/i)
+      const charLimit = limitMatch ? parseInt(limitMatch[1]) : 500
+      let answer = match[3].trim()
+      
+      // ENFORCE: Auto-truncate if over limit
+      if (answer.length > charLimit) {
+        answer = answer.substring(0, charLimit - 3) + '...'
+      }
+      
+      questions.push({
+        id: Date.now() + questions.length,
+        text: match[2].trim(),
+        response: answer,
+        charLimit: charLimit,
+        source: 'bucket-crai'
+      })
+    }
+    
+    if (questions.length === 0) {
+      questions.push({
+        id: Date.now(),
+        text: 'Describe your organization\'s experience and qualifications.',
+        response: text.substring(0, 497) + '...',
+        charLimit: 500,
+        source: 'bucket-crai'
+      })
+    }
+    
+    return questions
+  }
+
+  // Auto-shorten answer with CR-AI
+  const handleAutoShorten = async (index) => {
+    const question = questions[index]
+    setShorteningIndex(index)
+    
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: `Shorten this response to EXACTLY ${question.charLimit - 10} characters or less while keeping all key points. Current length: ${question.response.length}. Must be under ${question.charLimit}.
+
+Original response:
+${question.response}
+
+Return ONLY the shortened response, nothing else.`,
+          profile: profile,
+          charLimit: question.charLimit,
+          isShortening: true
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to shorten')
+      const data = await response.json()
+      
+      let shortened = data.response.trim()
+      // Final enforcement
+      if (shortened.length > question.charLimit) {
+        shortened = shortened.substring(0, question.charLimit - 3) + '...'
+      }
+      
+      const updated = [...questions]
+      updated[index] = { ...updated[index], response: shortened, source: 'bucket-crai' }
+      setQuestions(updated)
+    } catch (err) {
+      console.error('Error shortening:', err)
+      alert('CR-AI had trouble. Try editing manually.')
+    } finally {
+      setShorteningIndex(null)
+    }
+  }
+
+  // Regenerate single answer
+  const handleRegenerateAnswer = async (index) => {
+    const question = questions[index]
+    setEditingIndex(index)
+    
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: `Answer this question in UNDER ${question.charLimit} characters:
+
+${question.text}
+
+IMPORTANT: Response MUST be under ${question.charLimit} characters total.`,
+          profile: profile,
+          opportunity: { title: localOpportunity.title, agency: localOpportunity.agency },
+          charLimit: question.charLimit,
+          strategyPlan: strategyPlan?.raw
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to regenerate')
+      const data = await response.json()
+      
+      let answer = data.response.trim()
+      // ENFORCE limit
+      if (answer.length > question.charLimit) {
+        answer = answer.substring(0, question.charLimit - 3) + '...'
+      }
+      
+      const updated = [...questions]
+      updated[index] = { ...updated[index], response: answer, source: 'bucket-crai' }
+      setQuestions(updated)
+    } catch (err) {
+      console.error('Error regenerating:', err)
+      alert('CR-AI had trouble. Please try again.')
+    } finally {
+      setEditingIndex(null)
+    }
+  }
+
+  // Save edited answer - BLOCKED if over limit
+  const handleSaveEdit = (index) => {
+    const question = questions[index]
+    
+    if (editingText.length > question.charLimit) {
+      alert(`⛔ Cannot save. Your answer is ${editingText.length - question.charLimit} characters over the ${question.charLimit} limit.\n\nPlease shorten your response.`)
+      return // BLOCKED
+    }
+    
+    const updated = [...questions]
+    updated[index] = { ...updated[index], response: editingText, source: 'user-edited' }
+    setQuestions(updated)
+    setEditingIndex(null)
+    setEditingText('')
+  }
+
+  const handleArchive = async () => {
+    if (confirm('Archive this opportunity?')) {
+      await saveToDatabase({ status: 'archived' })
+      onBack()
+    }
+  }
+
+  const handleSaveExit = () => {
+    alert('✅ Progress saved! You can continue later from "In Progress".')
+    onBack()
+  }
+
+  const handleSaveEditDetails = async () => {
+    await saveToDatabase({
+      title: editForm.title, due_date: editForm.dueDate, agency: editForm.agency,
+      rfp_number: editForm.rfpNumber, estimated_value: editForm.estimatedValue, description: editForm.description
+    })
+    setLocalOpportunity({ ...localOpportunity, ...editForm, due_date: editForm.dueDate, rfp_number: editForm.rfpNumber, estimated_value: editForm.estimatedValue })
+    setShowEditDetails(false)
+  }
+
+  const handleExport = () => {
+    const issues = runComplianceCheck()
+    if (issues.length > 0) {
+      alert(`⛔ Cannot export. ${issues.length} compliance issue(s) found.\n\n${issues.map(i => i.message).join('\n')}\n\nFix these before exporting.`)
+      return // BLOCKED
+    }
+
+    let exportText = `${localOpportunity.title}\n${localOpportunity.agency || 'Agency not specified'}\nDue: ${new Date(localOpportunity.due_date).toLocaleDateString()}\n${'='.repeat(50)}\n\n`
+    if (strategyPlan?.raw) exportText += `STRATEGY OVERVIEW:\n${strategyPlan.raw}\n\n${'='.repeat(50)}\n\n`
+    questions.forEach((q, i) => { exportText += `Q${i + 1}: ${q.text}\n\nA: ${q.response || '[Not answered]'}\n\n${'-'.repeat(40)}\n\n` })
+    exportText += `\n${'='.repeat(50)}\nPrepared with BUCKET + CR-AI Technology\nYour business data + AI assistance\nContract Ready © ${new Date().getFullYear()}`
+    
+    navigator.clipboard.writeText(exportText).then(() => alert('✅ Copied to clipboard!'))
+  }
+
+  const handleMarkSubmitted = async () => {
+    const issues = runComplianceCheck()
+    
+    if (issues.length > 0) {
+      alert(`⛔ Cannot submit. ${issues.length} compliance issue(s) must be fixed:\n\n${issues.map(i => i.message).join('\n')}`)
+      return // BLOCKED
+    }
+    
+    if (!acknowledged) {
+      alert('Please check the acknowledgment box.')
+      return
+    }
+    
+    await saveToDatabase({ status: 'submitted', submission_notes: submissionNotes, submitted_at: new Date().toISOString() })
+    alert('🎉 Marked as submitted! Your responses are saved to your BUCKET for future bids.')
+    onBack()
+  }
+
+  const answeredCount = questions.filter(q => q.response).length
+  const issueCount = questions.filter(q => isOverLimit(q.response, q.charLimit)).length
+
   // ==========================================
-  // PHASE 1: OVERVIEW (NEW DESIGN!)
+  // PHASE 1: OVERVIEW
   // ==========================================
   if (phase === 'overview') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back to Cart</button>
+        <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back to Cart</button>
+          <button onClick={handleSaveExit} style={{ background: 'none', border: 'none', color: colors.gold, cursor: 'pointer', fontSize: '14px' }}>Save & Exit</button>
         </div>
 
-        <div style={{ padding: '30px', maxWidth: '650px', margin: '0 auto' }}>
+        <div style={{ padding: '25px 20px', maxWidth: '650px', margin: '0 auto' }}>
+          <h1 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '22px', lineHeight: '1.3' }}>{localOpportunity.title}</h1>
           
-          {/* Contract Title & Key Info */}
-          <div style={{ marginBottom: '25px' }}>
-            <h1 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '24px', lineHeight: '1.3' }}>
-              {localOpportunity.title}
-            </h1>
-            
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '15px' }}>
-              {localOpportunity.agency && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '16px' }}>🏛️</span>
-                  <span style={{ color: colors.white, fontSize: '14px' }}>{localOpportunity.agency}</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '16px' }}>📅</span>
-                <span style={{ color: isUrgent ? colors.gold : colors.white, fontSize: '14px', fontWeight: '600' }}>
-                  {daysLeft} days left
-                </span>
-              </div>
-              {localOpportunity.estimated_value && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '16px' }}>💰</span>
-                  <span style={{ color: colors.white, fontSize: '14px' }}>{localOpportunity.estimated_value}</span>
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              {localOpportunity.rfp_number && (
-                <span style={{ color: colors.gray, fontSize: '13px' }}>RFP# {localOpportunity.rfp_number}</span>
-              )}
-              <button
-                onClick={() => setShowEditDetails(true)}
-                style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}
-              >
-                ✏️ Edit Details
-              </button>
-            </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '15px' }}>
+            {localOpportunity.agency && <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '14px' }}>🏛️</span><span style={{ color: colors.white, fontSize: '13px' }}>{localOpportunity.agency}</span></div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '14px' }}>📅</span><span style={{ color: isUrgent ? colors.gold : colors.white, fontSize: '13px', fontWeight: '600' }}>{daysLeft} days left</span></div>
+            {localOpportunity.estimated_value && <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '14px' }}>💰</span><span style={{ color: colors.white, fontSize: '13px' }}>{localOpportunity.estimated_value}</span></div>}
           </div>
 
-          {/* Divider */}
-          <div style={{ height: '1px', backgroundColor: `${colors.gray}30`, margin: '25px 0' }} />
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+            <button onClick={() => setShowEditDetails(true)} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '12px', padding: 0 }}>✏️ Edit Details</button>
+            <button onClick={() => setShowRequirements(true)} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '12px', padding: 0 }}>📋 Requirements</button>
+          </div>
 
-          {/* BUCKET Match Score */}
-          <div style={{ 
-            backgroundColor: `${colors.primary}10`, 
-            borderRadius: '12px', 
-            padding: '20px',
-            border: `1px solid ${colors.primary}30`,
-            marginBottom: '20px'
-          }}>
+          <div style={{ height: '1px', backgroundColor: `${colors.gray}30`, margin: '20px 0' }} />
+
+          {/* BUCKET Match */}
+          <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '15px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '24px' }}>🎯</span>
-                <span style={{ color: colors.white, fontSize: '18px', fontWeight: '600' }}>BUCKET Match</span>
-              </div>
-              <div style={{ 
-                backgroundColor: colors.primary, 
-                color: colors.background,
-                padding: '8px 16px',
-                borderRadius: '20px',
-                fontWeight: '700',
-                fontSize: '18px'
-              }}>
-                {bucketMatch.percentage}%
-              </div>
-            </div>
-            
-            {/* Progress Bar */}
-            <div style={{ height: '8px', backgroundColor: `${colors.gray}30`, borderRadius: '4px', overflow: 'hidden' }}>
-              <div style={{ 
-                height: '100%', 
-                width: `${bucketMatch.percentage}%`,
-                backgroundColor: colors.primary,
-                borderRadius: '4px',
-                transition: 'width 0.5s ease'
-              }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ fontSize: '20px' }}>🎯</span><span style={{ color: colors.white, fontSize: '16px', fontWeight: '600' }}>BUCKET Match</span></div>
+              <div style={{ backgroundColor: colors.primary, color: colors.background, padding: '6px 14px', borderRadius: '20px', fontWeight: '700', fontSize: '16px' }}>{bucketMatch.percentage}%</div>
             </div>
           </div>
 
-          {/* YOUR BUCKET HAS Section */}
+          {/* YOUR BUCKET HAS */}
           {bucketMatch.hasItems.length > 0 && (
-            <div style={{ 
-              backgroundColor: '#0a1a0a', 
-              borderRadius: '12px', 
-              padding: '20px',
-              border: `1px solid ${colors.primary}20`,
-              marginBottom: '15px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                <span style={{ fontSize: '20px' }}>🪣</span>
-                <span style={{ color: colors.primary, fontSize: '16px', fontWeight: '600' }}>YOUR BUCKET HAS:</span>
-              </div>
-              
-              <div style={{ display: 'grid', gap: '10px' }}>
-                {bucketMatch.hasItems.slice(0, 5).map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ color: colors.primary, fontSize: '16px' }}>✓</span>
-                    <span style={{ color: colors.white, fontSize: '14px' }}>{item}</span>
-                  </div>
-                ))}
+            <div style={{ backgroundColor: '#0a1a0a', borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}20`, marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span style={{ fontSize: '18px' }}>🪣</span><span style={{ color: colors.primary, fontSize: '14px', fontWeight: '600' }}>YOUR BUCKET HAS:</span></div>
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {bucketMatch.hasItems.slice(0, 5).map((item, i) => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: colors.primary, fontSize: '14px' }}>✓</span><span style={{ color: colors.white, fontSize: '13px' }}>{item}</span></div>)}
               </div>
             </div>
           )}
 
-          {/* CR-AI WILL HELP YOU WITH Section */}
-          <div style={{ 
-            backgroundColor: `${colors.gold}08`, 
-            borderRadius: '12px', 
-            padding: '20px',
-            border: `1px solid ${colors.gold}30`,
-            marginBottom: '25px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-              <span style={{ fontSize: '20px' }}>🤖</span>
-              <span style={{ color: colors.gold, fontSize: '16px', fontWeight: '600' }}>CR-AI WILL HELP YOU WITH:</span>
-            </div>
-            
-            <div style={{ display: 'grid', gap: '10px', marginBottom: '15px' }}>
-              {bucketMatch.craiHelps.slice(0, 5).map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ color: colors.gold, fontSize: '14px' }}>✨</span>
-                  <span style={{ color: colors.white, fontSize: '14px' }}>{item}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ 
-              backgroundColor: `${colors.gold}15`,
-              borderRadius: '8px',
-              padding: '12px 15px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              <span style={{ fontSize: '16px' }}>💡</span>
-              <span style={{ color: colors.gold, fontSize: '13px' }}>
-                Completing these will boost your Contract Readiness score!
-              </span>
+          {/* CR-AI WILL HELP */}
+          <div style={{ backgroundColor: `${colors.gold}08`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.gold}30`, marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span style={{ fontSize: '18px' }}>🤖</span><span style={{ color: colors.gold, fontSize: '14px', fontWeight: '600' }}>CR-AI WILL HELP YOU WITH:</span></div>
+            <div style={{ display: 'grid', gap: '8px', marginBottom: '12px' }}>
+              {bucketMatch.craiHelps.slice(0, 4).map((item, i) => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: colors.gold, fontSize: '12px' }}>✨</span><span style={{ color: colors.white, fontSize: '13px' }}>{item}</span></div>)}
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <button
-              onClick={() => setPhase('add-questions')}
-              style={{
-                width: '100%',
-                padding: '18px',
-                borderRadius: '12px',
-                border: 'none',
-                backgroundColor: colors.primary,
-                color: colors.background,
-                fontSize: '18px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px'
-              }}
-            >
-              🚀 Go After This
-            </button>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <button
-                onClick={handleArchive}
-                style={{
-                  padding: '14px',
-                  borderRadius: '10px',
-                  border: `1px solid ${colors.gray}50`,
-                  backgroundColor: 'transparent',
-                  color: colors.gray,
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-              >
-                ❌ Not a Fit
-              </button>
-              <button
-                onClick={handleSaveForLater}
-                style={{
-                  padding: '14px',
-                  borderRadius: '10px',
-                  border: `1px solid ${colors.gold}50`,
-                  backgroundColor: 'transparent',
-                  color: colors.gold,
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-              >
-                🔖 Save for Later
-              </button>
+          <div style={{ display: 'grid', gap: '10px' }}>
+            <button onClick={() => setPhase('strategy')} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>🚀 Go After This</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <button onClick={handleArchive} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${colors.gray}50`, backgroundColor: 'transparent', color: colors.gray, fontSize: '13px', cursor: 'pointer' }}>❌ Not a Fit</button>
+              <button onClick={handleSaveExit} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${colors.gold}50`, backgroundColor: 'transparent', color: colors.gold, fontSize: '13px', cursor: 'pointer' }}>🔖 Save for Later</button>
             </div>
           </div>
         </div>
 
+        {/* Requirements Modal */}
+        {showRequirements && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '25px', maxWidth: '450px', width: '100%', border: `2px solid ${colors.gold}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ color: colors.white, margin: 0, fontSize: '18px' }}>📋 Requirements</h3>
+                <button onClick={() => setShowRequirements(false)} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '20px' }}>×</button>
+              </div>
+              
+              <div style={{ display: 'grid', gap: '15px' }}>
+                <div>
+                  <p style={{ color: colors.gold, fontSize: '13px', fontWeight: '600', margin: '0 0 8px 0' }}>💰 Budget Range</p>
+                  <div style={{ display: 'flex', gap: '15px' }}>
+                    <div><span style={{ color: colors.gray, fontSize: '12px' }}>Floor:</span><span style={{ color: colors.white, fontSize: '14px', marginLeft: '8px' }}>{requirements.budget_floor ? `$${requirements.budget_floor.toLocaleString()}` : 'Not set'}</span></div>
+                    <div><span style={{ color: colors.gray, fontSize: '12px' }}>Ceiling:</span><span style={{ color: colors.white, fontSize: '14px', marginLeft: '8px' }}>{requirements.budget_ceiling ? `$${requirements.budget_ceiling.toLocaleString()}` : 'Not set'}</span></div>
+                  </div>
+                </div>
+                
+                {questions.length > 0 && (
+                  <div>
+                    <p style={{ color: colors.gold, fontSize: '13px', fontWeight: '600', margin: '0 0 8px 0' }}>📝 Character Limits</p>
+                    <div style={{ display: 'grid', gap: '5px' }}>
+                      {questions.map((q, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: colors.gray, fontSize: '12px' }}>Q{i + 1}</span>
+                          <span style={{ color: isOverLimit(q.response, q.charLimit) ? colors.red : colors.primary, fontSize: '12px' }}>
+                            {q.response?.length || 0}/{q.charLimit} {isOverLimit(q.response, q.charLimit) ? '⛔' : '✓'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <button onClick={() => setShowRequirements(false)} style={{ width: '100%', marginTop: '20px', padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Close</button>
+            </div>
+          </div>
+        )}
+
         {/* Edit Details Modal */}
         {showEditDetails && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', maxWidth: '500px', width: '100%', border: `2px solid ${colors.primary}`, maxHeight: '90vh', overflowY: 'auto' }}>
-              <h3 style={{ color: colors.white, margin: '0 0 20px 0' }}>✏️ Edit Details</h3>
-              <div style={{ display: 'grid', gap: '15px' }}>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Title</label>
-                  <input type="text" value={editForm.title} onChange={(e) => setEditForm({...editForm, title: e.target.value})} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Due Date</label>
-                  <input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({...editForm, dueDate: e.target.value})} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Agency</label>
-                  <input type="text" value={editForm.agency} onChange={(e) => setEditForm({...editForm, agency: e.target.value})} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>RFP/Bid Number</label>
-                  <input type="text" value={editForm.rfpNumber} onChange={(e) => setEditForm({...editForm, rfpNumber: e.target.value})} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Contract Value</label>
-                  <input type="text" value={editForm.estimatedValue} onChange={(e) => setEditForm({...editForm, estimatedValue: e.target.value})} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>Notes</label>
-                  <textarea value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} rows={3} style={{...inputStyle, resize: 'vertical'}} />
-                </div>
+            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '25px', maxWidth: '450px', width: '100%', border: `2px solid ${colors.primary}`, maxHeight: '85vh', overflowY: 'auto' }}>
+              <h3 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '18px' }}>✏️ Edit Details</h3>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div><label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '4px' }}>Title</label><input type="text" value={editForm.title} onChange={(e) => setEditForm({...editForm, title: e.target.value})} style={inputStyle} /></div>
+                <div><label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '4px' }}>Due Date</label><input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({...editForm, dueDate: e.target.value})} style={inputStyle} /></div>
+                <div><label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '4px' }}>Agency</label><input type="text" value={editForm.agency} onChange={(e) => setEditForm({...editForm, agency: e.target.value})} style={inputStyle} /></div>
               </div>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
-                <button onClick={() => setShowEditDetails(false)} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
-                <button onClick={handleSaveEdit} style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Save Changes</button>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button onClick={() => setShowEditDetails(false)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveEditDetails} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>Save</button>
               </div>
             </div>
           </div>
@@ -994,269 +893,51 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
   }
 
   // ==========================================
-  // PHASE 2: ADD QUESTIONS
+  // PHASE 2: STRATEGY
   // ==========================================
-  if (phase === 'add-questions') {
+  if (phase === 'strategy') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button onClick={() => setPhase('overview')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
-            <h1 style={{ color: colors.white, margin: 0, fontSize: '18px' }}>{localOpportunity.title}</h1>
-            <div style={{ width: '60px' }}></div>
-          </div>
+        <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={() => setPhase('overview')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ fontSize: '14px' }}>🪣+🤖</span><span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>BUCKET + CR-AI</span></div>
+          <button onClick={handleSaveExit} style={{ background: 'none', border: 'none', color: colors.gold, cursor: 'pointer', fontSize: '14px' }}>Save & Exit</button>
         </div>
 
-        <div style={{ padding: '40px 30px', maxWidth: '600px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-            <h2 style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '24px' }}>Add the RFP Questions</h2>
-            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>Paste each question from the RFP. CR-AI will help you answer them.</p>
+        <div style={{ padding: '25px 20px', maxWidth: '650px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: `${colors.primary}15`, padding: '8px 16px', borderRadius: '20px', marginBottom: '15px' }}><span style={{ fontSize: '16px' }}>🪣+🤖</span><span style={{ color: colors.primary, fontSize: '14px', fontWeight: '600' }}>BUCKET + CR-AI Response Plan</span></div>
+            <h2 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '22px' }}>Let's Build Your Strategy</h2>
+            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>CR-AI will create a tailored approach using your BUCKET</p>
           </div>
 
-          {/* Questions Added So Far */}
-          {questions.length > 0 && (
-            <div style={{ marginBottom: '25px' }}>
-              <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '12px' }}>{questions.length} QUESTION{questions.length !== 1 ? 'S' : ''} ADDED</p>
-              <div style={{ display: 'grid', gap: '10px' }}>
-                {questions.map((q, i) => (
-                  <div key={q.id} style={{ backgroundColor: colors.card, borderRadius: '8px', padding: '12px 15px', border: `1px solid ${colors.gray}30`, display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <span style={{ color: colors.primary, fontWeight: '600', minWidth: '25px' }}>Q{i + 1}</span>
-                    <span style={{ color: colors.white, fontSize: '14px', flex: 1 }}>{q.text}</span>
-                    <button
-                      onClick={() => {
-                        const updated = questions.filter((_, idx) => idx !== i)
-                        setQuestions(updated)
-                        saveQuestions(updated)
-                      }}
-                      style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Add Question Input */}
-          <div style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, marginBottom: '20px' }}>
-            <textarea
-              value={newQuestion}
-              onChange={(e) => setNewQuestion(e.target.value)}
-              placeholder="Paste or type an RFP question here..."
-              rows={4}
-              style={{ ...inputStyle, marginBottom: '15px', resize: 'vertical' }}
-            />
-            <button
-              onClick={handleAddQuestion}
-              disabled={!newQuestion.trim()}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                border: 'none',
-                backgroundColor: newQuestion.trim() ? colors.primary : '#333',
-                color: newQuestion.trim() ? colors.background : colors.gray,
-                fontWeight: '600',
-                cursor: newQuestion.trim() ? 'pointer' : 'not-allowed'
-              }}
-            >
-              + Add Question
-            </button>
-          </div>
-
-          {/* Continue Button */}
-          {questions.length > 0 && (
-            <button
-              onClick={handleStartAnswering}
-              style={{
-                width: '100%',
-                padding: '18px',
-                borderRadius: '12px',
-                border: 'none',
-                backgroundColor: colors.primary,
-                color: colors.background,
-                fontSize: '18px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              Continue to Answers →
-            </button>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ==========================================
-  // PHASE 3: ANSWER QUESTIONS
-  // ==========================================
-  if (phase === 'answer') {
-    const currentQuestion = questions[currentQuestionIndex]
-    const hasAnswer = currentQuestion?.response
-
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
-        {/* Header with Progress */}
-        <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <button onClick={() => setPhase('add-questions')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Questions</button>
-            <span style={{ color: colors.white, fontSize: '14px' }}>Question {currentQuestionIndex + 1} of {questions.length}</span>
-            <button onClick={() => setPhase('review')} style={{ background: 'none', border: 'none', color: colors.primary, cursor: 'pointer', fontSize: '14px' }}>Review All →</button>
-          </div>
-          {/* Progress Bar */}
-          <div style={{ height: '4px', backgroundColor: '#1a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${((currentQuestionIndex + 1) / questions.length) * 100}%`,
-              backgroundColor: colors.primary,
-              transition: 'width 0.3s ease'
-            }} />
-          </div>
-        </div>
-
-        <div style={{ padding: '40px 30px', maxWidth: '600px', margin: '0 auto' }}>
-          {/* The Question */}
-          <div style={{ marginBottom: '30px' }}>
-            <p style={{ color: colors.primary, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>QUESTION {currentQuestionIndex + 1}</p>
-            <h2 style={{ color: colors.white, margin: 0, fontSize: '22px', lineHeight: '1.4' }}>{currentQuestion?.text}</h2>
-          </div>
-
-          {/* Write Own Modal */}
-          {showWriteOwn ? (
-            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '25px', border: `2px solid ${colors.primary}` }}>
-              <p style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '16px', fontWeight: '600' }}>Write your response</p>
-              <textarea
-                value={ownResponse}
-                onChange={(e) => setOwnResponse(e.target.value)}
-                placeholder="Type your response..."
-                rows={8}
-                style={{ ...inputStyle, resize: 'vertical', marginBottom: '15px' }}
-                autoFocus
-              />
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => setShowWriteOwn(false)}
-                  style={{ flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveOwnResponse}
-                  style={{ flex: 1, padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}
-                >
-                  Save & Continue
+          {!strategyPlan ? (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', border: `1px solid ${colors.gray}30`, marginBottom: '20px' }}>
+                <p style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '16px' }}>Ready to generate your response strategy?</p>
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>CR-AI will suggest a program title, key themes, and approach.</p>
+                <button onClick={handleGenerateStrategy} disabled={generatingStrategy} style={{ padding: '16px 32px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: generatingStrategy ? 'not-allowed' : 'pointer', opacity: generatingStrategy ? 0.7 : 1 }}>
+                  {generatingStrategy ? '⏳ Generating Strategy...' : '✨ Generate Strategy'}
                 </button>
               </div>
-            </div>
-          ) : hasAnswer ? (
-            /* Show existing answer */
-            <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '25px', border: `1px solid ${colors.primary}50`, marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <p style={{ color: colors.primary, margin: 0, fontSize: '12px', fontWeight: '600' }}>YOUR RESPONSE</p>
-                <button
-                  onClick={() => {
-                    setOwnResponse(currentQuestion.response)
-                    setShowWriteOwn(true)
-                  }}
-                  style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '12px' }}
-                >
-                  ✏️ Edit
-                </button>
-              </div>
-              <p style={{ color: colors.white, margin: 0, fontSize: '15px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{currentQuestion.response}</p>
             </div>
           ) : (
-            /* Action Buttons */
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <button
-                onClick={handleGenerateResponse}
-                disabled={generating}
-                style={{
-                  width: '100%',
-                  padding: '18px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  backgroundColor: colors.primary,
-                  color: colors.background,
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  cursor: generating ? 'not-allowed' : 'pointer',
-                  opacity: generating ? 0.7 : 1
-                }}
-              >
-                {generating ? '⏳ Pulling from your BUCKET...' : '✨ Get CR-AI Suggestion'}
-              </button>
-              <p style={{ color: colors.gray, margin: '0', fontSize: '12px', textAlign: 'center' }}>
-                🪣 CR-AI uses your BUCKET to write tailored responses
-              </p>
-              <button
-                onClick={handleWriteOwn}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  borderRadius: '12px',
-                  border: `1px solid ${colors.gray}50`,
-                  backgroundColor: 'transparent',
-                  color: colors.white,
-                  fontSize: '16px',
-                  cursor: 'pointer'
-                }}
-              >
-                ✍️ Write My Own
-              </button>
-              <button
-                onClick={handleSkip}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: colors.gray,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  padding: '10px'
-                }}
-              >
-                Skip for now →
-              </button>
-            </div>
-          )}
-
-          {/* Navigation (when has answer) */}
-          {hasAnswer && (
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              {currentQuestionIndex > 0 && (
-                <button
-                  onClick={goToPrevQuestion}
-                  style={{
-                    flex: 1,
-                    padding: '14px',
-                    borderRadius: '12px',
-                    border: `1px solid ${colors.gray}50`,
-                    backgroundColor: 'transparent',
-                    color: colors.white,
-                    cursor: 'pointer'
-                  }}
-                >
-                  ← Previous
+            <>
+              <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '20px', border: `1px solid ${colors.primary}30`, marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ fontSize: '16px' }}>📋</span><span style={{ color: colors.primary, fontSize: '14px', fontWeight: '600' }}>YOUR STRATEGY</span></div>
+                  <span style={{ fontSize: '10px', backgroundColor: `${colors.primary}20`, color: colors.primary, padding: '3px 8px', borderRadius: '4px' }}>🪣+🤖 Generated</span>
+                </div>
+                <div style={{ color: colors.white, fontSize: '14px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{strategyPlan.raw}</div>
+                <button onClick={handleGenerateStrategy} disabled={generatingStrategy} style={{ marginTop: '15px', padding: '8px 16px', borderRadius: '8px', border: `1px solid ${colors.gray}50`, backgroundColor: 'transparent', color: colors.gray, fontSize: '12px', cursor: 'pointer' }}>
+                  {generatingStrategy ? '⏳ Regenerating...' : '🔄 Regenerate Strategy'}
                 </button>
-              )}
-              <button
-                onClick={goToNextQuestion}
-                style={{
-                  flex: 1,
-                  padding: '14px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  backgroundColor: colors.primary,
-                  color: colors.background,
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                {currentQuestionIndex < questions.length - 1 ? 'Next Question →' : 'Review All →'}
+              </div>
+
+              <button onClick={() => { if (questions.length === 0) handleGenerateAllAnswers(); setPhase('answers') }} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: 'pointer' }}>
+                Continue to Answers →
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
@@ -1264,216 +945,171 @@ function ResponseBuilder({ opportunity, profile, session, onBack, calculateBucke
   }
 
   // ==========================================
-  // PHASE 4: REVIEW (WITH ACKNOWLEDGMENT)
+  // PHASE 3: ANSWERS
   // ==========================================
-  if (phase === 'review') {
-    const handleExport = () => {
-      // Build export text
-      let exportText = `${localOpportunity.title}\n`
-      exportText += `${localOpportunity.agency || 'No agency specified'}\n`
-      exportText += `Due: ${new Date(localOpportunity.due_date).toLocaleDateString()}\n`
-      exportText += `${'='.repeat(50)}\n\n`
-      
-      questions.forEach((q, i) => {
-        exportText += `Q${i + 1}: ${q.text}\n\n`
-        exportText += `A: ${q.response || '[Not answered]'}\n\n`
-        exportText += `${'-'.repeat(40)}\n\n`
-      })
-      
-      exportText += `\nGenerated with Contract Ready • CR-AI Technology`
-      
-      // Copy to clipboard
-      navigator.clipboard.writeText(exportText).then(() => {
-        alert('✅ Responses copied to clipboard!\n\nPaste them into your proposal document.')
-      }).catch(() => {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea')
-        textArea.value = exportText
-        document.body.appendChild(textArea)
-        textArea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textArea)
-        alert('✅ Responses copied to clipboard!\n\nPaste them into your proposal document.')
-      })
-    }
-
-    const handleMarkSubmitted = async () => {
-      if (!acknowledged) {
-        alert('Please check the acknowledgment box before submitting.')
-        return
-      }
-      
-      try {
-        await supabase
-          .from('submissions')
-          .update({ 
-            status: 'submitted',
-            submission_notes: submissionNotes
-          })
-          .eq('id', localOpportunity.id)
-        
-        alert('🎉 Marked as submitted!\n\nYour responses have been saved to your BUCKET for future bids.')
-        onBack()
-      } catch (err) {
-        console.error('Error updating status:', err)
-        alert('Error updating status. Please try again.')
-      }
-    }
-
+  if (phase === 'answers') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
+        <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30`, position: 'sticky', top: 0, zIndex: 100 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button onClick={() => setPhase('answer')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
-            <h1 style={{ color: colors.white, margin: 0, fontSize: '18px' }}>Review Responses</h1>
-            <span style={{ color: colors.primary, fontSize: '14px', fontWeight: '600' }}>{answeredCount}/{questions.length} Complete</span>
+            <button onClick={() => setPhase('strategy')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Strategy</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '14px' }}>🪣+🤖</span>
+              <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>{answeredCount}/{questions.length}</span>
+              {issueCount > 0 && <span style={{ color: colors.red, fontSize: '12px' }}>⛔ {issueCount} over</span>}
+            </div>
+            <button onClick={handleSaveExit} style={{ background: 'none', border: 'none', color: colors.gold, cursor: 'pointer', fontSize: '14px' }}>Save & Exit</button>
           </div>
         </div>
 
-        <div style={{ padding: '30px', maxWidth: '800px', margin: '0 auto' }}>
-          {/* Progress Summary */}
-          <div style={{
-            backgroundColor: answeredCount === questions.length ? `${colors.primary}15` : `${colors.gold}15`,
-            borderRadius: '12px',
-            padding: '20px',
-            border: `1px solid ${answeredCount === questions.length ? colors.primary : colors.gold}30`,
-            marginBottom: '25px',
-            textAlign: 'center'
-          }}>
-            {answeredCount === questions.length ? (
-              <>
-                <p style={{ color: colors.primary, margin: 0, fontSize: '18px', fontWeight: '600' }}>🎉 All questions answered!</p>
-                <p style={{ color: colors.gray, margin: '5px 0 0 0', fontSize: '14px' }}>Review below, then export when ready.</p>
-              </>
-            ) : (
-              <>
-                <p style={{ color: colors.gold, margin: 0, fontSize: '18px', fontWeight: '600' }}>{questions.length - answeredCount} question{questions.length - answeredCount !== 1 ? 's' : ''} still need answers</p>
-                <p style={{ color: colors.gray, margin: '5px 0 0 0', fontSize: '14px' }}>Click on any question to answer it.</p>
-              </>
-            )}
+        <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: `${colors.primary}15`, padding: '8px 16px', borderRadius: '20px', marginBottom: '10px' }}><span style={{ fontSize: '14px' }}>🪣+🤖</span><span style={{ color: colors.primary, fontSize: '13px', fontWeight: '600' }}>BUCKET + CR-AI Responses</span></div>
+            <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>Review & edit. Auto-saves as you go.</p>
           </div>
 
-          {/* All Q&As */}
-          <div style={{ display: 'grid', gap: '15px', marginBottom: '30px' }}>
-            {questions.map((q, i) => (
-              <div
-                key={q.id}
-                onClick={() => handleEditQuestion(i)}
-                style={{
-                  backgroundColor: colors.card,
-                  borderRadius: '12px',
-                  padding: '20px',
-                  border: `1px solid ${q.response ? colors.primary : colors.gold}30`,
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <p style={{ color: q.response ? colors.primary : colors.gold, margin: 0, fontSize: '12px', fontWeight: '600' }}>
-                    Q{i + 1} {q.response ? '✓' : '(needs answer)'}
-                  </p>
-                  <span style={{ color: colors.gray, fontSize: '12px' }}>Edit →</span>
-                </div>
-                <p style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '15px', fontWeight: '500' }}>{q.text}</p>
-                {q.response ? (
-                  <p style={{ color: colors.gray, margin: 0, fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
-                    {q.response.length > 200 ? q.response.substring(0, 200) + '...' : q.response}
-                  </p>
-                ) : (
-                  <p style={{ color: colors.gold, margin: 0, fontSize: '14px', fontStyle: 'italic' }}>Click to answer this question</p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Action Buttons & Acknowledgment */}
-          {answeredCount > 0 && (
-            <div style={{ display: 'grid', gap: '15px' }}>
-              <button
-                onClick={handleExport}
-                style={{
-                  width: '100%',
-                  padding: '18px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  backgroundColor: colors.gold,
-                  color: colors.background,
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                📋 Copy All Responses
-              </button>
-              
-              {answeredCount === questions.length && (
-                <>
-                  {/* Acknowledgment Box */}
-                  <div style={{
-                    backgroundColor: `${colors.primary}10`,
-                    borderRadius: '12px',
-                    padding: '20px',
-                    border: `1px solid ${colors.primary}30`
-                  }}>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={acknowledged}
-                        onChange={(e) => setAcknowledged(e.target.checked)}
-                        style={{ marginTop: '3px', width: '18px', height: '18px', accentColor: colors.primary }}
-                      />
-                      <span style={{ color: colors.white, fontSize: '14px', lineHeight: '1.5' }}>
-                        I understand CR-AI is an assistant tool. I am responsible for reviewing and verifying all information before submission.
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* Optional Notes */}
-                  <div>
-                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '8px' }}>
-                      📝 Notes (optional) — Anything to remember for this bid?
-                    </label>
-                    <textarea
-                      value={submissionNotes}
-                      onChange={(e) => setSubmissionNotes(e.target.value)}
-                      placeholder="e.g., Need to follow up on references, submitted via email..."
-                      rows={3}
-                      style={{ ...inputStyle, resize: 'vertical' }}
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleMarkSubmitted}
-                    disabled={!acknowledged}
-                    style={{
-                      width: '100%',
-                      padding: '18px',
-                      borderRadius: '12px',
-                      border: acknowledged ? 'none' : `2px solid ${colors.gray}50`,
-                      backgroundColor: acknowledged ? colors.primary : 'transparent',
-                      color: acknowledged ? colors.background : colors.gray,
-                      fontSize: '18px',
-                      fontWeight: '600',
-                      cursor: acknowledged ? 'pointer' : 'not-allowed'
-                    }}
-                  >
-                    ✅ Mark as Submitted
-                  </button>
-                </>
-              )}
+          {generatingAnswers && (
+            <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: colors.card, borderRadius: '16px', marginBottom: '20px' }}>
+              <p style={{ color: colors.primary, fontSize: '18px', margin: '0 0 10px 0' }}>⏳ Generating all answers...</p>
+              <p style={{ color: colors.gray, fontSize: '14px', margin: 0 }}>CR-AI is pulling from your BUCKET</p>
             </div>
           )}
 
-          {/* Tip */}
-          <div style={{
-            marginTop: '25px',
-            backgroundColor: `${colors.primary}10`,
-            borderRadius: '12px',
-            padding: '15px 20px',
-            border: `1px solid ${colors.primary}30`
-          }}>
-            <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
-              💡 <strong style={{ color: colors.white }}>Tip:</strong> Copy your responses and paste them into your official proposal. After you submit, mark it as "Submitted" to track it.
-            </p>
+          {!generatingAnswers && questions.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 20px', backgroundColor: colors.card, borderRadius: '16px', marginBottom: '20px' }}>
+              <p style={{ color: colors.gray, margin: '0 0 15px 0' }}>No answers generated yet</p>
+              <button onClick={handleGenerateAllAnswers} style={{ padding: '14px 28px', borderRadius: '10px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer' }}>✨ Generate All Answers</button>
+            </div>
+          )}
+
+          {!generatingAnswers && questions.map((q, index) => {
+            const overLimit = isOverLimit(q.response, q.charLimit)
+            const nearLimit = isNearLimit(q.response, q.charLimit)
+            
+            return (
+              <div key={q.id} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${overLimit ? colors.red : colors.gray}30`, marginBottom: '15px' }}>
+                {/* Question Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                  <span style={{ color: colors.primary, fontSize: '12px', fontWeight: '600' }}>Q{index + 1}</span>
+                  <span style={{ fontSize: '10px', backgroundColor: q.source === 'user-edited' ? `${colors.gold}20` : `${colors.primary}20`, color: q.source === 'user-edited' ? colors.gold : colors.primary, padding: '3px 8px', borderRadius: '4px' }}>
+                    {q.source === 'user-edited' ? '✍️ Edited' : '🪣+🤖 Generated'}
+                  </span>
+                </div>
+
+                <p style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '15px', fontWeight: '500', lineHeight: '1.4' }}>{q.text}</p>
+
+                {editingIndex === index ? (
+                  <div>
+                    <textarea value={editingText} onChange={(e) => setEditingText(e.target.value)} rows={6} style={{ ...inputStyle, marginBottom: '10px', resize: 'vertical', borderColor: editingText.length > q.charLimit ? colors.red : `${colors.gray}50` }} autoFocus />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: editingText.length > q.charLimit ? colors.red : colors.gray, fontSize: '12px', fontWeight: editingText.length > q.charLimit ? '600' : '400' }}>
+                        {editingText.length}/{q.charLimit} {editingText.length > q.charLimit && `⛔ ${editingText.length - q.charLimit} over`}
+                      </span>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={() => { setEditingIndex(null); setEditingText('') }} style={{ padding: '8px 16px', borderRadius: '6px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.gray, fontSize: '12px', cursor: 'pointer' }}>Cancel</button>
+                        <button onClick={() => handleSaveEdit(index)} disabled={editingText.length > q.charLimit} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: editingText.length > q.charLimit ? colors.gray : colors.primary, color: colors.background, fontSize: '12px', fontWeight: '600', cursor: editingText.length > q.charLimit ? 'not-allowed' : 'pointer' }}>
+                          {editingText.length > q.charLimit ? 'Over Limit' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ backgroundColor: '#0a0a0a', borderRadius: '8px', padding: '15px', marginBottom: '12px' }}>
+                      <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{q.response || 'No response yet'}</p>
+                    </div>
+                    
+                    {/* Character count - just numbers, turns red when over */}
+                    {q.charLimit && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <span style={{ color: overLimit ? colors.red : nearLimit ? colors.gold : colors.gray, fontSize: '12px', fontWeight: overLimit ? '600' : '400' }}>
+                          {q.response?.length || 0}/{q.charLimit} characters
+                          {overLimit && ` ⛔ ${q.response.length - q.charLimit} over limit`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Over limit warning + auto-fix */}
+                    {overLimit && (
+                      <div style={{ backgroundColor: `${colors.red}15`, borderRadius: '8px', padding: '12px', marginBottom: '12px', border: `1px solid ${colors.red}30` }}>
+                        <p style={{ color: colors.red, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
+                          ⛔ This answer is {q.response.length - q.charLimit} characters over the limit
+                        </p>
+                        <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '12px' }}>
+                          This will be rejected by the portal. CR-AI can shorten it for you.
+                        </p>
+                        <button onClick={() => handleAutoShorten(index)} disabled={shorteningIndex === index} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                          {shorteningIndex === index ? '⏳ Shortening...' : '✨ Auto-shorten with CR-AI'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button onClick={() => handleRegenerateAnswer(index)} disabled={editingIndex === index} style={{ padding: '8px 12px', borderRadius: '6px', border: `1px solid ${colors.primary}50`, backgroundColor: 'transparent', color: colors.primary, fontSize: '12px', cursor: 'pointer' }}>✨ Regenerate</button>
+                      <button onClick={() => { setEditingIndex(index); setEditingText(q.response || '') }} style={{ padding: '8px 12px', borderRadius: '6px', border: `1px solid ${colors.gray}50`, backgroundColor: 'transparent', color: colors.white, fontSize: '12px', cursor: 'pointer' }}>✍️ Edit</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
+
+          {questions.length > 0 && !generatingAnswers && (
+            <button onClick={() => setPhase('review')} disabled={issueCount > 0} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: issueCount > 0 ? `2px solid ${colors.red}` : 'none', backgroundColor: issueCount > 0 ? 'transparent' : colors.primary, color: issueCount > 0 ? colors.red : colors.background, fontSize: '16px', fontWeight: '600', cursor: issueCount > 0 ? 'not-allowed' : 'pointer', marginTop: '10px' }}>
+              {issueCount > 0 ? `⛔ Fix ${issueCount} issue${issueCount > 1 ? 's' : ''} to continue` : 'Review & Export →'}
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================
+  // PHASE 4: REVIEW
+  // ==========================================
+  if (phase === 'review') {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div style={{ backgroundColor: colors.card, padding: '15px 20px', borderBottom: `1px solid ${colors.primary}30` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button onClick={() => setPhase('answers')} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '14px' }}>← Back</button>
+            <span style={{ color: colors.white, fontSize: '14px', fontWeight: '600' }}>Review & Submit</span>
+            <span style={{ color: colors.primary, fontSize: '14px' }}>{answeredCount}/{questions.length}</span>
+          </div>
+        </div>
+
+        <div style={{ padding: '25px 20px', maxWidth: '650px', margin: '0 auto' }}>
+          {/* Compliance Status */}
+          <div style={{ backgroundColor: `${colors.primary}15`, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.primary}30`, marginBottom: '20px', textAlign: 'center' }}>
+            <p style={{ color: colors.primary, margin: 0, fontSize: '18px', fontWeight: '600' }}>🛡️ All compliance checks passed</p>
+            <p style={{ color: colors.gray, margin: '5px 0 0 0', fontSize: '14px' }}>Your responses are within all limits</p>
+          </div>
+
+          <button onClick={handleExport} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: colors.gold, color: colors.background, fontSize: '16px', fontWeight: '600', cursor: 'pointer', marginBottom: '20px' }}>📋 Copy All Responses</button>
+
+          {/* Acknowledgment */}
+          <div style={{ backgroundColor: `${colors.primary}10`, borderRadius: '12px', padding: '18px', border: `1px solid ${colors.primary}30`, marginBottom: '15px' }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} style={{ marginTop: '2px', width: '18px', height: '18px', accentColor: colors.primary }} />
+              <span style={{ color: colors.white, fontSize: '13px', lineHeight: '1.5' }}>I understand CR-AI is an assistant tool. I am responsible for reviewing and verifying all information before submission.</span>
+            </label>
+          </div>
+
+          {/* Notes */}
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '6px' }}>📝 Notes (optional)</label>
+            <textarea value={submissionNotes} onChange={(e) => setSubmissionNotes(e.target.value)} placeholder="Anything to remember..." rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+          </div>
+
+          <button onClick={handleMarkSubmitted} disabled={!acknowledged} style={{ width: '100%', padding: '16px', borderRadius: '12px', border: acknowledged ? 'none' : `2px solid ${colors.gray}50`, backgroundColor: acknowledged ? colors.primary : 'transparent', color: acknowledged ? colors.background : colors.gray, fontSize: '16px', fontWeight: '600', cursor: acknowledged ? 'pointer' : 'not-allowed' }}>
+            ✅ Mark as Submitted
+          </button>
+
+          {/* Footer */}
+          <div style={{ marginTop: '25px', textAlign: 'center', padding: '15px', backgroundColor: `${colors.primary}08`, borderRadius: '10px', border: `1px solid ${colors.primary}20` }}>
+            <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>Prepared with <strong style={{ color: colors.primary }}>BUCKET + CR-AI Technology</strong></p>
+            <p style={{ color: colors.gray, margin: '4px 0 0 0', fontSize: '11px' }}>Your business data + AI assistance • Contract Ready © {new Date().getFullYear()}</p>
           </div>
         </div>
       </div>
