@@ -408,10 +408,10 @@ Return ONLY the improved text, no explanations.`
   // Services functions
   const addService = () => {
     if (services.length >= 10) {
-      alert('Maximum 10 services allowed')
+      alert('Maximum 10 service areas allowed')
       return
     }
-    setServices([...services, { category: '', name: '', description: '' }])
+    setServices([...services, { category: '', description: '' }])
   }
 
   const removeService = (index) => {
@@ -862,8 +862,8 @@ Return ONLY the service description, no explanations.`
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ color: colors.white, margin: 0 }}>Services You Offer</h3>
-              <span style={{ color: colors.gray, fontSize: '14px' }}>{services.length}/10 services</span>
+              <h3 style={{ color: colors.white, margin: 0 }}>What Services Do You Offer?</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{services.length}/10 areas</span>
             </div>
 
             {/* Info box */}
@@ -874,7 +874,7 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>Tip:</strong> Add your core services. CR-AI will use these to match you with contracts and write better proposals.
+                💡 <strong style={{ color: colors.white }}>Just tell us what you do.</strong> Pick a category and explain everything you offer in that area. CR-AI will use this to match you with contracts.
               </p>
             </div>
 
@@ -891,7 +891,7 @@ Return ONLY the service description, no explanations.`
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                   <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>
-                    Service #{index + 1}
+                    Service Area #{index + 1}
                   </span>
                   <button
                     onClick={() => removeService(index)}
@@ -909,8 +909,8 @@ Return ONLY the service description, no explanations.`
 
                 <div style={{ display: 'grid', gap: '15px' }}>
                   <div>
-                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                      Industry Category *
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      What type of work is this?
                     </label>
                     <select
                       value={service.category}
@@ -925,36 +925,19 @@ Return ONLY the service description, no explanations.`
                   </div>
 
                   <div>
-                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                      Service Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={service.name}
-                      onChange={(e) => updateService(index, 'name', e.target.value)}
-                      placeholder="e.g., Mobile Mental Health Counseling"
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                      <label style={{ color: colors.gray, fontSize: '14px' }}>
-                        Description
+                    <div style={{ marginBottom: '5px' }}>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block' }}>
+                        Explain EVERYTHING you do in this area
                       </label>
-                      <button
-                        onClick={() => generateServiceDescription(index)}
-                        disabled={aiLoading[`service_${index}`]}
-                        style={{ ...aiButtonStyle, backgroundColor: colors.primary, color: colors.background, fontSize: '12px', padding: '6px 12px' }}
-                      >
-                        {aiLoading[`service_${index}`] ? '⏳ Generating...' : '✨ Generate with CR-AI'}
-                      </button>
+                      <span style={{ color: colors.gray, fontSize: '12px' }}>
+                        We'll organize it in your BUCKET. You can add or change it anytime.
+                      </span>
                     </div>
                     <textarea
                       value={service.description}
                       onChange={(e) => updateService(index, 'description', e.target.value)}
-                      placeholder="Describe what this service includes..."
-                      rows={3}
+                      placeholder="Example: We do photography and video for events, corporate headshots, and products. We also handle editing, social media content, and live event coverage. We've done concerts, city events, and campaigns for small businesses..."
+                      rows={6}
                       style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
                     />
                   </div>
@@ -980,14 +963,14 @@ Return ONLY the service description, no explanations.`
                   gap: '10px'
                 }}
               >
-                ➕ Add Service
+                ➕ Add Another Service Area
               </button>
             )}
 
             {services.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
                 <p style={{ fontSize: '16px', margin: 0 }}>No services added yet.</p>
-                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Click "Add Service" to get started.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Click "Add Another Service Area" to get started.</p>
               </div>
             )}
           </div>
