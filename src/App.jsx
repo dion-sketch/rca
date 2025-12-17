@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import BusinessBuilder from './BusinessBuilder'
-import Submissions from './Submissions'
+import MyCart from './MyCart'
 
 // Contract Ready Brand Colors
 const colors = {
@@ -24,7 +24,7 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [profileCompletion, setProfileCompletion] = useState(0)
-  const [opportunities, setOpportunities] = useState(5)
+  const [cartCount, setCartCount] = useState(0)
   const [submissions, setSubmissions] = useState(0)
 
   useEffect(() => {
@@ -34,6 +34,7 @@ function App() {
       setLoading(false)
       if (session) {
         fetchProfileCompletion(session.user.id)
+        fetchCartCount(session.user.id)
       }
     })
 
@@ -42,6 +43,7 @@ function App() {
       setSession(session)
       if (session) {
         fetchProfileCompletion(session.user.id)
+        fetchCartCount(session.user.id)
       }
     })
 
@@ -57,6 +59,18 @@ function App() {
     
     if (data?.completion_percentage) {
       setProfileCompletion(data.completion_percentage)
+    }
+  }
+
+  const fetchCartCount = async (userId) => {
+    const { data } = await supabase
+      .from('submissions')
+      .select('id')
+      .eq('user_id', userId)
+      .neq('status', 'archived')
+    
+    if (data) {
+      setCartCount(data.length)
     }
   }
 
@@ -311,22 +325,27 @@ function App() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          {['Dashboard', 'Find Contracts', 'Business Builder', 'Submissions'].map((item) => (
+          {[
+            { label: 'Dashboard', page: 'dashboard' },
+            { label: 'Shop Contracts', page: 'shop-contracts' },
+            { label: 'Business Builder', page: 'business-builder' },
+            { label: 'My Cart', page: 'my-cart' }
+          ].map((item) => (
             <button
-              key={item}
-              onClick={() => setCurrentPage(item.toLowerCase().replace(' ', '-'))}
+              key={item.page}
+              onClick={() => setCurrentPage(item.page)}
               style={{
                 background: 'none',
                 border: 'none',
-                color: currentPage === item.toLowerCase().replace(' ', '-') ? colors.primary : colors.white,
+                color: currentPage === item.page ? colors.primary : colors.white,
                 cursor: 'pointer',
                 fontSize: '14px',
                 padding: '8px 12px',
                 borderRadius: '6px',
-                backgroundColor: currentPage === item.toLowerCase().replace(' ', '-') ? `${colors.primary}20` : 'transparent'
+                backgroundColor: currentPage === item.page ? `${colors.primary}20` : 'transparent'
               }}
             >
-              {item}
+              {item.label}
             </button>
           ))}
           <button
@@ -355,10 +374,13 @@ function App() {
             fetchProfileCompletion(session.user.id)
           }} 
         />
-      ) : currentPage === 'submissions' ? (
-        <Submissions 
+      ) : currentPage === 'my-cart' ? (
+        <MyCart 
           session={session} 
-          onBack={() => setCurrentPage('dashboard')} 
+          onBack={() => {
+            setCurrentPage('dashboard')
+            fetchCartCount(session.user.id)
+          }} 
         />
       ) : (
         <>
@@ -370,131 +392,146 @@ function App() {
             justifyContent: 'space-around',
             borderBottom: `1px solid ${colors.primary}30`
           }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ color: profileCompletion >= 80 ? colors.primary : colors.gold, fontSize: '32px', fontWeight: '700' }}>
-            {profileCompletion}%
-          </div>
-          <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Full</div>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
-            🔍 {opportunities}
-          </div>
-          <div style={{ color: colors.gray, fontSize: '12px' }}>Opportunities</div>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ color: colors.white, fontSize: '32px', fontWeight: '700' }}>
-            🎯 {submissions}/2
-          </div>
-          <div style={{ color: colors.gray, fontSize: '12px' }}>Monthly Goal</div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div style={{ padding: '40px 30px', maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Welcome Message */}
-        <div style={{ marginBottom: '40px' }}>
-          <h2 style={{ color: colors.white, margin: '0 0 10px 0' }}>
-            Welcome to RCA! 👋
-          </h2>
-          <p style={{ color: colors.gray, margin: 0 }}>
-            Your <strong style={{ color: colors.primary }}>Rambo Contract Assistant</strong>. Let's get you contract ready.
-          </p>
-        </div>
-
-        {/* Three Main Cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '25px'
-        }}>
-          {/* Find Contracts Card */}
-          <div style={{
-            backgroundColor: colors.card,
-            borderRadius: '16px',
-            padding: '30px',
-            border: `2px solid ${colors.primary}30`,
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-          onClick={() => setCurrentPage('find-contracts')}
-          onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
-          onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
-          >
-            <div style={{ fontSize: '40px', marginBottom: '15px' }}>🔍</div>
-            <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Find Contracts & Grants</h3>
-            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-              Browse opportunities matched to your profile
-            </p>
-          </div>
-
-          {/* Business Builder Card */}
-          <div style={{
-            backgroundColor: colors.card,
-            borderRadius: '16px',
-            padding: '30px',
-            border: `2px solid ${colors.primary}`,
-            cursor: 'pointer',
-            boxShadow: `0 0 20px ${colors.primary}40`,
-            position: 'relative'
-          }}
-          onClick={() => setCurrentPage('business-builder')}
-          >
-            <div style={{
-              position: 'absolute',
-              top: '-10px',
-              right: '20px',
-              backgroundColor: colors.primary,
-              color: colors.background,
-              padding: '4px 12px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: '600'
-            }}>
-              {profileCompletion > 0 ? `${profileCompletion}% READY` : 'START HERE'}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ color: profileCompletion >= 80 ? colors.primary : colors.gold, fontSize: '32px', fontWeight: '700' }}>
+                {profileCompletion}%
+              </div>
+              <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Full</div>
             </div>
-            <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏗️</div>
-            <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Business Builder</h3>
-            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-              Build your profile to match with opportunities
-            </p>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
+                🛒 {cartCount}
+              </div>
+              <div style={{ color: colors.gray, fontSize: '12px' }}>In Cart</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ color: colors.white, fontSize: '32px', fontWeight: '700' }}>
+                🎯 {submissions}/2
+              </div>
+              <div style={{ color: colors.gray, fontSize: '12px' }}>Monthly Goal</div>
+            </div>
           </div>
 
-          {/* Submissions Card */}
-          <div style={{
-            backgroundColor: colors.card,
-            borderRadius: '16px',
-            padding: '30px',
-            border: `2px solid ${colors.primary}30`,
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-          onClick={() => setCurrentPage('submissions')}
-          onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
-          onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
-          >
-            <div style={{ fontSize: '40px', marginBottom: '15px' }}>📋</div>
-            <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Submissions</h3>
-            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-              Track your responses and drafts
-            </p>
+          {/* Main Content */}
+          <div style={{ padding: '40px 30px', maxWidth: '1200px', margin: '0 auto' }}>
+            {/* Welcome Message */}
+            <div style={{ marginBottom: '40px' }}>
+              <h2 style={{ color: colors.white, margin: '0 0 10px 0' }}>
+                Welcome to RCA! 👋
+              </h2>
+              <p style={{ color: colors.gray, margin: 0 }}>
+                Your <strong style={{ color: colors.primary }}>Rambo Contract Assistant</strong>. Let's get you contract ready.
+              </p>
+            </div>
+
+            {/* Three Main Cards */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+              gap: '25px'
+            }}>
+              {/* Shop Contracts Card */}
+              <div style={{
+                backgroundColor: colors.card,
+                borderRadius: '16px',
+                padding: '30px',
+                border: `2px solid ${colors.primary}30`,
+                cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => setCurrentPage('shop-contracts')}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
+              >
+                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🛍️</div>
+                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Shop Contracts</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                  Find contracts & grants matched to your profile
+                </p>
+              </div>
+
+              {/* Business Builder Card */}
+              <div style={{
+                backgroundColor: colors.card,
+                borderRadius: '16px',
+                padding: '30px',
+                border: `2px solid ${colors.primary}`,
+                cursor: 'pointer',
+                boxShadow: `0 0 20px ${colors.primary}40`,
+                position: 'relative'
+              }}
+              onClick={() => setCurrentPage('business-builder')}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: '-10px',
+                  right: '20px',
+                  backgroundColor: colors.primary,
+                  color: colors.background,
+                  padding: '4px 12px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}>
+                  {profileCompletion > 0 ? `${profileCompletion}% READY` : 'START HERE'}
+                </div>
+                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏗️</div>
+                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Business Builder</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                  Build your profile to match with opportunities
+                </p>
+              </div>
+
+              {/* My Cart Card */}
+              <div style={{
+                backgroundColor: colors.card,
+                borderRadius: '16px',
+                padding: '30px',
+                border: `2px solid ${colors.primary}30`,
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                position: 'relative'
+              }}
+              onClick={() => setCurrentPage('my-cart')}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
+              >
+                {cartCount > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    right: '20px',
+                    backgroundColor: colors.gold,
+                    color: colors.background,
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '600'
+                  }}>
+                    {cartCount} IN CART
+                  </div>
+                )}
+                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🛒</div>
+                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>My Cart</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                  Your saved opportunities to pursue
+                </p>
+              </div>
+            </div>
+
+            {/* Tip Box */}
+            <div style={{
+              marginTop: '40px',
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '12px',
+              padding: '20px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
+                💡 <strong>Tip:</strong> Fill your bucket in Business Builder, then go shopping for contracts! Add opportunities to your cart and let CR-AI help you respond.
+              </p>
+            </div>
           </div>
-        </div>
-
-        {/* Tip Box */}
-        <div style={{
-          marginTop: '40px',
-          backgroundColor: `${colors.primary}10`,
-          borderRadius: '12px',
-          padding: '20px',
-          border: `1px solid ${colors.primary}30`
-        }}>
-          <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
-            💡 <strong>Tip:</strong> Fill your bucket in Business Builder, then start bidding! Your bucket grows as you use RCA — the more you bid, the smarter your responses get.
-          </p>
-        </div>
-      </div>
-
         </>
       )}
 
