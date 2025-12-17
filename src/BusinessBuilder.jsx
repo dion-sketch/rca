@@ -94,6 +94,9 @@ function BusinessBuilder({ session, onBack }) {
   // NAICS Codes
   const [naicsCodes, setNaicsCodes] = useState([])
 
+  // Certifications
+  const [certifications, setCertifications] = useState([])
+
   // SAM.gov
   const [samRegistered, setSamRegistered] = useState(false)
   const [ueiNumber, setUeiNumber] = useState('')
@@ -144,6 +147,7 @@ function BusinessBuilder({ session, onBack }) {
         setServices(data.services || [])
         setPastPerformance(data.past_performance || [])
         setNaicsCodes(data.naics_codes || [])
+        setCertifications(data.certifications || [])
       }
     } catch (err) {
       console.error('Error:', err)
@@ -154,7 +158,7 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 20
+    let total = 22
 
     if (companyName) filled++
     if (address) filled++
@@ -173,6 +177,7 @@ function BusinessBuilder({ session, onBack }) {
     if (services.length > 0) filled += 2
     if (pastPerformance.length > 0) filled += 2
     if (naicsCodes.length > 0) filled += 2
+    if (certifications.length > 0) filled += 2
 
     return Math.round((filled / total) * 100)
   }
@@ -210,6 +215,7 @@ function BusinessBuilder({ session, onBack }) {
       services: services,
       past_performance: pastPerformance,
       naics_codes: naicsCodes,
+      certifications: certifications,
     }
 
     try {
@@ -586,6 +592,11 @@ Return ONLY the service description, no explanations.`
       case 4:
         if (profile.naics_codes && profile.naics_codes.length > 0) {
           return Math.min(100, profile.naics_codes.length * 20)
+        }
+        return 0
+      case 5:
+        if (profile.certifications && profile.certifications.length > 0) {
+          return 100
         }
         return 0
       case 8:
@@ -1225,6 +1236,170 @@ Return ONLY the service description, no explanations.`
                 ))}
               </div>
             </div>
+          </div>
+        )
+
+      case 5:
+        const availableCerts = [
+          { id: 'mbe', name: 'MBE', full: 'Minority Business Enterprise' },
+          { id: 'wbe', name: 'WBE', full: 'Women Business Enterprise' },
+          { id: 'dbe', name: 'DBE', full: 'Disadvantaged Business Enterprise' },
+          { id: 'dvbe', name: 'DVBE', full: 'Disabled Veteran Business Enterprise' },
+          { id: 'sdvosb', name: 'SDVOSB', full: 'Service-Disabled Veteran-Owned Small Business' },
+          { id: 'sbe', name: 'SBE', full: 'Small Business Enterprise' },
+          { id: 'lsbe', name: 'LSBE', full: 'Local Small Business Enterprise' },
+          { id: '8a', name: '8(a)', full: 'SBA 8(a) Business Development Program' },
+          { id: 'hubzone', name: 'HUBZone', full: 'Historically Underutilized Business Zone' },
+          { id: 'wosb', name: 'WOSB', full: 'Women-Owned Small Business' },
+          { id: 'edwosb', name: 'EDWOSB', full: 'Economically Disadvantaged WOSB' },
+          { id: 'lgbtbe', name: 'LGBTBE', full: 'LGBT Business Enterprise' },
+          { id: 'vosb', name: 'VOSB', full: 'Veteran-Owned Small Business' },
+        ]
+
+        const toggleCert = (cert) => {
+          const exists = certifications.find(c => c.id === cert.id)
+          if (exists) {
+            setCertifications(certifications.filter(c => c.id !== cert.id))
+          } else {
+            setCertifications([...certifications, { id: cert.id, name: cert.name, full: cert.full, certNumber: '', expirationDate: '' }])
+          }
+        }
+
+        const updateCert = (certId, field, value) => {
+          setCertifications(certifications.map(c => 
+            c.id === certId ? { ...c, [field]: value } : c
+          ))
+        }
+
+        return (
+          <div style={{ display: 'grid', gap: '25px' }}>
+            <h3 style={{ color: colors.white, margin: 0 }}>Certifications</h3>
+
+            {/* Info box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                💡 <strong style={{ color: colors.white }}>Certifications give you bidding advantages.</strong> Many contracts are set aside for certified businesses. Check all that apply — you can update this anytime in your BUCKET.
+              </p>
+            </div>
+
+            {/* No certs message */}
+            <div style={{
+              backgroundColor: `${colors.gold}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.gold}30`
+            }}>
+              <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
+                ⚠️ <strong>Don't have certifications yet?</strong> That's okay! You can still bid on open contracts. Certifications just give you extra advantages. Skip this section and come back later.
+              </p>
+            </div>
+
+            {/* Certification checkboxes */}
+            <div style={{ display: 'grid', gap: '10px' }}>
+              {availableCerts.map((cert) => {
+                const isChecked = certifications.some(c => c.id === cert.id)
+                const certData = certifications.find(c => c.id === cert.id)
+                
+                return (
+                  <div key={cert.id}>
+                    <div
+                      onClick={() => toggleCert(cert)}
+                      style={{
+                        backgroundColor: isChecked ? `${colors.primary}15` : '#1a1a1a',
+                        borderRadius: '10px',
+                        padding: '15px',
+                        border: `1px solid ${isChecked ? colors.primary : colors.gray}30`,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '15px'
+                      }}
+                    >
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '6px',
+                        border: `2px solid ${isChecked ? colors.primary : colors.gray}`,
+                        backgroundColor: isChecked ? colors.primary : 'transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        {isChecked && <span style={{ color: colors.background, fontSize: '14px' }}>✓</span>}
+                      </div>
+                      <div>
+                        <span style={{ color: colors.white, fontWeight: '600', fontSize: '16px' }}>{cert.name}</span>
+                        <span style={{ color: colors.gray, fontSize: '14px', marginLeft: '10px' }}>{cert.full}</span>
+                      </div>
+                    </div>
+
+                    {/* Show details when checked */}
+                    {isChecked && (
+                      <div style={{
+                        backgroundColor: '#1a1a1a',
+                        borderRadius: '0 0 10px 10px',
+                        padding: '15px',
+                        marginTop: '-5px',
+                        borderLeft: `1px solid ${colors.primary}30`,
+                        borderRight: `1px solid ${colors.primary}30`,
+                        borderBottom: `1px solid ${colors.primary}30`,
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '10px'
+                      }}>
+                        <div>
+                          <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                            Certification # (optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={certData?.certNumber || ''}
+                            onChange={(e) => updateCert(cert.id, 'certNumber', e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Enter cert number"
+                            style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ color: colors.gray, fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                            Expiration Date (optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={certData?.expirationDate || ''}
+                            onChange={(e) => updateCert(cert.id, 'expirationDate', e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="MM/YYYY"
+                            style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Summary */}
+            {certifications.length > 0 && (
+              <div style={{
+                backgroundColor: `${colors.primary}10`,
+                borderRadius: '10px',
+                padding: '15px',
+                border: `1px solid ${colors.primary}30`
+              }}>
+                <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
+                  ✅ <strong>{certifications.length} certification{certifications.length > 1 ? 's' : ''} selected:</strong>{' '}
+                  {certifications.map(c => c.name).join(', ')}
+                </p>
+              </div>
+            )}
           </div>
         )
 
