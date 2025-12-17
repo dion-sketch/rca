@@ -97,6 +97,9 @@ function BusinessBuilder({ session, onBack }) {
   // Certifications
   const [certifications, setCertifications] = useState([])
 
+  // Pricing
+  const [pricing, setPricing] = useState([])
+
   // SAM.gov
   const [samRegistered, setSamRegistered] = useState(false)
   const [ueiNumber, setUeiNumber] = useState('')
@@ -148,6 +151,7 @@ function BusinessBuilder({ session, onBack }) {
         setPastPerformance(data.past_performance || [])
         setNaicsCodes(data.naics_codes || [])
         setCertifications(data.certifications || [])
+        setPricing(data.pricing || [])
       }
     } catch (err) {
       console.error('Error:', err)
@@ -158,7 +162,7 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 22
+    let total = 24
 
     if (companyName) filled++
     if (address) filled++
@@ -178,6 +182,7 @@ function BusinessBuilder({ session, onBack }) {
     if (pastPerformance.length > 0) filled += 2
     if (naicsCodes.length > 0) filled += 2
     if (certifications.length > 0) filled += 2
+    if (pricing.length > 0) filled += 2
 
     return Math.round((filled / total) * 100)
   }
@@ -216,6 +221,7 @@ function BusinessBuilder({ session, onBack }) {
       past_performance: pastPerformance,
       naics_codes: naicsCodes,
       certifications: certifications,
+      pricing: pricing,
     }
 
     try {
@@ -561,6 +567,25 @@ Return ONLY the service description, no explanations.`
     setNaicsCodes(updated)
   }
 
+  // Pricing functions
+  const addPricingRole = () => {
+    if (pricing.length >= 15) {
+      alert('Maximum 15 roles allowed')
+      return
+    }
+    setPricing([...pricing, { role: '', hourlyRate: '', description: '' }])
+  }
+
+  const removePricingRole = (index) => {
+    setPricing(pricing.filter((_, i) => i !== index))
+  }
+
+  const updatePricingRole = (index, field, value) => {
+    const updated = [...pricing]
+    updated[index][field] = value
+    setPricing(updated)
+  }
+
   const saveApiKey = () => {
     localStorage.setItem('anthropic_api_key', tempApiKey)
     setShowApiKeyModal(false)
@@ -597,6 +622,11 @@ Return ONLY the service description, no explanations.`
       case 5:
         if (profile.certifications && profile.certifications.length > 0) {
           return 100
+        }
+        return 0
+      case 7:
+        if (profile.pricing && profile.pricing.length > 0) {
+          return Math.min(100, profile.pricing.length * 20)
         }
         return 0
       case 8:
@@ -1462,6 +1492,164 @@ Return ONLY the service description, no explanations.`
                 <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
                   💡 <strong>Tip:</strong> SAM.gov registration is required for federal contracts. Visit <a href="https://sam.gov" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>sam.gov</a> to register for free.
                 </p>
+              </div>
+            )}
+          </div>
+        )
+
+      case 7:
+        const commonRoles = [
+          { role: 'Project Manager', rate: '85' },
+          { role: 'Program Director', rate: '125' },
+          { role: 'Consultant', rate: '75' },
+          { role: 'Senior Consultant', rate: '95' },
+          { role: 'Analyst', rate: '65' },
+          { role: 'Administrative Support', rate: '45' },
+          { role: 'Trainer/Facilitator', rate: '80' },
+          { role: 'Counselor/Therapist', rate: '90' },
+          { role: 'Technician', rate: '55' },
+          { role: 'Developer/Engineer', rate: '110' },
+        ]
+
+        return (
+          <div style={{ display: 'grid', gap: '25px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ color: colors.white, margin: 0 }}>Pricing Snapshot</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{pricing.length}/15 roles</span>
+            </div>
+
+            {/* Info box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                💡 <strong style={{ color: colors.white }}>Add your typical hourly rates by role.</strong> CR-AI uses this to help build budgets in proposals. These are just estimates — you can adjust for each contract.
+              </p>
+            </div>
+
+            {/* Quick add common roles */}
+            <div style={{
+              backgroundColor: `${colors.gold}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.gold}30`
+            }}>
+              <p style={{ color: colors.gold, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>
+                Quick add common roles:
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {commonRoles.map((item) => (
+                  <button
+                    key={item.role}
+                    onClick={() => {
+                      if (pricing.length < 15 && !pricing.some(p => p.role === item.role)) {
+                        setPricing([...pricing, { role: item.role, hourlyRate: item.rate, description: '' }])
+                      }
+                    }}
+                    disabled={pricing.some(p => p.role === item.role)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      border: `1px solid ${colors.gold}50`,
+                      backgroundColor: pricing.some(p => p.role === item.role) ? `${colors.gray}30` : 'transparent',
+                      color: pricing.some(p => p.role === item.role) ? colors.gray : colors.white,
+                      cursor: pricing.some(p => p.role === item.role) ? 'default' : 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {item.role}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Existing Pricing Roles */}
+            {pricing.map((item, index) => (
+              <div
+                key={index}
+                style={{
+                  backgroundColor: '#1a1a1a',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: `1px solid ${colors.gray}30`
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>
+                    Role #{index + 1}
+                  </span>
+                  <button
+                    onClick={() => removePricingRole(index)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ff4444',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🗑️ Remove
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '15px' }}>
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Role / Position Title
+                    </label>
+                    <input
+                      type="text"
+                      value={item.role}
+                      onChange={(e) => updatePricingRole(index, 'role', e.target.value)}
+                      placeholder="e.g., Project Manager"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Hourly Rate ($)
+                    </label>
+                    <input
+                      type="text"
+                      value={item.hourlyRate}
+                      onChange={(e) => updatePricingRole(index, 'hourlyRate', e.target.value)}
+                      placeholder="e.g., 85"
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Add Role Button */}
+            {pricing.length < 15 && (
+              <button
+                onClick={addPricingRole}
+                style={{
+                  padding: '15px',
+                  borderRadius: '12px',
+                  border: `2px dashed ${colors.gray}`,
+                  backgroundColor: 'transparent',
+                  color: colors.gray,
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                ➕ Add Custom Role
+              </button>
+            )}
+
+            {pricing.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
+                <p style={{ fontSize: '16px', margin: 0 }}>No pricing added yet.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Click a common role above or add your own.</p>
               </div>
             )}
           </div>
