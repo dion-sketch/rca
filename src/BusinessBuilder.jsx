@@ -88,6 +88,9 @@ function BusinessBuilder({ session, onBack }) {
   // Services
   const [services, setServices] = useState([])
 
+  // Past Performance
+  const [pastPerformance, setPastPerformance] = useState([])
+
   // SAM.gov
   const [samRegistered, setSamRegistered] = useState(false)
   const [ueiNumber, setUeiNumber] = useState('')
@@ -136,6 +139,7 @@ function BusinessBuilder({ session, onBack }) {
         setResultsAchieved(data.results_achieved || '')
         setAnythingElse(data.anything_else || '')
         setServices(data.services || [])
+        setPastPerformance(data.past_performance || [])
       }
     } catch (err) {
       console.error('Error:', err)
@@ -146,7 +150,7 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 16
+    let total = 18
 
     if (companyName) filled++
     if (address) filled++
@@ -163,6 +167,7 @@ function BusinessBuilder({ session, onBack }) {
     if (yearEstablished) filled++
     if (revenueRange) filled++
     if (services.length > 0) filled += 2
+    if (pastPerformance.length > 0) filled += 2
 
     return Math.round((filled / total) * 100)
   }
@@ -198,6 +203,7 @@ function BusinessBuilder({ session, onBack }) {
       results_achieved: resultsAchieved,
       anything_else: anythingElse,
       services: services,
+      past_performance: pastPerformance,
     }
 
     try {
@@ -432,8 +438,8 @@ Return ONLY the improved text, no explanations.`
     }
 
     const service = services[index]
-    if (!service.name) {
-      alert('Please enter a service name first.')
+    if (!service.category) {
+      alert('Please select a category first.')
       return
     }
 
@@ -442,15 +448,14 @@ Return ONLY the improved text, no explanations.`
     try {
       const prompt = `Write a professional 2-3 sentence description for this service offered by a government contractor:
 
-Service Name: ${service.name}
-Industry Category: ${service.category || 'Not specified'}
+Industry Category: ${service.category}
 Company: ${companyName || 'Not specified'}
 
 Company Context:
 ${buildFullContext()}
 
 The description should:
-- Explain what the service includes
+- Explain what services they likely provide in this category
 - Highlight benefits to government/public sector clients
 - Sound professional for RFP responses
 - Be specific, not generic
@@ -485,6 +490,36 @@ Return ONLY the service description, no explanations.`
     }
   }
 
+  // Past Performance functions
+  const addPastPerformance = () => {
+    if (pastPerformance.length >= 5) {
+      alert('Maximum 5 past performance entries allowed')
+      return
+    }
+    setPastPerformance([...pastPerformance, { 
+      clientName: '', 
+      projectName: '', 
+      contractValue: '', 
+      startYear: '', 
+      endYear: '', 
+      description: '', 
+      results: '',
+      referenceName: '',
+      referenceTitle: '',
+      referenceContact: ''
+    }])
+  }
+
+  const removePastPerformance = (index) => {
+    setPastPerformance(pastPerformance.filter((_, i) => i !== index))
+  }
+
+  const updatePastPerformance = (index, field, value) => {
+    const updated = [...pastPerformance]
+    updated[index][field] = value
+    setPastPerformance(updated)
+  }
+
   const saveApiKey = () => {
     localStorage.setItem('anthropic_api_key', tempApiKey)
     setShowApiKeyModal(false)
@@ -511,6 +546,11 @@ Return ONLY the service description, no explanations.`
       case 3:
         if (profile.services && profile.services.length > 0) {
           return Math.min(100, profile.services.length * 20)
+        }
+        return 0
+      case 8:
+        if (profile.past_performance && profile.past_performance.length > 0) {
+          return Math.min(100, profile.past_performance.length * 20)
         }
         return 0
       case 6:
@@ -1035,6 +1075,221 @@ Return ONLY the service description, no explanations.`
                 <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
                   💡 <strong>Tip:</strong> SAM.gov registration is required for federal contracts. Visit <a href="https://sam.gov" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>sam.gov</a> to register for free.
                 </p>
+              </div>
+            )}
+          </div>
+        )
+
+      case 8:
+        return (
+          <div style={{ display: 'grid', gap: '25px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ color: colors.white, margin: 0 }}>Past Performance</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{pastPerformance.length}/5 projects</span>
+            </div>
+
+            {/* Info box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                💡 <strong style={{ color: colors.white }}>This is what evaluators look at most.</strong> Add your best contracts, grants, or projects. Include results and numbers if you have them.
+              </p>
+            </div>
+
+            {/* Existing Past Performance */}
+            {pastPerformance.map((pp, index) => (
+              <div
+                key={index}
+                style={{
+                  backgroundColor: '#1a1a1a',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: `1px solid ${colors.gray}30`
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>
+                    Project #{index + 1}
+                  </span>
+                  <button
+                    onClick={() => removePastPerformance(index)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ff4444',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🗑️ Remove
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  {/* Row 1: Client and Project Name */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Who was it for? *
+                      </label>
+                      <input
+                        type="text"
+                        value={pp.clientName}
+                        onChange={(e) => updatePastPerformance(index, 'clientName', e.target.value)}
+                        placeholder="e.g., LA County Dept of Mental Health"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Project or Contract Name
+                      </label>
+                      <input
+                        type="text"
+                        value={pp.projectName}
+                        onChange={(e) => updatePastPerformance(index, 'projectName', e.target.value)}
+                        placeholder="e.g., Student Wellness Program"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Value and Dates */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Contract Value
+                      </label>
+                      <input
+                        type="text"
+                        value={pp.contractValue}
+                        onChange={(e) => updatePastPerformance(index, 'contractValue', e.target.value)}
+                        placeholder="e.g., $250,000"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Start Year
+                      </label>
+                      <input
+                        type="text"
+                        value={pp.startYear}
+                        onChange={(e) => updatePastPerformance(index, 'startYear', e.target.value)}
+                        placeholder="e.g., 2022"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        End Year
+                      </label>
+                      <input
+                        type="text"
+                        value={pp.endYear}
+                        onChange={(e) => updatePastPerformance(index, 'endYear', e.target.value)}
+                        placeholder="e.g., 2024 or Ongoing"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      What did you do?
+                    </label>
+                    <textarea
+                      value={pp.description}
+                      onChange={(e) => updatePastPerformance(index, 'description', e.target.value)}
+                      placeholder="Explain what you delivered, how you did it, who you served..."
+                      rows={4}
+                      style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
+                    />
+                  </div>
+
+                  {/* Results */}
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      What were the results? (Numbers help!)
+                    </label>
+                    <textarea
+                      value={pp.results}
+                      onChange={(e) => updatePastPerformance(index, 'results', e.target.value)}
+                      placeholder="e.g., Served 5,000 students, 95% satisfaction rate, completed on time and under budget..."
+                      rows={3}
+                      style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
+                    />
+                  </div>
+
+                  {/* Reference (collapsible) */}
+                  <div style={{ 
+                    backgroundColor: `${colors.gray}10`, 
+                    borderRadius: '8px', 
+                    padding: '15px',
+                    border: `1px solid ${colors.gray}20`
+                  }}>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '10px' }}>
+                      📞 Reference Contact (optional but recommended)
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <input
+                        type="text"
+                        value={pp.referenceName}
+                        onChange={(e) => updatePastPerformance(index, 'referenceName', e.target.value)}
+                        placeholder="Contact Name"
+                        style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
+                      />
+                      <input
+                        type="text"
+                        value={pp.referenceTitle}
+                        onChange={(e) => updatePastPerformance(index, 'referenceTitle', e.target.value)}
+                        placeholder="Title (e.g., Program Manager)"
+                        style={{ ...inputStyle, padding: '10px', fontSize: '14px' }}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={pp.referenceContact}
+                      onChange={(e) => updatePastPerformance(index, 'referenceContact', e.target.value)}
+                      placeholder="Phone or Email"
+                      style={{ ...inputStyle, padding: '10px', fontSize: '14px', marginTop: '10px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Add Past Performance Button */}
+            {pastPerformance.length < 5 && (
+              <button
+                onClick={addPastPerformance}
+                style={{
+                  padding: '15px',
+                  borderRadius: '12px',
+                  border: `2px dashed ${colors.gray}`,
+                  backgroundColor: 'transparent',
+                  color: colors.gray,
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                ➕ Add Past Project
+              </button>
+            )}
+
+            {pastPerformance.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
+                <p style={{ fontSize: '16px', margin: 0 }}>No past performance added yet.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Click "Add Past Project" to get started. Even 1-2 examples help!</p>
               </div>
             )}
           </div>
