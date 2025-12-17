@@ -382,6 +382,81 @@ function App() {
             fetchCartCount(session.user.id)
           }} 
         />
+      ) : currentPage === 'shop-contracts' ? (
+        /* Shop Contracts Page */
+        <div style={{ padding: '40px 30px', maxWidth: '800px', margin: '0 auto' }}>
+          <button 
+            onClick={() => setCurrentPage('dashboard')} 
+            style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px', marginBottom: '20px' }}
+          >
+            ← Back to Dashboard
+          </button>
+          
+          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <div style={{ fontSize: '60px', marginBottom: '20px' }}>🛍️</div>
+            <h1 style={{ color: colors.white, margin: '0 0 10px 0' }}>Shop Contracts</h1>
+            <p style={{ color: colors.gray, margin: 0 }}>Find contracts & grants matched to your profile</p>
+          </div>
+
+          {/* Coming Soon Card */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '40px',
+            border: `2px solid ${colors.gold}`,
+            textAlign: 'center',
+            marginBottom: '25px'
+          }}>
+            <div style={{
+              backgroundColor: colors.gold,
+              color: colors.background,
+              padding: '6px 16px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: '600',
+              display: 'inline-block',
+              marginBottom: '20px'
+            }}>
+              COMING SOON
+            </div>
+            <h2 style={{ color: colors.white, margin: '0 0 15px 0' }}>Auto-Matched Opportunities</h2>
+            <p style={{ color: colors.gray, margin: '0 0 20px 0', lineHeight: '1.6' }}>
+              Soon, RCA will automatically search SAM.gov, state portals, and grant databases to find opportunities that match your NAICS codes, certifications, and capabilities.
+            </p>
+            <p style={{ color: colors.gold, margin: 0, fontSize: '14px' }}>
+              🚀 Expected: Coming with API integration
+            </p>
+          </div>
+
+          {/* For Now - Manual Option */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '30px',
+            border: `2px solid ${colors.primary}`,
+            textAlign: 'center'
+          }}>
+            <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Found an opportunity yourself?</h3>
+            <p style={{ color: colors.gray, margin: '0 0 20px 0' }}>
+              Add it to your cart and let CR-AI help you respond.
+            </p>
+            <button
+              onClick={() => setCurrentPage('my-cart')}
+              style={{
+                padding: '14px 30px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: colors.primary,
+                color: colors.background,
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              🛒 Go to My Cart
+            </button>
+          </div>
+        </div>
       ) : (
         <>
           {/* Stats Bar */}
@@ -396,7 +471,7 @@ function App() {
               <div style={{ color: profileCompletion >= 80 ? colors.primary : colors.gold, fontSize: '32px', fontWeight: '700' }}>
                 {profileCompletion}%
               </div>
-              <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Full</div>
+              <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Built</div>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
@@ -528,7 +603,7 @@ function App() {
               border: `1px solid ${colors.primary}30`
             }}>
               <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
-                💡 <strong>Tip:</strong> Fill your bucket in Business Builder, then go shopping for contracts! Add opportunities to your cart and let CR-AI help you respond.
+                💡 <strong>Tip:</strong> Build your BUCKET in Business Builder, then go shopping for contracts! Add opportunities to your cart and let CR-AI help you respond.
               </p>
             </div>
           </div>
