@@ -100,6 +100,9 @@ function BusinessBuilder({ session, onBack }) {
   // Pricing
   const [pricing, setPricing] = useState([])
 
+  // Team
+  const [teamMembers, setTeamMembers] = useState([])
+
   // SAM.gov
   const [samRegistered, setSamRegistered] = useState(false)
   const [ueiNumber, setUeiNumber] = useState('')
@@ -152,6 +155,7 @@ function BusinessBuilder({ session, onBack }) {
         setNaicsCodes(data.naics_codes || [])
         setCertifications(data.certifications || [])
         setPricing(data.pricing || [])
+        setTeamMembers(data.team_members || [])
       }
     } catch (err) {
       console.error('Error:', err)
@@ -162,7 +166,7 @@ function BusinessBuilder({ session, onBack }) {
 
   const calculateCompletion = () => {
     let filled = 0
-    let total = 24
+    let total = 26
 
     if (companyName) filled++
     if (address) filled++
@@ -183,6 +187,7 @@ function BusinessBuilder({ session, onBack }) {
     if (naicsCodes.length > 0) filled += 2
     if (certifications.length > 0) filled += 2
     if (pricing.length > 0) filled += 2
+    if (teamMembers.length > 0) filled += 2
 
     return Math.round((filled / total) * 100)
   }
@@ -222,6 +227,7 @@ function BusinessBuilder({ session, onBack }) {
       naics_codes: naicsCodes,
       certifications: certifications,
       pricing: pricing,
+      team_members: teamMembers,
     }
 
     try {
@@ -586,6 +592,31 @@ Return ONLY the service description, no explanations.`
     setPricing(updated)
   }
 
+  // Team functions
+  const addTeamMember = () => {
+    if (teamMembers.length >= 10) {
+      alert('Maximum 10 team members allowed')
+      return
+    }
+    setTeamMembers([...teamMembers, { 
+      name: '', 
+      role: '', 
+      yearsExperience: '', 
+      qualifications: '',
+      bio: ''
+    }])
+  }
+
+  const removeTeamMember = (index) => {
+    setTeamMembers(teamMembers.filter((_, i) => i !== index))
+  }
+
+  const updateTeamMember = (index, field, value) => {
+    const updated = [...teamMembers]
+    updated[index][field] = value
+    setTeamMembers(updated)
+  }
+
   const saveApiKey = () => {
     localStorage.setItem('anthropic_api_key', tempApiKey)
     setShowApiKeyModal(false)
@@ -627,6 +658,11 @@ Return ONLY the service description, no explanations.`
       case 7:
         if (profile.pricing && profile.pricing.length > 0) {
           return Math.min(100, profile.pricing.length * 20)
+        }
+        return 0
+      case 9:
+        if (profile.team_members && profile.team_members.length > 0) {
+          return Math.min(100, profile.team_members.length * 20)
         }
         return 0
       case 8:
@@ -1880,6 +1916,160 @@ Return ONLY the service description, no explanations.`
               <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
                 <p style={{ fontSize: '16px', margin: 0 }}>No past performance added yet.</p>
                 <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Add any project — public or private. Even 1-2 examples help you get started!</p>
+              </div>
+            )}
+          </div>
+        )
+
+      case 9:
+        return (
+          <div style={{ display: 'grid', gap: '25px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ color: colors.white, margin: 0 }}>Key Personnel / Team</h3>
+              <span style={{ color: colors.gray, fontSize: '14px' }}>{teamMembers.length}/10 members</span>
+            </div>
+
+            {/* Info box */}
+            <div style={{
+              backgroundColor: `${colors.primary}10`,
+              borderRadius: '12px',
+              padding: '15px',
+              border: `1px solid ${colors.primary}30`
+            }}>
+              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                💡 <strong style={{ color: colors.white }}>Evaluators want to know WHO will do the work.</strong> Add key team members with their experience. Start with yourself and add others as your team grows. You can update this anytime in your BUCKET.
+              </p>
+            </div>
+
+            {/* Existing Team Members */}
+            {teamMembers.map((member, index) => (
+              <div
+                key={index}
+                style={{
+                  backgroundColor: '#1a1a1a',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: `1px solid ${colors.gray}30`
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>
+                    {index === 0 ? '⭐ Primary Contact' : `Team Member #${index + 1}`}
+                  </span>
+                  <button
+                    onClick={() => removeTeamMember(index)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ff4444',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    🗑️ Remove
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  {/* Row 1: Name and Role */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={member.name}
+                        onChange={(e) => updateTeamMember(index, 'name', e.target.value)}
+                        placeholder="e.g., John Smith"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Role / Title *
+                      </label>
+                      <input
+                        type="text"
+                        value={member.role}
+                        onChange={(e) => updateTeamMember(index, 'role', e.target.value)}
+                        placeholder="e.g., Project Manager"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Experience and Qualifications */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px' }}>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Years of Experience
+                      </label>
+                      <input
+                        type="text"
+                        value={member.yearsExperience}
+                        onChange={(e) => updateTeamMember(index, 'yearsExperience', e.target.value)}
+                        placeholder="e.g., 10"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Key Qualifications / Certifications
+                      </label>
+                      <input
+                        type="text"
+                        value={member.qualifications}
+                        onChange={(e) => updateTeamMember(index, 'qualifications', e.target.value)}
+                        placeholder="e.g., PMP, MBA, Licensed Therapist"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Bio */}
+                  <div>
+                    <label style={{ color: colors.white, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Brief Bio / Relevant Experience
+                    </label>
+                    <textarea
+                      value={member.bio}
+                      onChange={(e) => updateTeamMember(index, 'bio', e.target.value)}
+                      placeholder="Describe their background, expertise, and relevant experience for contracts..."
+                      rows={3}
+                      style={{ ...inputStyle, resize: 'vertical', lineHeight: '1.5' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Add Team Member Button */}
+            {teamMembers.length < 10 && (
+              <button
+                onClick={addTeamMember}
+                style={{
+                  padding: '15px',
+                  borderRadius: '12px',
+                  border: `2px dashed ${colors.gray}`,
+                  backgroundColor: 'transparent',
+                  color: colors.gray,
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                ➕ Add Team Member
+              </button>
+            )}
+
+            {teamMembers.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
+                <p style={{ fontSize: '16px', margin: 0 }}>No team members added yet.</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>Start with yourself! Add more people as your team grows.</p>
               </div>
             )}
           </div>
