@@ -682,17 +682,30 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
 
     setGenerating(true)
     try {
+      // Get previous responses for consistency
+      const previousResponses = questions.slice(0, currentQuestionIndex).filter(q => q.response)
+      
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: question.text,
           profile: profile,
-          opportunityTitle: opportunity.title
+          opportunity: {
+            title: localOpportunity.title,
+            agency: localOpportunity.agency,
+            due_date: localOpportunity.due_date,
+            estimated_value: localOpportunity.estimated_value,
+            description: localOpportunity.description
+          },
+          previousResponses: previousResponses
         }),
       })
 
-      if (!response.ok) throw new Error('Failed to generate')
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to generate')
+      }
       
       const data = await response.json()
       const updated = questions.map((q, i) => 
@@ -707,7 +720,7 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
       }, 500)
     } catch (err) {
       console.error('Error generating:', err)
-      alert('CR-AI had trouble connecting. Try again or write your own.')
+      alert('CR-AI had trouble connecting. Try again or write your own response.')
     } finally {
       setGenerating(false)
     }
