@@ -18,6 +18,10 @@ function Submissions({ session, onBack, profileData }) {
   const [opportunities, setOpportunities] = useState([])
   const [activeSubmissions, setActiveSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
+  
+  // NEW: Save success state
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [savedOpportunity, setSavedOpportunity] = useState(null)
 
   // Manual entry form
   const [manualEntry, setManualEntry] = useState({
@@ -79,8 +83,14 @@ function Submissions({ session, onBack, profileData }) {
 
       if (error) throw error
 
+      // Update submissions list
       setActiveSubmissions([data, ...activeSubmissions])
-      setShowAddManual(false)
+      
+      // Show success state instead of closing
+      setSavedOpportunity(data)
+      setSaveSuccess(true)
+      
+      // Reset form for potential "Add Another"
       setManualEntry({
         title: '',
         rfpNumber: '',
@@ -94,6 +104,43 @@ function Submissions({ session, onBack, profileData }) {
       console.error('Error adding submission:', err)
       alert('Error adding opportunity. Please try again.')
     }
+  }
+
+  const handleViewInActive = () => {
+    setShowAddManual(false)
+    setSaveSuccess(false)
+    setSavedOpportunity(null)
+    setActiveTab('active')
+  }
+
+  const handleAddAnother = () => {
+    setSaveSuccess(false)
+    setSavedOpportunity(null)
+  }
+
+  const handleStartNow = () => {
+    if (savedOpportunity) {
+      setSelectedOpportunity(savedOpportunity)
+      setShowResponseBuilder(true)
+      setShowAddManual(false)
+      setSaveSuccess(false)
+      setSavedOpportunity(null)
+    }
+  }
+
+  const closeModal = () => {
+    setShowAddManual(false)
+    setSaveSuccess(false)
+    setSavedOpportunity(null)
+    setManualEntry({
+      title: '',
+      rfpNumber: '',
+      agency: '',
+      dueDate: '',
+      source: '',
+      estimatedValue: '',
+      description: ''
+    })
   }
 
   const startResponse = (opportunity) => {
@@ -453,143 +500,226 @@ function Submissions({ session, onBack, profileData }) {
             maxHeight: '90vh',
             overflowY: 'auto'
           }}>
-            <h3 style={{ color: colors.white, margin: '0 0 5px 0' }}>✍️ Enter Opportunity</h3>
-            <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>
-              Fill in what you know — only title and due date are required.
-            </p>
-
-            <div style={{ display: 'grid', gap: '15px' }}>
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                  Opportunity Title *
-                </label>
-                <input
-                  type="text"
-                  value={manualEntry.title}
-                  onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })}
-                  placeholder="e.g., Mental Health Services RFP"
-                  style={inputStyle}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    RFP/Bid Number
-                  </label>
-                  <input
-                    type="text"
-                    value={manualEntry.rfpNumber}
-                    onChange={(e) => setManualEntry({ ...manualEntry, rfpNumber: e.target.value })}
-                    placeholder="e.g., RFP-2024-001"
-                    style={inputStyle}
-                  />
+            {/* SUCCESS STATE */}
+            {saveSuccess && savedOpportunity ? (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '50%',
+                  backgroundColor: `${colors.primary}20`,
+                  border: `3px solid ${colors.primary}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 20px auto'
+                }}>
+                  <span style={{ fontSize: '40px' }}>✓</span>
                 </div>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    Due Date *
-                  </label>
-                  <input
-                    type="date"
-                    value={manualEntry.dueDate}
-                    onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
+                
+                <h3 style={{ color: colors.primary, margin: '0 0 10px 0', fontSize: '24px' }}>
+                  Found it!
+                </h3>
+                <p style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px', fontWeight: '600' }}>
+                  {savedOpportunity.title}
+                </p>
+                <p style={{ color: colors.gray, margin: '0 0 25px 0', fontSize: '14px' }}>
+                  Added to Active • Due {new Date(savedOpportunity.due_date).toLocaleDateString()}
+                </p>
 
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                  Agency / Organization
-                </label>
-                <input
-                  type="text"
-                  value={manualEntry.agency}
-                  onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })}
-                  placeholder="e.g., LA County Department of Mental Health"
-                  style={inputStyle}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    Where'd you find it?
-                  </label>
-                  <select
-                    value={manualEntry.source}
-                    onChange={(e) => setManualEntry({ ...manualEntry, source: e.target.value })}
-                    style={{ ...inputStyle, cursor: 'pointer' }}
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  <button
+                    onClick={handleStartNow}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: colors.primary,
+                      color: colors.background,
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
                   >
-                    <option value="">Select...</option>
-                    <option value="SAM.gov">SAM.gov</option>
-                    <option value="State Website">State Website</option>
-                    <option value="County Website">County Website</option>
-                    <option value="City Website">City Website</option>
-                    <option value="Email/Newsletter">Email/Newsletter</option>
-                    <option value="Referral">Referral</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                    Contract Value (if known)
-                  </label>
-                  <input
-                    type="text"
-                    value={manualEntry.estimatedValue}
-                    onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })}
-                    placeholder="e.g., $500,000"
-                    style={inputStyle}
-                  />
+                    🚀 Start Response Now
+                  </button>
+                  
+                  <button
+                    onClick={handleViewInActive}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      borderRadius: '8px',
+                      border: `1px solid ${colors.gray}`,
+                      backgroundColor: 'transparent',
+                      color: colors.white,
+                      fontSize: '14px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    View in Active
+                  </button>
+                  
+                  <button
+                    onClick={handleAddAnother}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      borderRadius: '8px',
+                      border: `1px solid ${colors.gray}`,
+                      backgroundColor: 'transparent',
+                      color: colors.gray,
+                      fontSize: '14px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + Add Another Opportunity
+                  </button>
                 </div>
               </div>
+            ) : (
+              /* ENTRY FORM */
+              <>
+                <h3 style={{ color: colors.white, margin: '0 0 5px 0' }}>✍️ Enter Opportunity</h3>
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '13px' }}>
+                  Fill in what you know — only title and due date are required.
+                </p>
 
-              <div>
-                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
-                  Notes
-                </label>
-                <textarea
-                  value={manualEntry.description}
-                  onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })}
-                  placeholder="Anything else you want to remember..."
-                  rows={3}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
-              </div>
-            </div>
+                <div style={{ display: 'grid', gap: '15px' }}>
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Opportunity Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={manualEntry.title}
+                      onChange={(e) => setManualEntry({ ...manualEntry, title: e.target.value })}
+                      placeholder="e.g., Mental Health Services RFP"
+                      style={inputStyle}
+                    />
+                  </div>
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '25px' }}>
-              <button
-                onClick={() => setShowAddManual(false)}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '8px',
-                  border: `1px solid ${colors.gray}`,
-                  backgroundColor: 'transparent',
-                  color: colors.white,
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddManual}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: colors.primary,
-                  color: colors.background,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '600'
-                }}
-              >
-                Save & Continue
-              </button>
-            </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        RFP/Bid Number
+                      </label>
+                      <input
+                        type="text"
+                        value={manualEntry.rfpNumber}
+                        onChange={(e) => setManualEntry({ ...manualEntry, rfpNumber: e.target.value })}
+                        placeholder="e.g., RFP-2024-001"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Due Date *
+                      </label>
+                      <input
+                        type="date"
+                        value={manualEntry.dueDate}
+                        onChange={(e) => setManualEntry({ ...manualEntry, dueDate: e.target.value })}
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Agency / Organization
+                    </label>
+                    <input
+                      type="text"
+                      value={manualEntry.agency}
+                      onChange={(e) => setManualEntry({ ...manualEntry, agency: e.target.value })}
+                      placeholder="e.g., LA County Department of Mental Health"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Where'd you find it?
+                      </label>
+                      <select
+                        value={manualEntry.source}
+                        onChange={(e) => setManualEntry({ ...manualEntry, source: e.target.value })}
+                        style={{ ...inputStyle, cursor: 'pointer' }}
+                      >
+                        <option value="">Select...</option>
+                        <option value="SAM.gov">SAM.gov</option>
+                        <option value="State Website">State Website</option>
+                        <option value="County Website">County Website</option>
+                        <option value="City Website">City Website</option>
+                        <option value="Email/Newsletter">Email/Newsletter</option>
+                        <option value="Referral">Referral</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                        Contract Value (if known)
+                      </label>
+                      <input
+                        type="text"
+                        value={manualEntry.estimatedValue}
+                        onChange={(e) => setManualEntry({ ...manualEntry, estimatedValue: e.target.value })}
+                        placeholder="e.g., $500,000"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>
+                      Notes
+                    </label>
+                    <textarea
+                      value={manualEntry.description}
+                      onChange={(e) => setManualEntry({ ...manualEntry, description: e.target.value })}
+                      placeholder="Anything else you want to remember..."
+                      rows={3}
+                      style={{ ...inputStyle, resize: 'vertical' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '25px' }}>
+                  <button
+                    onClick={closeModal}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '8px',
+                      border: `1px solid ${colors.gray}`,
+                      backgroundColor: 'transparent',
+                      color: colors.white,
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddManual}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: colors.primary,
+                      color: colors.background,
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Save & Continue
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -633,18 +763,12 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
     }
   }
 
-  // Calculate CR Match Grade based on profile completeness
-  const getCRMatchGrade = () => {
-    // This would be smarter in production - comparing NAICS, services, past work to opportunity
-    const score = opportunity.cr_match_score || 75 // Default to B range
-    
-    if (score >= 90) return { grade: 'A', color: colors.primary, message: "Your bucket is ready for this!" }
-    if (score >= 75) return { grade: 'B', color: colors.primary, message: "Strong match — you got this!" }
-    if (score >= 60) return { grade: 'C', color: colors.gold, message: "Ready to bid — add a few things to strengthen" }
-    return { grade: 'D', color: colors.gold, message: "You can do this — CR-AI will help fill the gaps" }
+  const getDaysUntilDue = (dueDate) => {
+    const due = new Date(dueDate)
+    const now = new Date()
+    const diff = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
+    return diff
   }
-
-  const matchGrade = getCRMatchGrade()
 
   const inputStyle = {
     width: '100%',
@@ -766,9 +890,23 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
     }
   }
 
-  const answeredCount = questions.filter(q => q.response).length
+  const handleArchive = async () => {
+    try {
+      await supabase
+        .from('submissions')
+        .update({ status: 'archived' })
+        .eq('id', opportunity.id)
+      onBack()
+    } catch (err) {
+      console.error('Error archiving:', err)
+    }
+  }
 
-  // OVERVIEW PHASE
+  const answeredCount = questions.filter(q => q.response).length
+  const daysLeft = getDaysUntilDue(opportunity.due_date)
+  const isUrgent = daysLeft <= 7
+
+  // OVERVIEW PHASE - SIMPLIFIED
   if (phase === 'overview') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -777,187 +915,133 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
               <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
-              <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>📋 Opportunity Overview</h1>
+              <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>Opportunity Details</h1>
             </div>
           </div>
         </div>
 
-        <div style={{ padding: '30px', maxWidth: '900px', margin: '0 auto' }}>
-          {/* Opportunity Details Card */}
+        <div style={{ padding: '30px', maxWidth: '700px', margin: '0 auto' }}>
+          
+          {/* Main Opportunity Card */}
           <div style={{
             backgroundColor: colors.card,
             borderRadius: '16px',
-            padding: '25px',
+            padding: '30px',
             border: `1px solid ${colors.gray}30`,
-            marginBottom: '25px'
+            marginBottom: '20px'
           }}>
-            <h2 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '22px' }}>{opportunity.title}</h2>
+            <h2 style={{ color: colors.white, margin: '0 0 20px 0', fontSize: '24px', lineHeight: '1.3' }}>
+              {opportunity.title}
+            </h2>
             
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+            {/* Key Details - Simple Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
               <div>
-                <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>AGENCY</p>
+                <p style={{ color: colors.gray, margin: '0 0 4px 0', fontSize: '12px', textTransform: 'uppercase' }}>Agency</p>
                 <p style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{opportunity.agency || 'Not specified'}</p>
               </div>
               <div>
-                <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>DUE DATE</p>
-                <p style={{ color: colors.gold, margin: 0, fontSize: '16px', fontWeight: '600' }}>
-                  {opportunity.due_date ? new Date(opportunity.due_date).toLocaleDateString() : 'Not set'}
+                <p style={{ color: colors.gray, margin: '0 0 4px 0', fontSize: '12px', textTransform: 'uppercase' }}>Due Date</p>
+                <p style={{ color: isUrgent ? colors.gold : colors.white, margin: 0, fontSize: '16px', fontWeight: '600' }}>
+                  {new Date(opportunity.due_date).toLocaleDateString()} 
+                  <span style={{ color: colors.gray, fontWeight: '400', marginLeft: '8px' }}>
+                    ({daysLeft} days)
+                  </span>
                 </p>
               </div>
-              <div>
-                <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>ESTIMATED VALUE</p>
-                <p style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{opportunity.estimated_value || 'Not specified'}</p>
-              </div>
-              <div>
-                <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px' }}>RFP NUMBER</p>
-                <p style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{opportunity.rfp_number || 'N/A'}</p>
-              </div>
+              {opportunity.estimated_value && (
+                <div>
+                  <p style={{ color: colors.gray, margin: '0 0 4px 0', fontSize: '12px', textTransform: 'uppercase' }}>Value</p>
+                  <p style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{opportunity.estimated_value}</p>
+                </div>
+              )}
+              {opportunity.rfp_number && (
+                <div>
+                  <p style={{ color: colors.gray, margin: '0 0 4px 0', fontSize: '12px', textTransform: 'uppercase' }}>RFP #</p>
+                  <p style={{ color: colors.white, margin: 0, fontSize: '16px' }}>{opportunity.rfp_number}</p>
+                </div>
+              )}
             </div>
+
+            {opportunity.description && (
+              <div style={{ 
+                backgroundColor: '#1a1a1a', 
+                borderRadius: '8px', 
+                padding: '15px',
+                marginTop: '15px'
+              }}>
+                <p style={{ color: colors.gray, margin: '0 0 5px 0', fontSize: '12px', textTransform: 'uppercase' }}>Notes</p>
+                <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.5' }}>{opportunity.description}</p>
+              </div>
+            )}
           </div>
 
-          {/* CR Match Grade */}
-          <div style={{
-            backgroundColor: `${matchGrade.color}15`,
-            borderRadius: '16px',
-            padding: '25px',
-            border: `2px solid ${matchGrade.color}50`,
-            marginBottom: '25px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '20px'
-          }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              backgroundColor: `${matchGrade.color}20`,
-              border: `3px solid ${matchGrade.color}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              <span style={{ color: matchGrade.color, fontSize: '36px', fontWeight: '700' }}>{matchGrade.grade}</span>
-            </div>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ color: matchGrade.color, margin: '0 0 8px 0', fontSize: '20px' }}>
-                CR Match: {matchGrade.grade}
-              </h3>
-              <p style={{ color: colors.white, margin: '0 0 10px 0', fontSize: '16px' }}>
-                {matchGrade.message}
-              </p>
-              <p style={{ color: colors.gray, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>
-                🚀 <strong style={{ color: colors.primary }}>Your Bucket + CR-AI = We Got This!</strong> 
-                <br/>Missing a skill? You're the contract manager — hire the team. CR-AI helps find local workers and build budgets.
-              </p>
-            </div>
-          </div>
-
-          {/* Key Scope Items */}
+          {/* Decision Buttons */}
           <div style={{
             backgroundColor: colors.card,
             borderRadius: '16px',
             padding: '25px',
             border: `1px solid ${colors.gray}30`,
-            marginBottom: '25px'
+            marginBottom: '20px'
           }}>
-            <h3 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '18px' }}>
-              📌 Key Scope Items
+            <h3 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '18px' }}>
+              Ready to go after this one?
             </h3>
-            <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '14px' }}>
-              Add the main deliverables or requirements from the RFP. This helps RCA understand what you need to address.
+            <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>
+              CR-AI will help you write responses using your business profile.
             </p>
 
-            {scopeItems.length > 0 && (
-              <div style={{ display: 'grid', gap: '10px', marginBottom: '15px' }}>
-                {scopeItems.map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      backgroundColor: '#1a1a1a',
-                      borderRadius: '8px',
-                      padding: '12px 15px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ color: colors.primary, fontWeight: '600' }}>{index + 1}.</span>
-                      <span style={{ color: colors.white }}>{item}</span>
-                    </div>
-                    <button
-                      onClick={() => removeScopeItem(index)}
-                      style={{ background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer', fontSize: '12px' }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input
-                type="text"
-                value={newScopeItem}
-                onChange={(e) => setNewScopeItem(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addScopeItem()}
-                placeholder="e.g., Provide mental health services to 500 students"
-                style={{ ...inputStyle, flex: 1 }}
-              />
+            <div style={{ display: 'grid', gap: '12px' }}>
               <button
-                onClick={addScopeItem}
+                onClick={() => setPhase('questions')}
                 style={{
-                  padding: '12px 20px',
-                  borderRadius: '8px',
+                  width: '100%',
+                  padding: '16px',
+                  borderRadius: '10px',
                   border: 'none',
                   backgroundColor: colors.primary,
                   color: colors.background,
+                  fontSize: '16px',
                   fontWeight: '600',
                   cursor: 'pointer',
-                  whiteSpace: 'nowrap'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
                 }}
               >
-                + Add
+                🚀 Go After This
+              </button>
+              
+              <button
+                onClick={handleArchive}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  border: `1px solid ${colors.gray}50`,
+                  backgroundColor: 'transparent',
+                  color: colors.gray,
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                Not a Fit — Archive
               </button>
             </div>
           </div>
 
-          {/* Encouragement Box */}
+          {/* Simple Tip */}
           <div style={{
-            backgroundColor: `${colors.gold}10`,
+            backgroundColor: `${colors.primary}10`,
             borderRadius: '12px',
-            padding: '20px',
-            border: `1px solid ${colors.gold}30`,
-            marginBottom: '25px'
+            padding: '15px 20px',
+            border: `1px solid ${colors.primary}30`
           }}>
-            <h4 style={{ color: colors.gold, margin: '0 0 10px 0' }}>🚀 Your Bucket + CR-AI = We Got This!</h4>
-            <ul style={{ color: colors.gray, margin: 0, paddingLeft: '20px', lineHeight: '1.8', fontSize: '14px' }}>
-              <li>CR-AI writes responses using your profile</li>
-              <li>Missing team members? We help find local workers</li>
-              <li>Need a budget? CR-AI builds it with you</li>
-              <li>Every answer saves to your bucket for next time</li>
-            </ul>
+            <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+              💡 <strong style={{ color: colors.white }}>Next:</strong> Add the RFP questions, then let CR-AI generate responses from your bucket.
+            </p>
           </div>
-
-          {/* Continue Button */}
-          <button
-            onClick={() => setPhase('questions')}
-            style={{
-              width: '100%',
-              padding: '16px',
-              borderRadius: '12px',
-              border: 'none',
-              backgroundColor: colors.primary,
-              color: colors.background,
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
-          >
-            Continue to Questions →
-          </button>
         </div>
       </div>
     )
@@ -979,16 +1063,6 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{
-              backgroundColor: `${matchGrade.color}20`,
-              padding: '6px 12px',
-              borderRadius: '20px',
-              border: `1px solid ${matchGrade.color}`
-            }}>
-              <span style={{ color: matchGrade.color, fontWeight: '600', fontSize: '14px' }}>
-                CR Match: {matchGrade.grade}
-              </span>
-            </div>
             <span style={{ color: colors.gray, fontSize: '14px' }}>
               {answeredCount}/{questions.length} answered
             </span>
@@ -1215,7 +1289,7 @@ function ResponseBuilder({ opportunity, session, profileData, onBack }) {
         }}>
           <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
             🚀 <strong style={{ color: colors.primary }}>Your Bucket + CR-AI = We Got This!</strong> 
-            Every answer gets saved to your bucket for future bids.
+            {' '}Every answer gets saved to your bucket for future bids.
           </p>
         </div>
 
