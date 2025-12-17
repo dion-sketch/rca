@@ -2119,8 +2119,6 @@ Return ONLY the service description, no explanations.`
             )}
           </div>
         )
-          </div>
-        )
 
       default:
         return (
