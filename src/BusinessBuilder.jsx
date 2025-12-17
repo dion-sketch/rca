@@ -46,7 +46,7 @@ const sections = [
   { id: 7, title: 'Pricing Snapshot', icon: '💰', description: 'Hourly rates by role' },
   { id: 8, title: 'Past Performance', icon: '📊', description: 'Previous contracts and projects (up to 5)' },
   { id: 9, title: 'Team Builder', icon: '👥', description: 'Employees, contractors, vendors — grows as you submit' },
-  { id: 10, title: 'Generate Capability Statement', icon: '📄', description: 'Create a professional capability statement from your BUCKET' },
+  { id: 10, title: 'Generate Capability Statement', icon: '🔒', description: 'Coming Soon', locked: true },
 ]
 
 function BusinessBuilder({ session, onBack }) {
@@ -2446,24 +2446,36 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
           <div style={{ display: 'grid', gap: '15px' }}>
             {sections.map((section) => {
               const completion = getSectionCompletion(section.id)
+              const isLocked = section.locked === true
               return (
                 <div
                   key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${completion === 100 ? colors.primary : colors.gray}30`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s ease' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.primary; e.currentTarget.style.transform = 'translateX(5px)' }}
+                  onClick={() => !isLocked && setActiveSection(section.id)}
+                  style={{ 
+                    backgroundColor: isLocked ? `${colors.card}80` : colors.card, 
+                    borderRadius: '12px', 
+                    padding: '20px', 
+                    border: `1px solid ${completion === 100 ? colors.primary : colors.gray}30`, 
+                    cursor: isLocked ? 'not-allowed' : 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    transition: 'all 0.2s ease',
+                    opacity: isLocked ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => { if (!isLocked) { e.currentTarget.style.borderColor = colors.primary; e.currentTarget.style.transform = 'translateX(5px)' }}}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = `${completion === 100 ? colors.primary : colors.gray}30`; e.currentTarget.style.transform = 'translateX(0)' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                     <span style={{ fontSize: '28px' }}>{section.icon}</span>
                     <div>
-                      <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px' }}>{section.title}</h3>
+                      <h3 style={{ color: isLocked ? colors.gray : colors.white, margin: '0 0 5px 0', fontSize: '18px' }}>{section.title}</h3>
                       <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{section.description}</p>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    {completion === 100 ? <span style={{ color: colors.primary, fontSize: '20px' }}>✓</span> : completion > 0 ? <span style={{ color: colors.gold, fontSize: '14px' }}>{completion}%</span> : null}
-                    <span style={{ color: colors.gray, fontSize: '20px' }}>→</span>
+                    {isLocked ? <span style={{ color: colors.gray, fontSize: '14px' }}>Coming Soon</span> : completion === 100 ? <span style={{ color: colors.primary, fontSize: '20px' }}>✓</span> : completion > 0 ? <span style={{ color: colors.gold, fontSize: '14px' }}>{completion}%</span> : null}
+                    {!isLocked && <span style={{ color: colors.gray, fontSize: '20px' }}>→</span>}
                   </div>
                 </div>
               )
