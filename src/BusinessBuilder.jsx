@@ -2560,29 +2560,34 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
-          <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🏗️ Business Builder</h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div 
-            style={{ 
-              backgroundColor: completionPercentage >= 80 ? `${colors.primary}20` : `${colors.gold}20`, 
-              padding: '8px 16px', 
-              borderRadius: '20px', 
-              border: `1px solid ${completionPercentage >= 80 ? colors.primary : colors.gold}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <span style={{ color: completionPercentage >= 80 ? colors.primary : colors.gold, fontWeight: '600', fontSize: '16px' }}>
-              {completionPercentage}% Ready
-            </span>
+      {/* Header - UPDATED TO BUCKET LANGUAGE */}
+      <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Back</button>
+            <h1 style={{ color: colors.white, margin: 0, fontSize: '24px' }}>🪣 Your BUCKET</h1>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div 
+              style={{ 
+                backgroundColor: completionPercentage >= 80 ? `${colors.primary}20` : `${colors.gold}20`, 
+                padding: '8px 16px', 
+                borderRadius: '20px', 
+                border: `1px solid ${completionPercentage >= 80 ? colors.primary : colors.gold}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <span style={{ color: completionPercentage >= 80 ? colors.primary : colors.gold, fontWeight: '600', fontSize: '16px' }}>
+                {completionPercentage}% Built
+              </span>
+            </div>
           </div>
         </div>
+        <p style={{ color: colors.gray, margin: '10px 0 0 0', fontSize: '13px', paddingLeft: '85px' }}>
+          Everything CR-AI knows about your business. The more you add, the smarter it gets.
+        </p>
       </div>
 
       {/* Main Content */}
@@ -2607,15 +2612,15 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
             }}>
               {/* Progress Header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
-                <span style={{ fontSize: '32px' }}>{completionPercentage >= 80 ? '🚀' : '📈'}</span>
+                <span style={{ fontSize: '32px' }}>{completionPercentage >= 80 ? '🚀' : '🪣'}</span>
                 <div>
                   <h3 style={{ color: completionPercentage >= 80 ? colors.primary : colors.gold, margin: 0, fontSize: '20px', fontWeight: '700' }}>
-                    {completionPercentage}% Ready to Bid
+                    {completionPercentage}% BUCKET Built
                   </h3>
                   <p style={{ color: colors.gray, margin: '3px 0 0 0', fontSize: '13px' }}>
                     {completionPercentage >= 80 
-                      ? "Your profile is strong! Go win some contracts."
-                      : "You can start bidding now — add more to strengthen your responses."
+                      ? "Your BUCKET is strong! CR-AI has plenty to work with."
+                      : "Add more to your BUCKET — CR-AI writes better responses with more data."
                     }
                   </p>
                 </div>
@@ -2632,7 +2637,7 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
                     {missing.length > 0 && (
                       <div style={{ marginBottom: '15px' }}>
                         <p style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '13px', fontWeight: '600' }}>
-                          💡 Add these to strengthen your bids:
+                          💡 Add these to strengthen your BUCKET:
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           {missing.map((item, i) => (
@@ -2660,7 +2665,7 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
                     {completed.length > 0 && (
                       <div>
                         <p style={{ color: colors.gray, margin: '0 0 8px 0', fontSize: '12px' }}>
-                          ✅ You have:
+                          ✅ In your BUCKET:
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                           {completed.map((item, i) => (
