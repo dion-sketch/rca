@@ -561,8 +561,9 @@ function MyCart({ session, onBack, profileData }) {
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
                 <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔍</div>
                 <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Searching...</h3>
-                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>Checking SAM.gov, Grants.gov, and agency websites</p>
-                <div style={{ marginTop: '20px' }}>
+                <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '14px' }}>Checking SAM.gov, Grants.gov, and agency websites</p>
+                <p style={{ color: colors.gold, margin: '0 0 20px 0', fontSize: '13px', fontStyle: 'italic' }}>⏱️ This may take 10-20 seconds — CR-AI is searching the web for you</p>
+                <div style={{ marginTop: '10px' }}>
                   <div style={{ width: '200px', height: '4px', backgroundColor: colors.gray + '30', borderRadius: '2px', margin: '0 auto', overflow: 'hidden' }}>
                     <div style={{ width: '50%', height: '100%', backgroundColor: colors.primary, animation: 'pulse 1.5s infinite', borderRadius: '2px' }} />
                   </div>
