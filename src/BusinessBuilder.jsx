@@ -117,6 +117,100 @@ function BusinessBuilder({ session, onBack }) {
     fetchProfile()
   }, [session])
 
+  // AUTO-GENERATE NAICS CODES when services change
+  useEffect(() => {
+    if (services.length === 0) return
+    
+    const serviceText = services.map(s => `${s.category} ${s.description}`).join(' ').toLowerCase()
+    const autoNaics = []
+    
+    // PR / Communications / Media
+    if (serviceText.includes('pr') || serviceText.includes('public relation') || serviceText.includes('communications') || serviceText.includes('media relation')) {
+      autoNaics.push({ code: '541820', description: 'Public Relations Agencies', isPrimary: false })
+    }
+    if (serviceText.includes('advertis') || serviceText.includes('marketing') || serviceText.includes('campaign') || serviceText.includes('brand')) {
+      autoNaics.push({ code: '541810', description: 'Advertising Agencies', isPrimary: false })
+      autoNaics.push({ code: '541613', description: 'Marketing Consulting Services', isPrimary: false })
+    }
+    
+    // Video / Production / Media
+    if (serviceText.includes('video') || serviceText.includes('film') || serviceText.includes('production') || serviceText.includes('documentary')) {
+      autoNaics.push({ code: '512110', description: 'Motion Picture & Video Production', isPrimary: false })
+    }
+    if (serviceText.includes('photo') || serviceText.includes('photography')) {
+      autoNaics.push({ code: '541922', description: 'Commercial Photography', isPrimary: false })
+    }
+    
+    // Mental Health / Counseling / Wellness
+    if (serviceText.includes('mental health') || serviceText.includes('counseling') || serviceText.includes('therapy') || serviceText.includes('wellness') || serviceText.includes('behavioral')) {
+      autoNaics.push({ code: '621330', description: 'Offices of Mental Health Practitioners', isPrimary: false })
+      autoNaics.push({ code: '621420', description: 'Outpatient Mental Health Centers', isPrimary: false })
+      autoNaics.push({ code: '624190', description: 'Other Individual & Family Services', isPrimary: false })
+    }
+    
+    // Telehealth / Mobile Health
+    if (serviceText.includes('telehealth') || serviceText.includes('mobile health') || serviceText.includes('health van') || serviceText.includes('mobile') || serviceText.includes('remote health')) {
+      autoNaics.push({ code: '621999', description: 'Miscellaneous Ambulatory Health Care', isPrimary: false })
+    }
+    
+    // Events / Entertainment / Concerts
+    if (serviceText.includes('event') || serviceText.includes('concert') || serviceText.includes('entertainment') || serviceText.includes('festival') || serviceText.includes('activation')) {
+      autoNaics.push({ code: '711310', description: 'Promoters of Performing Arts with Facilities', isPrimary: false })
+      autoNaics.push({ code: '711320', description: 'Promoters of Performing Arts without Facilities', isPrimary: false })
+    }
+    
+    // Training / Education / Workshops
+    if (serviceText.includes('training') || serviceText.includes('workshop') || serviceText.includes('education') || serviceText.includes('curriculum')) {
+      autoNaics.push({ code: '611430', description: 'Professional & Management Development Training', isPrimary: false })
+    }
+    
+    // Consulting / Management
+    if (serviceText.includes('consult') || serviceText.includes('strategy') || serviceText.includes('management')) {
+      autoNaics.push({ code: '541611', description: 'Administrative Management Consulting', isPrimary: false })
+    }
+    
+    // Outreach / Community / Social Services
+    if (serviceText.includes('outreach') || serviceText.includes('community') || serviceText.includes('social service') || serviceText.includes('youth') || serviceText.includes('family')) {
+      autoNaics.push({ code: '624110', description: 'Child & Youth Services', isPrimary: false })
+      autoNaics.push({ code: '813319', description: 'Other Social Advocacy Organizations', isPrimary: false })
+    }
+    
+    // Technology / Software / IT
+    if (serviceText.includes('software') || serviceText.includes('technology') || serviceText.includes('app') || serviceText.includes('web') || serviceText.includes('platform')) {
+      autoNaics.push({ code: '541512', description: 'Computer Systems Design Services', isPrimary: false })
+    }
+    
+    // Research / Data / Analytics
+    if (serviceText.includes('research') || serviceText.includes('data') || serviceText.includes('analytic') || serviceText.includes('evaluation')) {
+      autoNaics.push({ code: '541720', description: 'Research & Development in Social Sciences', isPrimary: false })
+    }
+    
+    // Staffing / HR
+    if (serviceText.includes('staff') || serviceText.includes('recruit') || serviceText.includes('hr') || serviceText.includes('human resource')) {
+      autoNaics.push({ code: '561320', description: 'Temporary Help Services', isPrimary: false })
+    }
+    
+    // Merge with existing NAICS codes (don't remove user-added ones)
+    if (autoNaics.length > 0) {
+      setNaicsCodes(prev => {
+        // Get existing codes that user added
+        const existingCodes = prev.map(n => n.code)
+        // Filter out auto-generated ones that already exist
+        const newCodes = autoNaics.filter(n => !existingCodes.includes(n.code))
+        // If there are new codes to add
+        if (newCodes.length > 0) {
+          const merged = [...prev, ...newCodes].slice(0, 10) // Max 10
+          // Set first one as primary if none is primary
+          if (!merged.find(n => n.isPrimary)) {
+            merged[0].isPrimary = true
+          }
+          return merged
+        }
+        return prev
+      })
+    }
+  }, [services]) // Run when services change
+
   const fetchProfile = async () => {
     try {
       const { data, error } = await supabase
@@ -1340,20 +1434,40 @@ Return ONLY the service description, no explanations.`
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ color: colors.white, margin: 0 }}>NAICS Codes</h3>
-              <span style={{ color: colors.gray, fontSize: '14px' }}>{naicsCodes.length}/10 codes</span>
+              <span style={{ color: naicsCodes.length > 0 ? colors.primary : colors.gray, fontSize: '14px', fontWeight: naicsCodes.length > 0 ? '600' : '400' }}>
+                {naicsCodes.length > 0 ? `✓ ${naicsCodes.length} codes added` : '0/10 codes'}
+              </span>
             </div>
 
-            {/* Info box */}
-            <div style={{
-              backgroundColor: `${colors.primary}10`,
-              borderRadius: '12px',
-              padding: '15px',
-              border: `1px solid ${colors.primary}30`
-            }}>
-              <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                💡 <strong style={{ color: colors.white }}>NAICS codes tell agencies what you do.</strong> Every contract lists required codes. Add yours so CR-AI can match you with the right opportunities. Don't know your codes? <a href="https://www.naics.com/search/" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>Look them up here</a>
-              </p>
-            </div>
+            {/* Auto-added explanation */}
+            {naicsCodes.length > 0 && services.length > 0 && (
+              <div style={{
+                backgroundColor: `${colors.primary}15`,
+                borderRadius: '12px',
+                padding: '15px',
+                border: `1px solid ${colors.primary}40`
+              }}>
+                <p style={{ color: colors.white, margin: 0, fontSize: '14px' }}>
+                  ✨ <strong>CR-AI auto-added {naicsCodes.length} NAICS codes</strong> based on your services. 
+                  Remove any that don't fit, or add more manually.
+                </p>
+              </div>
+            )}
+
+            {/* Info box - only show if no codes yet */}
+            {naicsCodes.length === 0 && (
+              <div style={{
+                backgroundColor: `${colors.gold}10`,
+                borderRadius: '12px',
+                padding: '15px',
+                border: `1px solid ${colors.gold}30`
+              }}>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
+                  💡 <strong style={{ color: colors.white }}>Add your services first!</strong> CR-AI will automatically add the right NAICS codes for you. 
+                  Or <a href="https://www.naics.com/search/" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>look up codes manually</a>
+                </p>
+              </div>
+            )}
 
             {/* Existing NAICS Codes */}
             {naicsCodes.map((naics, index) => (
@@ -1432,179 +1546,48 @@ Return ONLY the service description, no explanations.`
               </div>
             ))}
 
-            {/* Add NAICS Button */}
-            {naicsCodes.length < 10 && (
-              <button
-                onClick={addNaicsCode}
-                style={{
-                  padding: '15px',
-                  borderRadius: '12px',
-                  border: `2px dashed ${colors.gray}`,
-                  backgroundColor: 'transparent',
-                  color: colors.gray,
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px'
-                }}
-              >
-                ➕ Add NAICS Code
-              </button>
-            )}
-
-            {naicsCodes.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray }}>
-                <p style={{ fontSize: '16px', margin: 0 }}>No NAICS codes added yet.</p>
-                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>These help contracts find YOU. Add at least your primary code.</p>
-              </div>
-            )}
-
-            {/* Smart NAICS suggestions based on services */}
-            <div style={{
-              backgroundColor: `${colors.gold}10`,
-              borderRadius: '12px',
-              padding: '15px',
-              border: `1px solid ${colors.gold}30`
-            }}>
-              <p style={{ color: colors.gold, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>
-                ✨ CR-AI Suggested NAICS Codes Based on Your Services:
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {(() => {
-                  // Build suggestions based on user's services
-                  const suggestions = []
-                  const serviceText = services.map(s => `${s.category} ${s.description}`).join(' ').toLowerCase()
-                  
-                  // PR / Communications / Media
-                  if (serviceText.includes('pr') || serviceText.includes('public relation') || serviceText.includes('communications') || serviceText.includes('media relation')) {
-                    suggestions.push({ code: '541820', desc: 'Public Relations Agencies' })
-                  }
-                  if (serviceText.includes('advertis') || serviceText.includes('marketing') || serviceText.includes('campaign') || serviceText.includes('brand')) {
-                    suggestions.push({ code: '541810', desc: 'Advertising Agencies' })
-                    suggestions.push({ code: '541613', desc: 'Marketing Consulting' })
-                  }
-                  
-                  // Video / Production / Media
-                  if (serviceText.includes('video') || serviceText.includes('film') || serviceText.includes('production') || serviceText.includes('documentary')) {
-                    suggestions.push({ code: '512110', desc: 'Motion Picture & Video Production' })
-                    suggestions.push({ code: '512191', desc: 'Teleproduction Services' })
-                  }
-                  if (serviceText.includes('photo') || serviceText.includes('photography')) {
-                    suggestions.push({ code: '541922', desc: 'Commercial Photography' })
-                  }
-                  
-                  // Mental Health / Counseling / Wellness
-                  if (serviceText.includes('mental health') || serviceText.includes('counseling') || serviceText.includes('therapy') || serviceText.includes('wellness') || serviceText.includes('behavioral')) {
-                    suggestions.push({ code: '621330', desc: 'Offices of Mental Health Practitioners' })
-                    suggestions.push({ code: '621420', desc: 'Outpatient Mental Health Centers' })
-                    suggestions.push({ code: '624190', desc: 'Other Individual & Family Services' })
-                  }
-                  
-                  // Telehealth / Mobile Health
-                  if (serviceText.includes('telehealth') || serviceText.includes('mobile health') || serviceText.includes('health van') || serviceText.includes('remote health')) {
-                    suggestions.push({ code: '621999', desc: 'Miscellaneous Ambulatory Health Care' })
-                    suggestions.push({ code: '621493', desc: 'Freestanding Emergency Medical Centers' })
-                  }
-                  
-                  // Events / Entertainment / Concerts
-                  if (serviceText.includes('event') || serviceText.includes('concert') || serviceText.includes('entertainment') || serviceText.includes('festival')) {
-                    suggestions.push({ code: '711310', desc: 'Promoters with Facilities' })
-                    suggestions.push({ code: '711320', desc: 'Promoters without Facilities' })
-                    suggestions.push({ code: '561920', desc: 'Convention & Trade Show Organizers' })
-                  }
-                  
-                  // Training / Education / Workshops
-                  if (serviceText.includes('training') || serviceText.includes('workshop') || serviceText.includes('education') || serviceText.includes('curriculum')) {
-                    suggestions.push({ code: '611430', desc: 'Professional Development Training' })
-                    suggestions.push({ code: '611710', desc: 'Educational Support Services' })
-                  }
-                  
-                  // Consulting / Management
-                  if (serviceText.includes('consult') || serviceText.includes('strategy') || serviceText.includes('management')) {
-                    suggestions.push({ code: '541611', desc: 'Administrative Management Consulting' })
-                    suggestions.push({ code: '541618', desc: 'Other Management Consulting' })
-                  }
-                  
-                  // Outreach / Community / Social Services
-                  if (serviceText.includes('outreach') || serviceText.includes('community') || serviceText.includes('social service') || serviceText.includes('youth')) {
-                    suggestions.push({ code: '624110', desc: 'Child & Youth Services' })
-                    suggestions.push({ code: '624229', desc: 'Other Community Housing Services' })
-                    suggestions.push({ code: '813319', desc: 'Other Social Advocacy Organizations' })
-                  }
-                  
-                  // Technology / Software / IT
-                  if (serviceText.includes('software') || serviceText.includes('technology') || serviceText.includes('app') || serviceText.includes('web') || serviceText.includes('it ')) {
-                    suggestions.push({ code: '541512', desc: 'Computer Systems Design' })
-                    suggestions.push({ code: '541511', desc: 'Custom Computer Programming' })
-                  }
-                  
-                  // Research / Data / Analytics
-                  if (serviceText.includes('research') || serviceText.includes('data') || serviceText.includes('analytic') || serviceText.includes('evaluation')) {
-                    suggestions.push({ code: '541720', desc: 'Research & Development' })
-                    suggestions.push({ code: '541910', desc: 'Marketing Research & Public Opinion' })
-                  }
-                  
-                  // Staffing / HR
-                  if (serviceText.includes('staff') || serviceText.includes('recruit') || serviceText.includes('hr') || serviceText.includes('human resource')) {
-                    suggestions.push({ code: '561320', desc: 'Temporary Help Services' })
-                    suggestions.push({ code: '541612', desc: 'Human Resources Consulting' })
-                  }
-                  
-                  // If no services matched, show generic suggestions
-                  if (suggestions.length === 0) {
-                    suggestions.push(
-                      { code: '541611', desc: 'Management Consulting' },
-                      { code: '541810', desc: 'Advertising Agencies' },
-                      { code: '621330', desc: 'Mental Health Services' },
-                      { code: '611430', desc: 'Professional Training' },
-                      { code: '541512', desc: 'Computer Systems Design' }
-                    )
-                  }
-                  
-                  // Remove duplicates and limit to 10
-                  const unique = suggestions.filter((s, i, arr) => 
-                    arr.findIndex(x => x.code === s.code) === i
-                  ).slice(0, 10)
-                  
-                  return unique.map((item) => (
-                    <button
-                      key={item.code}
-                      onClick={() => {
-                        if (naicsCodes.length < 10 && !naicsCodes.find(n => n.code === item.code)) {
-                          setNaicsCodes([...naicsCodes, { code: item.code, description: item.desc, isPrimary: naicsCodes.length === 0 }])
-                        }
-                      }}
-                      disabled={naicsCodes.find(n => n.code === item.code)}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: '8px',
-                        border: naicsCodes.find(n => n.code === item.code) 
-                          ? `1px solid ${colors.primary}` 
-                          : `1px solid ${colors.gold}50`,
-                        backgroundColor: naicsCodes.find(n => n.code === item.code) 
-                          ? `${colors.primary}20` 
-                          : 'transparent',
-                        color: naicsCodes.find(n => n.code === item.code) 
-                          ? colors.primary 
-                          : colors.white,
-                        cursor: naicsCodes.find(n => n.code === item.code) ? 'default' : 'pointer',
-                        fontSize: '13px'
-                      }}
-                    >
-                      {naicsCodes.find(n => n.code === item.code) ? '✓ ' : '+ '}
-                      {item.code} - {item.desc}
-                    </button>
-                  ))
-                })()}
-              </div>
-              {services.length === 0 && (
-                <p style={{ color: colors.gray, margin: '15px 0 0 0', fontSize: '12px', fontStyle: 'italic' }}>
-                  💡 Tip: Add your services in Section 4 and CR-AI will suggest better NAICS codes for you.
+            {naicsCodes.length === 0 && services.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray, backgroundColor: colors.card, borderRadius: '12px' }}>
+                <p style={{ fontSize: '18px', margin: 0 }}>No NAICS codes yet</p>
+                <p style={{ fontSize: '14px', margin: '10px 0 0 0' }}>
+                  👆 Go to <strong>Section 4 (Services)</strong> first — CR-AI will auto-add your NAICS codes!
                 </p>
-              )}
-            </div>
+              </div>
+            )}
+
+            {naicsCodes.length === 0 && services.length > 0 && (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.gray, backgroundColor: colors.card, borderRadius: '12px' }}>
+                <p style={{ fontSize: '16px', margin: 0 }}>🔄 Loading NAICS codes based on your services...</p>
+              </div>
+            )}
+
+            {/* Manual add option - only show if they want to add more */}
+            {naicsCodes.length > 0 && naicsCodes.length < 10 && (
+              <div style={{
+                backgroundColor: `${colors.gray}10`,
+                borderRadius: '12px',
+                padding: '15px',
+                border: `1px solid ${colors.gray}30`
+              }}>
+                <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '13px' }}>
+                  Need to add more codes manually? <a href="https://www.naics.com/search/" target="_blank" rel="noopener noreferrer" style={{ color: colors.primary }}>Look up codes here</a>
+                </p>
+                <button
+                  onClick={addNaicsCode}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    border: `1px solid ${colors.gray}50`,
+                    backgroundColor: 'transparent',
+                    color: colors.gray,
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  + Add Another Code Manually
+                </button>
+              </div>
+            )}
           </div>
         )
 
@@ -2819,28 +2802,80 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
       <div style={{ padding: '30px', maxWidth: '1000px', margin: '0 auto' }}>
         {activeSection ? (
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', border: `1px solid ${colors.primary}30` }}>
-            {/* Section Progress Indicator */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '25px' }}>
-              {sections.filter(s => !s.locked).map((s, idx) => (
-                <div 
-                  key={s.id}
-                  onClick={() => { saveProfile(); setActiveSection(s.id); }}
-                  style={{
-                    width: activeSection === s.id ? '24px' : '10px',
-                    height: '10px',
-                    borderRadius: '5px',
-                    backgroundColor: activeSection === s.id ? colors.primary : activeSection > s.id ? colors.primary + '60' : colors.gray + '40',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
+            {/* TOP NAVIGATION */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '15px', borderBottom: `1px solid ${colors.gray}30` }}>
+              <button 
+                onClick={() => { saveProfile(); setActiveSection(activeSection > 1 ? activeSection - 1 : null); }}
+                style={{ 
+                  padding: '8px 16px', 
+                  borderRadius: '8px', 
+                  border: `1px solid ${colors.gray}50`, 
+                  backgroundColor: 'transparent', 
+                  color: colors.white, 
+                  cursor: 'pointer', 
+                  fontSize: '14px'
+                }}
+              >
+                ← {activeSection > 1 ? 'Prev' : 'Menu'}
+              </button>
+              
+              {/* Section Progress Dots */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {sections.filter(s => !s.locked).map((s) => (
+                  <div 
+                    key={s.id}
+                    onClick={() => { saveProfile(); setActiveSection(s.id); }}
+                    style={{
+                      width: activeSection === s.id ? '24px' : '10px',
+                      height: '10px',
+                      borderRadius: '5px',
+                      backgroundColor: activeSection === s.id ? colors.primary : activeSection > s.id ? colors.primary + '60' : colors.gray + '40',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title={s.title}
+                  />
+                ))}
+              </div>
+              
+              {activeSection < sections.filter(s => !s.locked).length ? (
+                <button 
+                  onClick={() => { saveProfile(); setActiveSection(activeSection + 1); }}
+                  style={{ 
+                    padding: '8px 16px', 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    backgroundColor: colors.primary, 
+                    color: colors.background, 
+                    cursor: 'pointer', 
+                    fontSize: '14px',
+                    fontWeight: '600'
                   }}
-                  title={s.title}
-                />
-              ))}
+                >
+                  Next →
+                </button>
+              ) : (
+                <button 
+                  onClick={() => { saveProfile(); setActiveSection(null); }}
+                  style={{ 
+                    padding: '8px 16px', 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    backgroundColor: colors.gold, 
+                    color: colors.background, 
+                    cursor: 'pointer', 
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  ✓ Done
+                </button>
+              )}
             </div>
             
             {renderSectionForm()}
             
-            {/* Navigation Footer */}
+            {/* BOTTOM NAVIGATION */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '30px', paddingTop: '20px', borderTop: `1px solid ${colors.gray}30` }}>
               {/* Previous Button */}
               <button 
