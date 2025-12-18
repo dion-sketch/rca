@@ -339,7 +339,7 @@ async function executeSearches(queries) {
   const results = []
 
   // Use Claude API with web_search tool to search the internet
-  for (const query of queries.slice(0, 15)) { // Limit to prevent rate limiting
+  for (const query of queries.slice(0, 5)) { // Limit to 5 queries to avoid timeouts
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -357,63 +357,120 @@ async function executeSearches(queries) {
           }],
           messages: [{
             role: 'user',
-            content: `Search for current government contracts, RFPs, and grants using this query: "${query}"
+            content: `Search for: "${query}"
 
-IMPORTANT: Only return CURRENTLY OPEN opportunities (not expired).
+Find government contracts, RFPs, grants, and solicitations that are CURRENTLY OPEN (not expired).
 
-For each result found, extract:
-- Title (exact name of the RFP/grant)
-- Agency (who is issuing it - city, county, state, or federal agency)
-- Due date (deadline - YYYY-MM-DD format)
-- Estimated value (dollar amount if shown)
-- Brief description (what they're looking for)
-- Source URL (direct link to the opportunity)
-- RFP/Solicitation number if available
-- Level (federal/state/county/city)
+After searching, respond with ONLY a JSON array containing the opportunities found. No other text.
 
-Return ONLY a JSON array. No explanation.
-If nothing relevant found, return empty array [].
+Each opportunity should have:
+{
+  "title": "exact name of opportunity",
+  "agency": "issuing organization", 
+  "dueDate": "YYYY-MM-DD or null",
+  "estimatedValue": "dollar amount or Not specified",
+  "description": "brief summary",
+  "sourceUrl": "URL",
+  "rfpNumber": "solicitation number or null",
+  "level": "federal/state/county/city",
+  "source": "where found (SAM.gov, Grants.gov, state portal, etc)"
+}
 
-Format:
-[
-  {
-    "title": "...",
-    "agency": "...",
-    "dueDate": "YYYY-MM-DD or null",
-    "estimatedValue": "...",
-    "description": "...",
-    "sourceUrl": "...",
-    "rfpNumber": "...",
-    "level": "federal|state|county|city",
-    "source": "SAM.gov, Grants.gov, [State] Portal, [County] Portal, etc."
-  }
-]`
+If no opportunities found, respond with: []
+
+RESPOND WITH ONLY THE JSON ARRAY, NO OTHER TEXT.`
           }]
         })
       })
 
       const data = await response.json()
       
-      // Extract text content from response
-      const textContent = data.content?.find(c => c.type === 'text')?.text || '[]'
+      // Log for debugging
+      console.log('API Response for query:', query)
+      console.log('Response content types:', data.content?.map(c => c.type))
       
-      // Parse JSON from response
+      // Extract text content from response - handle multiple content blocks
+      let textContent = ''
+      if (data.content) {
+        for (const block of data.content) {
+          if (block.type === 'text') {
+            textContent += block.text + '\n'
+          }
+        }
+      }
+      
+      console.log('Text content length:', textContent.length)
+      
+      // Try to extract JSON from the response
       try {
-        const cleanJson = textContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+        // Remove markdown code blocks
+        let cleanJson = textContent
+          .replace(/```json\n?/gi, '')
+          .replace(/```\n?/gi, '')
+          .trim()
+        
+        // Try to find JSON array in the response
+        const jsonMatch = cleanJson.match(/\[[\s\S]*\]/)
+        if (jsonMatch) {
+          cleanJson = jsonMatch[0]
+        }
+        
         const parsed = JSON.parse(cleanJson)
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log('Parsed', parsed.length, 'opportunities from query:', query)
           results.push(...parsed)
+        } else {
+          console.log('Empty or non-array result for query:', query)
         }
       } catch (parseErr) {
-        console.log('Could not parse results for query:', query)
+        console.log('Could not parse JSON for query:', query)
+        console.log('Raw text:', textContent.substring(0, 500))
+        
+        // Try to extract opportunities from natural language response
+        const opportunities = extractOpportunitiesFromText(textContent, query)
+        if (opportunities.length > 0) {
+          console.log('Extracted', opportunities.length, 'opportunities from text')
+          results.push(...opportunities)
+        }
       }
 
     } catch (err) {
-      console.error('Search failed for query:', query, err)
+      console.error('Search failed for query:', query, err.message)
     }
   }
 
   return results
+}
+
+// Extract opportunities from natural language if JSON parsing fails
+function extractOpportunitiesFromText(text, query) {
+  const opportunities = []
+  
+  // Look for patterns like URLs, dates, dollar amounts
+  const urlPattern = /https?:\/\/[^\s]+/g
+  const datePattern = /\d{4}-\d{2}-\d{2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/gi
+  const dollarPattern = /\$[\d,]+(?:\.\d{2})?(?:\s*(?:million|M|k|K))?/g
+  
+  const urls = text.match(urlPattern) || []
+  const dates = text.match(datePattern) || []
+  const dollars = text.match(dollarPattern) || []
+  
+  // If we found relevant information, create a single opportunity
+  if (urls.length > 0 || text.toLowerCase().includes('rfp') || text.toLowerCase().includes('grant')) {
+    opportunities.push({
+      title: query.split(' ').slice(0, 5).join(' ') + ' - Search Result',
+      agency: 'Found via web search',
+      dueDate: dates[0] || null,
+      estimatedValue: dollars[0] || 'Not specified',
+      description: text.substring(0, 300).replace(/\n/g, ' '),
+      sourceUrl: urls[0] || '',
+      rfpNumber: null,
+      level: 'unknown',
+      source: 'Web Search'
+    })
+  }
+  
+  return opportunities
 }
 
 // ==========================================
