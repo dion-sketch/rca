@@ -243,12 +243,12 @@ function MyCart({ session, onBack, profileData }) {
         .insert({
           user_id: session.user.id,
           title: manualEntry.title,
-          rfp_number: manualEntry.rfpNumber,
-          agency: manualEntry.agency,
-          due_date: manualEntry.dueDate,
+          rfp_number: manualEntry.rfpNumber || null,
+          agency: manualEntry.agency || null,
+          due_date: manualEntry.dueDate || null,  // Convert empty string to null
           source: manualEntry.source || 'Manual Entry',
-          estimated_value: manualEntry.estimatedValue,
-          description: manualEntry.description,
+          estimated_value: manualEntry.estimatedValue || null,
+          description: manualEntry.description || null,
           status: 'draft',
           questions: []
         })
@@ -403,36 +403,58 @@ function MyCart({ session, onBack, profileData }) {
                 <div style={{ display: 'grid', gap: '15px' }}>
                   {cartItems.map(item => (
                     <div key={item.id} style={{ backgroundColor: colors.card, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.gray}30`, position: 'relative' }}>
-                      <div onClick={() => openResponseBuilder(item)} style={{ cursor: 'pointer' }}>
+                      {/* DELETE BUTTON - TOP RIGHT */}
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
+                        style={{ 
+                          position: 'absolute', 
+                          top: '12px', 
+                          right: '12px', 
+                          background: '#ff4444',
+                          border: 'none', 
+                          color: 'white', 
+                          cursor: 'pointer', 
+                          fontSize: '14px',
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          fontWeight: '600'
+                        }}
+                        title="Delete this opportunity"
+                      >
+                        ✕ Delete
+                      </button>
+                      
+                      <div onClick={() => openResponseBuilder(item)} style={{ cursor: 'pointer', paddingRight: '80px' }}>
+                        {/* Source indicator */}
+                        {item.source && (
+                          <span style={{ 
+                            fontSize: '11px', 
+                            backgroundColor: `${colors.primary}20`, 
+                            color: colors.primary, 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            marginBottom: '8px', 
+                            display: 'inline-block' 
+                          }}>
+                            📍 {item.source}
+                          </span>
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div>
+                          <div style={{ flex: 1 }}>
                             <h3 style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px' }}>{item.title}</h3>
                             <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>{item.agency || 'No agency specified'}</p>
+                            {item.description && (
+                              <p style={{ color: colors.gray, margin: '8px 0 0 0', fontSize: '13px', lineHeight: '1.4' }}>
+                                {item.description.substring(0, 100)}{item.description.length > 100 ? '...' : ''}
+                              </p>
+                            )}
                           </div>
-                          <div style={{ textAlign: 'right' }}>
+                          <div style={{ textAlign: 'right', marginLeft: '20px' }}>
                             <p style={{ color: colors.gold, margin: '0 0 5px 0', fontSize: '14px', fontWeight: '600' }}>Due: {new Date(item.due_date).toLocaleDateString()}</p>
                             {item.estimated_value && <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>{item.estimated_value}</p>}
                           </div>
                         </div>
                       </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteItem(item.id); }}
-                        style={{ 
-                          position: 'absolute', 
-                          top: '10px', 
-                          right: '10px', 
-                          background: 'none', 
-                          border: 'none', 
-                          color: colors.gray, 
-                          cursor: 'pointer', 
-                          fontSize: '18px',
-                          padding: '5px',
-                          opacity: 0.6
-                        }}
-                        title="Delete"
-                      >
-                        ×
-                      </button>
                     </div>
                   ))}
                 </div>
