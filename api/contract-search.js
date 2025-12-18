@@ -48,21 +48,21 @@ export default async function handler(req, res) {
 function buildQuery(searchQuery, userLocation, geographicPreference) {
   let query = searchQuery || ''
   
-  // Add location context
+  // Add STRONG location context - California focused
   if (geographicPreference === 'local' || geographicPreference === 'county') {
     const county = userLocation?.county || 'Los Angeles'
-    query += ` ${county} County California`
+    query = `${query} "${county} County" California -"New York" -"Texas" -"Florida"`
   } else if (geographicPreference === 'state') {
-    query += ' California state'
+    query = `${query} California state government -"New York" -"Texas" -"Florida"`
   } else if (geographicPreference === 'federal') {
-    query += ' federal government'
+    query += ' federal government SAM.gov grants.gov'
   }
   
   // Add contract/grant keywords if not already present
   if (!query.toLowerCase().includes('rfp') && 
       !query.toLowerCase().includes('grant') &&
       !query.toLowerCase().includes('contract')) {
-    query += ' RFP grant solicitation'
+    query += ' RFP OR grant OR solicitation'
   }
   
   return query.trim()
@@ -136,15 +136,49 @@ Return ONLY the JSON array. If nothing found, return: []`
         for (const item of block.content) {
           if (item.type === 'web_search_result') {
             const title = (item.title || '').toLowerCase()
+            const url = (item.url || '').toLowerCase()
+            
+            // FILTER: Only California or Federal results
+            const isCaliforniaOrFederal = 
+              url.includes('ca.gov') ||
+              url.includes('california') ||
+              url.includes('lacounty') ||
+              url.includes('lacity') ||
+              url.includes('sam.gov') ||
+              url.includes('grants.gov') ||
+              url.includes('.gov') ||
+              title.includes('california') ||
+              title.includes('los angeles') ||
+              title.includes('la county')
+            
+            // FILTER: Skip other states
+            const isOtherState = 
+              (url.includes('ny.gov') || title.includes('new york')) ||
+              (url.includes('tx.gov') || title.includes('texas')) ||
+              (url.includes('fl.gov') || title.includes('florida')) ||
+              (url.includes('il.gov') || title.includes('illinois')) ||
+              (url.includes('pa.gov') || title.includes('pennsylvania'))
             
             // Filter for relevant results
-            if (title.includes('rfp') || 
-                title.includes('grant') || 
-                title.includes('contract') ||
-                title.includes('solicitation') ||
-                title.includes('bid') ||
-                title.includes('proposal') ||
-                title.includes('funding')) {
+            const isRelevant = 
+              title.includes('rfp') || 
+              title.includes('grant') || 
+              title.includes('contract') ||
+              title.includes('solicitation') ||
+              title.includes('bid') ||
+              title.includes('proposal') ||
+              title.includes('funding')
+            
+            if (isRelevant && !isOtherState) {
+              // Get clean description - avoid encrypted content
+              let description = ''
+              if (item.page_snippet && !item.page_snippet.includes('Eog') && item.page_snippet.length < 500) {
+                description = item.page_snippet
+              } else if (item.snippet && !item.snippet.includes('Eog')) {
+                description = item.snippet
+              } else {
+                description = `View opportunity details at ${getSource(item.url)}`
+              }
               
               results.push({
                 id: `opp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -152,7 +186,7 @@ Return ONLY the JSON array. If nothing found, return: []`
                 agency: getAgency(item.url),
                 dueDate: null,
                 estimatedValue: 'Not specified',
-                description: item.page_snippet || item.snippet || '',
+                description: description.substring(0, 300),
                 sourceUrl: item.url,
                 source: getSource(item.url),
                 level: getLevel(item.url)
