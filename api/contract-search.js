@@ -349,7 +349,7 @@ async function executeSearches(queries) {
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-5-20250929',
           max_tokens: 4096,
           tools: [{
             type: 'web_search_20250305',
@@ -385,21 +385,38 @@ RESPOND WITH ONLY THE JSON ARRAY, NO OTHER TEXT.`
 
       const data = await response.json()
       
-      // Log for debugging
+      // Log full response for debugging
       console.log('API Response for query:', query)
-      console.log('Response content types:', data.content?.map(c => c.type))
+      console.log('Full response:', JSON.stringify(data).substring(0, 500))
+      
+      // Check for API errors
+      if (data.error) {
+        console.error('API Error:', data.error.type, data.error.message)
+        continue
+      }
+      
+      // Check if response has content
+      if (!data.content) {
+        console.log('No content in response')
+        continue
+      }
+      
+      console.log('Response content types:', data.content.map(c => c.type))
       
       // Extract text content from response - handle multiple content blocks
       let textContent = ''
-      if (data.content) {
-        for (const block of data.content) {
-          if (block.type === 'text') {
-            textContent += block.text + '\n'
-          }
+      for (const block of data.content) {
+        if (block.type === 'text') {
+          textContent += block.text + '\n'
+        }
+        // Also check for tool_result blocks (web search returns these)
+        if (block.type === 'tool_result') {
+          textContent += (block.content || '') + '\n'
         }
       }
       
       console.log('Text content length:', textContent.length)
+      console.log('Raw text:', textContent.substring(0, 300))
       
       // Try to extract JSON from the response
       try {
