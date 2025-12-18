@@ -34,10 +34,11 @@ function MyCart({ session, onBack, profileData }) {
   })
 
   // Smart Search Flow States
-  const [searchMode, setSearchMode] = useState('input') // 'input' | 'searching' | 'results' | 'notfound' | 'manual'
+  const [searchMode, setSearchMode] = useState('input') // 'input' | 'searching' | 'results' | 'notfound' | 'manual' | 'shopping' | 'shopping-results'
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [searchError, setSearchError] = useState(null)
+  const [shoppingResults, setShoppingResults] = useState([]) // Results from "Go Shopping"
 
   useEffect(() => {
     fetchSubmissions()
@@ -61,7 +62,8 @@ function MyCart({ session, onBack, profileData }) {
     }
   }
 
-  // Smart Search: Find contract details from public sources
+  // REAL Contract Search - Searches the ENTIRE INTERNET
+  // Based on user location: Federal, State, County, City, everywhere
   const handleSmartSearch = async () => {
     if (!searchQuery.trim()) return
     
@@ -69,53 +71,95 @@ function MyCart({ session, onBack, profileData }) {
     setSearchError(null)
     
     try {
-      const response = await fetch('https://rca-pi-drab.vercel.app/api/chat', {
+      // Get user's location from profile for location-aware search
+      const userLocation = {
+        city: profileData?.city || '',
+        county: profileData?.county || 'Los Angeles', // Default to LA County
+        state: profileData?.state || 'California'
+      }
+
+      const response = await fetch('/api/contract-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `Search for this government contract or grant opportunity and return ONLY a JSON object with these exact fields (no markdown, no explanation):
-{
-  "found": true/false,
-  "title": "exact official title",
-  "agency": "issuing agency name",
-  "estimatedValue": "dollar range or amount",
-  "dueDate": "YYYY-MM-DD format if known, otherwise null",
-  "description": "2-3 sentence summary of what they're looking for",
-  "source": "where you found this (e.g., SAM.gov, Grants.gov, agency website)",
-  "rfpNumber": "solicitation number if available",
-  "confidence": "high/medium/low"
-}
-
-Search for: "${searchQuery}"
-
-Search SAM.gov, Grants.gov, state grant portals, and agency websites. If you find it, return the details. If not found, set found: false.`,
-          profile: {}
+          searchQuery: searchQuery.trim(),
+          searchType: 'specific', // Looking for a specific contract
+          userLocation: userLocation,
+          naicsCodes: profileData?.naics_codes || [],
+          certifications: profileData?.certifications || [],
+          serviceAreas: profileData?.service_areas || []
         })
       })
       
       const data = await response.json()
       
-      // Parse the AI response - it should be JSON
-      let parsed
-      try {
-        // Clean up any markdown formatting
-        const cleanResponse = data.response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-        parsed = JSON.parse(cleanResponse)
-      } catch (parseErr) {
-        // AI didn't return valid JSON, treat as not found
-        parsed = { found: false }
-      }
-      
-      if (parsed.found) {
-        setSearchResults(parsed)
+      if (data.success && data.opportunities?.length > 0) {
+        // Found results - show the best match first
+        const bestMatch = data.opportunities[0]
+        setSearchResults({
+          found: true,
+          title: bestMatch.title,
+          agency: bestMatch.agency,
+          estimatedValue: bestMatch.estimatedValue,
+          dueDate: bestMatch.dueDate,
+          description: bestMatch.description,
+          source: bestMatch.source,
+          sourceUrl: bestMatch.sourceUrl,
+          rfpNumber: bestMatch.rfpNumber,
+          matchScore: bestMatch.matchScore,
+          matchLevel: bestMatch.matchLevel,
+          confidence: bestMatch.matchScore >= 80 ? 'high' : bestMatch.matchScore >= 60 ? 'medium' : 'low',
+          allResults: data.opportunities // Store all results in case user wants to see more
+        })
         setSearchMode('results')
       } else {
         setSearchMode('notfound')
       }
     } catch (err) {
       console.error('Search error:', err)
-      setSearchError('Search failed. You can enter details manually.')
+      setSearchError('Search failed. You can enter details manually or try again.')
       setSearchMode('notfound')
+    }
+  }
+
+  // GO SHOPPING - Search for opportunities that match user's BUCKET
+  const handleGoShopping = async () => {
+    setSearchMode('shopping')
+    setSearchError(null)
+    
+    try {
+      const userLocation = {
+        city: profileData?.city || '',
+        county: profileData?.county || 'Los Angeles',
+        state: profileData?.state || 'California'
+      }
+
+      const response = await fetch('/api/contract-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          searchQuery: '', // Empty - we're searching by profile
+          searchType: 'shopping', // Find matches for my profile
+          userLocation: userLocation,
+          naicsCodes: profileData?.naics_codes || [],
+          certifications: profileData?.certifications || [],
+          serviceAreas: profileData?.service_areas || []
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success && data.opportunities?.length > 0) {
+        setShoppingResults(data.opportunities)
+        setSearchMode('shopping-results')
+      } else {
+        setSearchError('No matching opportunities found right now. Try again later or search manually.')
+        setSearchMode('input')
+      }
+    } catch (err) {
+      console.error('Shopping search error:', err)
+      setSearchError('Search failed. Please try again.')
+      setSearchMode('input')
     }
   }
 
