@@ -468,6 +468,7 @@ function App() {
         <MyBucketPage 
           session={session} 
           profileData={profileData}
+          profileCompletion={profileCompletion}
           onBack={() => setCurrentPage('dashboard')}
           onEditProfile={() => setCurrentPage('business-builder')}
         />
@@ -655,7 +656,7 @@ function App() {
 // MY BUCKET PAGE COMPONENT
 // Shows everything in the user's BUCKET
 // ==========================================
-function MyBucketPage({ session, profileData, onBack, onEditProfile }) {
+function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditProfile }) {
   const [savedAnswers, setSavedAnswers] = useState([])
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -697,34 +698,8 @@ function MyBucketPage({ session, profileData, onBack, onEditProfile }) {
   }
 
   const submissionCount = profileData?.submission_count || submissions.length || 0
-  const bucketScore = calculateBucketScore(profileData, submissionCount)
-
-  function calculateBucketScore(profile, subCount) {
-    if (!profile) return 0
-    let score = 0
-    const baseMax = 40
-
-    // Foundation
-    if (profile.company_name) score += 2
-    if (profile.city && profile.state) score += 2
-    if (profile.phone && profile.email) score += 2
-    if (profile.mission) score += 3
-    if (profile.elevator_pitch) score += 2
-    if (profile.services?.length > 0) score += 5
-    if (profile.naics_codes?.length > 0) score += 5
-    if (profile.sam_registered) score += 5
-    if (profile.past_performance?.length > 0) score += 3
-    if (profile.past_performance?.length >= 3) score += 2
-    if (profile.team_members?.length > 0) score += 2
-    if (profile.team_members?.length >= 3) score += 1
-    if (profile.pricing?.length > 0) score += 1
-    if (profile.certifications?.length > 0) score += 1
-
-    // Submission bonus
-    score += subCount * 3
-
-    return Math.round((score / baseMax) * 100)
-  }
+  // Use the same percentage as Dashboard (passed in as prop)
+  const bucketScore = profileCompletion || 0
 
   return (
     <div style={{ padding: '40px 30px', maxWidth: '800px', margin: '0 auto', paddingBottom: '100px' }}>
