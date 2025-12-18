@@ -481,13 +481,21 @@ function App() {
             justifyContent: 'space-around',
             borderBottom: `1px solid ${colors.primary}30`
           }}>
-            <div style={{ textAlign: 'center' }}>
+            <div 
+              onClick={() => setCurrentPage('my-bucket')}
+              style={{ textAlign: 'center', cursor: 'pointer' }}
+              title="Click to view My BUCKET"
+            >
               <div style={{ color: profileCompletion >= 80 ? colors.primary : colors.gold, fontSize: '32px', fontWeight: '700' }}>
-                {profileCompletion}%
+                🪣 {profileCompletion}%
               </div>
               <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Built</div>
             </div>
-            <div style={{ textAlign: 'center' }}>
+            <div 
+              onClick={() => setCurrentPage('my-cart')}
+              style={{ textAlign: 'center', cursor: 'pointer' }}
+              title="Click to view My Cart"
+            >
               <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
                 🛒 {cartCount}
               </div>
@@ -658,14 +666,19 @@ function MyBucketPage({ session, profileData, onBack, onEditProfile }) {
 
   const fetchBucketData = async () => {
     try {
-      // Fetch saved answers
-      const { data: answers } = await supabase
-        .from('saved_answers')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
+      // Fetch saved answers (may not exist yet - that's OK)
+      try {
+        const { data: answers } = await supabase
+          .from('saved_answers')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false })
 
-      if (answers) setSavedAnswers(answers)
+        if (answers) setSavedAnswers(answers)
+      } catch (e) {
+        // Table might not exist yet - that's fine
+        console.log('saved_answers table not ready yet')
+      }
 
       // Fetch completed submissions
       const { data: subs } = await supabase
