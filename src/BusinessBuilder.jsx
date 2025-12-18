@@ -1461,7 +1461,7 @@ Return ONLY the service description, no explanations.`
               </div>
             )}
 
-            {/* Common codes helper */}
+            {/* Smart NAICS suggestions based on services */}
             <div style={{
               backgroundColor: `${colors.gold}10`,
               borderRadius: '12px',
@@ -1469,40 +1469,141 @@ Return ONLY the service description, no explanations.`
               border: `1px solid ${colors.gold}30`
             }}>
               <p style={{ color: colors.gold, margin: '0 0 10px 0', fontSize: '14px', fontWeight: '600' }}>
-                Common NAICS codes based on your previously inputted information. You can change anytime.
+                ✨ CR-AI Suggested NAICS Codes Based on Your Services:
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {[
-                  { code: '541611', desc: 'Management Consulting' },
-                  { code: '541810', desc: 'Advertising Agencies' },
-                  { code: '621330', desc: 'Mental Health Services' },
-                  { code: '611430', desc: 'Professional Training' },
-                  { code: '561720', desc: 'Janitorial Services' },
-                  { code: '236220', desc: 'Commercial Construction' },
-                  { code: '541512', desc: 'Computer Systems Design' },
-                  { code: '561320', desc: 'Temporary Staffing' },
-                ].map((item) => (
-                  <button
-                    key={item.code}
-                    onClick={() => {
-                      if (naicsCodes.length < 10) {
-                        setNaicsCodes([...naicsCodes, { code: item.code, description: item.desc, isPrimary: naicsCodes.length === 0 }])
-                      }
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      border: `1px solid ${colors.gold}50`,
-                      backgroundColor: 'transparent',
-                      color: colors.gray,
-                      cursor: 'pointer',
-                      fontSize: '12px'
-                    }}
-                  >
-                    {item.code} - {item.desc}
-                  </button>
-                ))}
+                {(() => {
+                  // Build suggestions based on user's services
+                  const suggestions = []
+                  const serviceText = services.map(s => `${s.category} ${s.description}`).join(' ').toLowerCase()
+                  
+                  // PR / Communications / Media
+                  if (serviceText.includes('pr') || serviceText.includes('public relation') || serviceText.includes('communications') || serviceText.includes('media relation')) {
+                    suggestions.push({ code: '541820', desc: 'Public Relations Agencies' })
+                  }
+                  if (serviceText.includes('advertis') || serviceText.includes('marketing') || serviceText.includes('campaign') || serviceText.includes('brand')) {
+                    suggestions.push({ code: '541810', desc: 'Advertising Agencies' })
+                    suggestions.push({ code: '541613', desc: 'Marketing Consulting' })
+                  }
+                  
+                  // Video / Production / Media
+                  if (serviceText.includes('video') || serviceText.includes('film') || serviceText.includes('production') || serviceText.includes('documentary')) {
+                    suggestions.push({ code: '512110', desc: 'Motion Picture & Video Production' })
+                    suggestions.push({ code: '512191', desc: 'Teleproduction Services' })
+                  }
+                  if (serviceText.includes('photo') || serviceText.includes('photography')) {
+                    suggestions.push({ code: '541922', desc: 'Commercial Photography' })
+                  }
+                  
+                  // Mental Health / Counseling / Wellness
+                  if (serviceText.includes('mental health') || serviceText.includes('counseling') || serviceText.includes('therapy') || serviceText.includes('wellness') || serviceText.includes('behavioral')) {
+                    suggestions.push({ code: '621330', desc: 'Offices of Mental Health Practitioners' })
+                    suggestions.push({ code: '621420', desc: 'Outpatient Mental Health Centers' })
+                    suggestions.push({ code: '624190', desc: 'Other Individual & Family Services' })
+                  }
+                  
+                  // Telehealth / Mobile Health
+                  if (serviceText.includes('telehealth') || serviceText.includes('mobile health') || serviceText.includes('health van') || serviceText.includes('remote health')) {
+                    suggestions.push({ code: '621999', desc: 'Miscellaneous Ambulatory Health Care' })
+                    suggestions.push({ code: '621493', desc: 'Freestanding Emergency Medical Centers' })
+                  }
+                  
+                  // Events / Entertainment / Concerts
+                  if (serviceText.includes('event') || serviceText.includes('concert') || serviceText.includes('entertainment') || serviceText.includes('festival')) {
+                    suggestions.push({ code: '711310', desc: 'Promoters with Facilities' })
+                    suggestions.push({ code: '711320', desc: 'Promoters without Facilities' })
+                    suggestions.push({ code: '561920', desc: 'Convention & Trade Show Organizers' })
+                  }
+                  
+                  // Training / Education / Workshops
+                  if (serviceText.includes('training') || serviceText.includes('workshop') || serviceText.includes('education') || serviceText.includes('curriculum')) {
+                    suggestions.push({ code: '611430', desc: 'Professional Development Training' })
+                    suggestions.push({ code: '611710', desc: 'Educational Support Services' })
+                  }
+                  
+                  // Consulting / Management
+                  if (serviceText.includes('consult') || serviceText.includes('strategy') || serviceText.includes('management')) {
+                    suggestions.push({ code: '541611', desc: 'Administrative Management Consulting' })
+                    suggestions.push({ code: '541618', desc: 'Other Management Consulting' })
+                  }
+                  
+                  // Outreach / Community / Social Services
+                  if (serviceText.includes('outreach') || serviceText.includes('community') || serviceText.includes('social service') || serviceText.includes('youth')) {
+                    suggestions.push({ code: '624110', desc: 'Child & Youth Services' })
+                    suggestions.push({ code: '624229', desc: 'Other Community Housing Services' })
+                    suggestions.push({ code: '813319', desc: 'Other Social Advocacy Organizations' })
+                  }
+                  
+                  // Technology / Software / IT
+                  if (serviceText.includes('software') || serviceText.includes('technology') || serviceText.includes('app') || serviceText.includes('web') || serviceText.includes('it ')) {
+                    suggestions.push({ code: '541512', desc: 'Computer Systems Design' })
+                    suggestions.push({ code: '541511', desc: 'Custom Computer Programming' })
+                  }
+                  
+                  // Research / Data / Analytics
+                  if (serviceText.includes('research') || serviceText.includes('data') || serviceText.includes('analytic') || serviceText.includes('evaluation')) {
+                    suggestions.push({ code: '541720', desc: 'Research & Development' })
+                    suggestions.push({ code: '541910', desc: 'Marketing Research & Public Opinion' })
+                  }
+                  
+                  // Staffing / HR
+                  if (serviceText.includes('staff') || serviceText.includes('recruit') || serviceText.includes('hr') || serviceText.includes('human resource')) {
+                    suggestions.push({ code: '561320', desc: 'Temporary Help Services' })
+                    suggestions.push({ code: '541612', desc: 'Human Resources Consulting' })
+                  }
+                  
+                  // If no services matched, show generic suggestions
+                  if (suggestions.length === 0) {
+                    suggestions.push(
+                      { code: '541611', desc: 'Management Consulting' },
+                      { code: '541810', desc: 'Advertising Agencies' },
+                      { code: '621330', desc: 'Mental Health Services' },
+                      { code: '611430', desc: 'Professional Training' },
+                      { code: '541512', desc: 'Computer Systems Design' }
+                    )
+                  }
+                  
+                  // Remove duplicates and limit to 10
+                  const unique = suggestions.filter((s, i, arr) => 
+                    arr.findIndex(x => x.code === s.code) === i
+                  ).slice(0, 10)
+                  
+                  return unique.map((item) => (
+                    <button
+                      key={item.code}
+                      onClick={() => {
+                        if (naicsCodes.length < 10 && !naicsCodes.find(n => n.code === item.code)) {
+                          setNaicsCodes([...naicsCodes, { code: item.code, description: item.desc, isPrimary: naicsCodes.length === 0 }])
+                        }
+                      }}
+                      disabled={naicsCodes.find(n => n.code === item.code)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        border: naicsCodes.find(n => n.code === item.code) 
+                          ? `1px solid ${colors.primary}` 
+                          : `1px solid ${colors.gold}50`,
+                        backgroundColor: naicsCodes.find(n => n.code === item.code) 
+                          ? `${colors.primary}20` 
+                          : 'transparent',
+                        color: naicsCodes.find(n => n.code === item.code) 
+                          ? colors.primary 
+                          : colors.white,
+                        cursor: naicsCodes.find(n => n.code === item.code) ? 'default' : 'pointer',
+                        fontSize: '13px'
+                      }}
+                    >
+                      {naicsCodes.find(n => n.code === item.code) ? '✓ ' : '+ '}
+                      {item.code} - {item.desc}
+                    </button>
+                  ))
+                })()}
               </div>
+              {services.length === 0 && (
+                <p style={{ color: colors.gray, margin: '15px 0 0 0', fontSize: '12px', fontStyle: 'italic' }}>
+                  💡 Tip: Add your services in Section 4 and CR-AI will suggest better NAICS codes for you.
+                </p>
+              )}
             </div>
           </div>
         )
@@ -2718,10 +2819,94 @@ ${personnelItems.map(p => '<li>' + p + '</li>').join('\n')}
       <div style={{ padding: '30px', maxWidth: '1000px', margin: '0 auto' }}>
         {activeSection ? (
           <div style={{ backgroundColor: colors.card, borderRadius: '16px', padding: '30px', border: `1px solid ${colors.primary}30` }}>
+            {/* Section Progress Indicator */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '25px' }}>
+              {sections.filter(s => !s.locked).map((s, idx) => (
+                <div 
+                  key={s.id}
+                  onClick={() => { saveProfile(); setActiveSection(s.id); }}
+                  style={{
+                    width: activeSection === s.id ? '24px' : '10px',
+                    height: '10px',
+                    borderRadius: '5px',
+                    backgroundColor: activeSection === s.id ? colors.primary : activeSection > s.id ? colors.primary + '60' : colors.gray + '40',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  title={s.title}
+                />
+              ))}
+            </div>
+            
             {renderSectionForm()}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', paddingTop: '20px', borderTop: `1px solid ${colors.gray}30` }}>
-              <button onClick={() => setActiveSection(null)} style={{ padding: '12px 24px', borderRadius: '8px', border: `1px solid ${colors.gray}`, backgroundColor: 'transparent', color: colors.white, cursor: 'pointer', fontSize: '16px' }}>Cancel</button>
-              <button onClick={saveProfile} disabled={saving} style={{ padding: '12px 30px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, cursor: saving ? 'not-allowed' : 'pointer', fontSize: '16px', fontWeight: '600', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save & Continue'}</button>
+            
+            {/* Navigation Footer */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '30px', paddingTop: '20px', borderTop: `1px solid ${colors.gray}30` }}>
+              {/* Previous Button */}
+              <button 
+                onClick={() => { saveProfile(); setActiveSection(activeSection > 1 ? activeSection - 1 : null); }}
+                style={{ 
+                  padding: '12px 24px', 
+                  borderRadius: '8px', 
+                  border: `1px solid ${colors.gray}`, 
+                  backgroundColor: 'transparent', 
+                  color: colors.white, 
+                  cursor: 'pointer', 
+                  fontSize: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                ← {activeSection > 1 ? 'Previous' : 'Back to Menu'}
+              </button>
+              
+              {/* Section indicator */}
+              <span style={{ color: colors.gray, fontSize: '14px' }}>
+                Section {activeSection} of {sections.filter(s => !s.locked).length}
+              </span>
+              
+              {/* Next / Save Button */}
+              {activeSection < sections.filter(s => !s.locked).length ? (
+                <button 
+                  onClick={() => { saveProfile(); setActiveSection(activeSection + 1); }}
+                  disabled={saving}
+                  style={{ 
+                    padding: '12px 30px', 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    backgroundColor: colors.primary, 
+                    color: colors.background, 
+                    cursor: saving ? 'not-allowed' : 'pointer', 
+                    fontSize: '16px', 
+                    fontWeight: '600', 
+                    opacity: saving ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {saving ? 'Saving...' : 'Next →'}
+                </button>
+              ) : (
+                <button 
+                  onClick={() => { saveProfile(); setActiveSection(null); }}
+                  disabled={saving}
+                  style={{ 
+                    padding: '12px 30px', 
+                    borderRadius: '8px', 
+                    border: 'none', 
+                    backgroundColor: colors.gold, 
+                    color: colors.background, 
+                    cursor: saving ? 'not-allowed' : 'pointer', 
+                    fontSize: '16px', 
+                    fontWeight: '600', 
+                    opacity: saving ? 0.7 : 1 
+                  }}
+                >
+                  {saving ? 'Saving...' : '✓ Done'}
+                </button>
+              )}
             </div>
           </div>
         ) : (
