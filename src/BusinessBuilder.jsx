@@ -38,15 +38,16 @@ const industryCategories = [
 
 const sections = [
   { id: 1, title: 'Company Basics', icon: '🏢', description: 'Legal name, DBA, address, contact info' },
-  { id: 2, title: 'Mission, Vision & Elevator Pitch', icon: '🎯', description: 'Your company story and value proposition' },
-  { id: 3, title: 'Services', icon: '⚙️', description: 'What you offer (up to 10 services)' },
-  { id: 4, title: 'NAICS Codes', icon: '🔢', description: 'Industry classification codes (up to 10)' },
-  { id: 5, title: 'Certifications', icon: '📜', description: 'MBE, WBE, DVBE, SBE, 8(a), HUBZone, etc.' },
-  { id: 6, title: 'SAM.gov Registration', icon: '✅', description: 'Federal registration status, UEI, CAGE code' },
-  { id: 7, title: 'Rates', icon: '💰', description: 'Hourly rates by role' },
-  { id: 8, title: 'Past Work', icon: '📊', description: 'Jobs, projects & contracts you\'ve completed' },
-  { id: 9, title: 'Team Builder', icon: '👥', description: 'Employees, contractors, vendors — grows as you submit' },
-  { id: 10, title: 'Generate Capability Statement', icon: '🔒', description: 'Coming Soon', locked: true },
+  { id: 2, title: 'Where to Search', icon: '🌎', description: 'Geographic area for finding contracts & grants' },
+  { id: 3, title: 'Mission, Vision & Elevator Pitch', icon: '🎯', description: 'Your company story and value proposition' },
+  { id: 4, title: 'Services', icon: '⚙️', description: 'What you offer (up to 10 services)' },
+  { id: 5, title: 'NAICS Codes', icon: '🔢', description: 'Industry classification codes (up to 10)' },
+  { id: 6, title: 'Certifications', icon: '📜', description: 'MBE, WBE, DVBE, SBE, 8(a), HUBZone, etc.' },
+  { id: 7, title: 'SAM.gov Registration', icon: '✅', description: 'Federal registration status, UEI, CAGE code' },
+  { id: 8, title: 'Rates', icon: '💰', description: 'Hourly rates by role' },
+  { id: 9, title: 'Past Work', icon: '📊', description: 'Jobs, projects & contracts you\'ve completed' },
+  { id: 10, title: 'Team Builder', icon: '👥', description: 'Employees, contractors, vendors — grows as you submit' },
+  { id: 11, title: 'Generate Capability Statement', icon: '🔒', description: 'Coming Soon', locked: true },
 ]
 
 function BusinessBuilder({ session, onBack }) {
@@ -64,8 +65,12 @@ function BusinessBuilder({ session, onBack }) {
   const [dba, setDba] = useState('')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
+  const [county, setCounty] = useState('')
   const [state, setState] = useState('')
   const [zip, setZip] = useState('')
+  
+  // Geographic Preference - Where to search for contracts
+  const [geographicPreference, setGeographicPreference] = useState('local') // 'federal' | 'state' | 'county' | 'local' | 'nationwide'
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('')
@@ -130,8 +135,10 @@ function BusinessBuilder({ session, onBack }) {
         setDba(data.dba || '')
         setAddress(data.address || '')
         setCity(data.city || '')
+        setCounty(data.county || '')
         setState(data.state || '')
         setZip(data.zip || '')
+        setGeographicPreference(data.geographic_preference || 'local')
         setPhone(data.phone || '')
         setEmail(data.email || '')
         setWebsite(data.website || '')
@@ -291,8 +298,10 @@ function BusinessBuilder({ session, onBack }) {
       dba: dba,
       address: address,
       city: city,
+      county: county,
       state: state,
       zip: zip,
+      geographic_preference: geographicPreference,
       phone: phone,
       email: email,
       website: website,
@@ -823,10 +832,14 @@ Return ONLY the service description, no explanations.`
               <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter street address" style={inputStyle} />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', gap: '15px' }}>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>City *</label>
                 <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>County *</label>
+                <input type="text" value={county} onChange={(e) => setCounty(e.target.value)} placeholder="County name" style={inputStyle} />
               </div>
               <div>
                 <label style={{ color: colors.gray, fontSize: '14px', display: 'block', marginBottom: '5px' }}>State *</label>
@@ -908,6 +921,104 @@ Return ONLY the service description, no explanations.`
         )
 
       case 2:
+        // WHERE TO SEARCH - Geographic Preference
+        return (
+          <div style={{ display: 'grid', gap: '25px' }}>
+            <h3 style={{ color: colors.white, margin: 0 }}>Where to Search for Contracts & Grants</h3>
+            
+            <p style={{ color: colors.gray, fontSize: '14px', margin: 0, lineHeight: '1.6' }}>
+              CR-AI will search the internet for contracts and grants based on your selection below. 
+              This uses your address to find opportunities in your area.
+            </p>
+
+            {/* Current address summary */}
+            {(city || state) && (
+              <div style={{
+                backgroundColor: '#1a1a1a',
+                borderRadius: '12px',
+                padding: '20px',
+                border: `1px solid ${colors.primary}30`
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '20px' }}>📍</span>
+                  <span style={{ color: colors.primary, fontWeight: '600', fontSize: '14px' }}>Your Location:</span>
+                </div>
+                <p style={{ color: colors.white, margin: 0, fontSize: '15px' }}>
+                  {city}{county ? `, ${county} County` : ''}{state ? `, ${state}` : ''} {zip}
+                </p>
+                <p style={{ color: colors.gray, margin: '10px 0 0 0', fontSize: '12px' }}>
+                  Update your address in Section 1 (Company Basics) if needed.
+                </p>
+              </div>
+            )}
+
+            {/* Geographic preference selection */}
+            <div>
+              <label style={{ color: colors.white, fontSize: '16px', display: 'block', marginBottom: '15px', fontWeight: '600' }}>
+                How far should CR-AI search?
+              </label>
+              
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {[
+                  { value: 'local', label: 'Local (City + County + State + Federal)', description: `Searches ${city || 'your city'}, ${county || 'your county'}, ${state || 'your state'}, and federal opportunities`, icon: '🏘️' },
+                  { value: 'county', label: 'County + State + Federal', description: `Searches ${county || 'your county'}, ${state || 'your state'}, and federal opportunities`, icon: '🏛️' },
+                  { value: 'state', label: 'State + Federal Only', description: `Searches ${state || 'your state'} and federal opportunities only`, icon: '🗺️' },
+                  { value: 'federal', label: 'Federal Only', description: 'Searches SAM.gov and Grants.gov only', icon: '🇺🇸' },
+                  { value: 'nationwide', label: 'Nationwide (All 50 States)', description: 'Searches the entire United States - federal, all states, all counties, all cities', icon: '🌎' },
+                ].map((option) => (
+                  <label
+                    key={option.value}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '15px',
+                      padding: '20px',
+                      backgroundColor: geographicPreference === option.value ? `${colors.primary}15` : colors.card,
+                      borderRadius: '12px',
+                      border: geographicPreference === option.value ? `2px solid ${colors.primary}` : `1px solid ${colors.gray}30`,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="geographicPreference"
+                      value={option.value}
+                      checked={geographicPreference === option.value}
+                      onChange={(e) => setGeographicPreference(e.target.value)}
+                      style={{ marginTop: '3px', accentColor: colors.primary }}
+                    />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                        <span style={{ fontSize: '18px' }}>{option.icon}</span>
+                        <span style={{ color: colors.white, fontWeight: '600', fontSize: '15px' }}>{option.label}</span>
+                      </div>
+                      <p style={{ color: colors.gray, margin: 0, fontSize: '13px', lineHeight: '1.4' }}>
+                        {option.description}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* What this means */}
+            <div style={{
+              backgroundColor: `${colors.gold}15`,
+              borderRadius: '12px',
+              padding: '20px',
+              border: `1px solid ${colors.gold}30`
+            }}>
+              <p style={{ color: colors.white, margin: 0, fontSize: '14px', lineHeight: '1.6' }}>
+                💡 <strong>Tip:</strong> Most small businesses start with "Local" to find opportunities close to home. 
+                You can change this anytime. CR-AI searches SAM.gov, Grants.gov, state portals, county portals, 
+                city portals, and the entire internet based on your selection.
+              </p>
+            </div>
+          </div>
+        )
+
+      case 3:
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <h3 style={{ color: colors.white, margin: 0 }}>Mission, Vision & Elevator Pitch</h3>
@@ -1106,7 +1217,7 @@ Return ONLY the service description, no explanations.`
           </div>
         )
 
-      case 3:
+      case 4:
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1224,7 +1335,7 @@ Return ONLY the service description, no explanations.`
           </div>
         )
 
-      case 4:
+      case 5:
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1396,7 +1507,7 @@ Return ONLY the service description, no explanations.`
           </div>
         )
 
-      case 5:
+      case 6:
         const certCategories = {
           federal: {
             title: '🏛️ Federal Certifications',
@@ -1605,7 +1716,7 @@ Return ONLY the service description, no explanations.`
           </div>
         )
 
-      case 6:
+      case 7:
         return (
           <div style={{ display: 'grid', gap: '20px' }}>
             <h3 style={{ color: colors.white, margin: 0 }}>SAM.gov Registration</h3>
@@ -1669,7 +1780,7 @@ Return ONLY the service description, no explanations.`
           </div>
         )
 
-      case 7:
+      case 8:
         const commonRoles = [
           { role: 'Project Manager', rate: '85' },
           { role: 'Program Director', rate: '125' },
@@ -1827,7 +1938,7 @@ Return ONLY the service description, no explanations.`
           </div>
         )
 
-      case 8:
+      case 9:
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2077,7 +2188,7 @@ Return ONLY the service description, no explanations.`
           </div>
         )
 
-      case 9:
+      case 10:
         return (
           <div style={{ display: 'grid', gap: '25px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
