@@ -403,51 +403,86 @@ RESPOND WITH ONLY THE JSON ARRAY, NO OTHER TEXT.`
       
       console.log('Response content types:', data.content.map(c => c.type))
       
-      // Extract text content from response - handle multiple content blocks
+      // Extract search results from web_search_tool_result blocks
+      let searchResults = []
       let textContent = ''
+      
       for (const block of data.content) {
+        // Handle web search tool results (new format)
+        if (block.type === 'web_search_tool_result' && block.content) {
+          console.log('Found web_search_tool_result with', block.content.length, 'items')
+          for (const item of block.content) {
+            if (item.type === 'web_search_result') {
+              searchResults.push({
+                title: item.title || '',
+                url: item.url || '',
+                snippet: item.encrypted_content || item.snippet || item.description || ''
+              })
+            }
+          }
+        }
+        
+        // Handle text blocks
         if (block.type === 'text') {
           textContent += block.text + '\n'
         }
-        // Also check for tool_result blocks (web search returns these)
-        if (block.type === 'tool_result') {
-          textContent += (block.content || '') + '\n'
-        }
       }
       
+      console.log('Found', searchResults.length, 'web search results')
       console.log('Text content length:', textContent.length)
-      console.log('Raw text:', textContent.substring(0, 300))
       
-      // Try to extract JSON from the response
-      try {
-        // Remove markdown code blocks
-        let cleanJson = textContent
-          .replace(/```json\n?/gi, '')
-          .replace(/```\n?/gi, '')
-          .trim()
-        
-        // Try to find JSON array in the response
-        const jsonMatch = cleanJson.match(/\[[\s\S]*\]/)
-        if (jsonMatch) {
-          cleanJson = jsonMatch[0]
+      // If we got web search results, convert them to opportunities
+      if (searchResults.length > 0) {
+        for (const sr of searchResults) {
+          // Only include results that look like contracts/grants
+          const lowerTitle = sr.title.toLowerCase()
+          const lowerSnippet = sr.snippet.toLowerCase()
+          const isRelevant = 
+            lowerTitle.includes('rfp') || 
+            lowerTitle.includes('grant') || 
+            lowerTitle.includes('solicitation') ||
+            lowerTitle.includes('contract') ||
+            lowerTitle.includes('bid') ||
+            lowerTitle.includes('proposal') ||
+            lowerSnippet.includes('rfp') ||
+            lowerSnippet.includes('grant') ||
+            lowerSnippet.includes('solicitation')
+          
+          if (isRelevant) {
+            results.push({
+              title: sr.title,
+              agency: extractAgency(sr.title, sr.url),
+              dueDate: extractDate(sr.snippet),
+              estimatedValue: extractValue(sr.snippet),
+              description: sr.snippet.substring(0, 300),
+              sourceUrl: sr.url,
+              rfpNumber: extractRfpNumber(sr.title + ' ' + sr.snippet),
+              level: detectLevel(sr.url),
+              source: detectSource(sr.url)
+            })
+          }
         }
-        
-        const parsed = JSON.parse(cleanJson)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          console.log('Parsed', parsed.length, 'opportunities from query:', query)
-          results.push(...parsed)
-        } else {
-          console.log('Empty or non-array result for query:', query)
-        }
-      } catch (parseErr) {
-        console.log('Could not parse JSON for query:', query)
-        console.log('Raw text:', textContent.substring(0, 500))
-        
-        // Try to extract opportunities from natural language response
-        const opportunities = extractOpportunitiesFromText(textContent, query)
-        if (opportunities.length > 0) {
-          console.log('Extracted', opportunities.length, 'opportunities from text')
-          results.push(...opportunities)
+        console.log('Converted to', results.length, 'opportunities')
+      }
+      
+      // Also try to parse any JSON from text content
+      if (textContent.length > 0) {
+        try {
+          let cleanJson = textContent
+            .replace(/```json\n?/gi, '')
+            .replace(/```\n?/gi, '')
+            .trim()
+          
+          const jsonMatch = cleanJson.match(/\[[\s\S]*\]/)
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0])
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              console.log('Also parsed', parsed.length, 'from text JSON')
+              results.push(...parsed)
+            }
+          }
+        } catch (e) {
+          // Ignore JSON parse errors for text content
         }
       }
 
@@ -457,6 +492,107 @@ RESPOND WITH ONLY THE JSON ARRAY, NO OTHER TEXT.`
   }
 
   return results
+}
+
+// Helper function to extract agency from title/url
+function extractAgency(title, url) {
+  // Check URL for known agencies
+  if (url.includes('sam.gov')) return 'Federal (SAM.gov)'
+  if (url.includes('grants.gov')) return 'Federal (Grants.gov)'
+  if (url.includes('ca.gov')) return 'California State'
+  if (url.includes('lacounty') || url.includes('la.county')) return 'LA County'
+  if (url.includes('lacity') || url.includes('la.city')) return 'City of Los Angeles'
+  
+  // Try to extract from title
+  const agencyPatterns = [
+    /(?:from|by|for)\s+(?:the\s+)?([A-Z][A-Za-z\s]+(?:Department|Agency|Office|County|City|State))/i,
+    /(California\s+[A-Za-z\s]+)/i,
+    /(Los Angeles\s+[A-Za-z\s]+)/i,
+    /(LA\s+County\s+[A-Za-z\s]+)/i
+  ]
+  
+  for (const pattern of agencyPatterns) {
+    const match = title.match(pattern)
+    if (match) return match[1].trim()
+  }
+  
+  return 'Government Agency'
+}
+
+// Helper to extract dates
+function extractDate(text) {
+  const datePatterns = [
+    /(\d{1,2}\/\d{1,2}\/\d{2,4})/,
+    /(\d{4}-\d{2}-\d{2})/,
+    /((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/i,
+    /due[:\s]+(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    /deadline[:\s]+(\d{1,2}\/\d{1,2}\/\d{2,4})/i
+  ]
+  
+  for (const pattern of datePatterns) {
+    const match = text.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+// Helper to extract dollar values
+function extractValue(text) {
+  const valuePatterns = [
+    /\$\s*([\d,]+(?:\.\d{2})?)\s*(?:million|M)/i,
+    /\$\s*([\d,]+(?:\.\d{2})?)\s*(?:billion|B)/i,
+    /\$\s*([\d,]+(?:\.\d{2})?)/
+  ]
+  
+  for (const pattern of valuePatterns) {
+    const match = text.match(pattern)
+    if (match) {
+      let value = match[0]
+      return value
+    }
+  }
+  return 'Not specified'
+}
+
+// Helper to extract RFP numbers
+function extractRfpNumber(text) {
+  const rfpPatterns = [
+    /(?:RFP|RFQ|IFB|Solicitation)[\s#:-]*([A-Z0-9-]+)/i,
+    /(?:Contract|Grant)[\s#:-]*([A-Z0-9-]+)/i,
+    /\b([A-Z]{2,4}-\d{4,}-\d+)\b/
+  ]
+  
+  for (const pattern of rfpPatterns) {
+    const match = text.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+// Helper to detect government level
+function detectLevel(url) {
+  if (url.includes('sam.gov') || url.includes('grants.gov') || url.includes('.gov/')) return 'federal'
+  if (url.includes('ca.gov')) return 'state'
+  if (url.includes('county')) return 'county'
+  if (url.includes('city') || url.includes('.org')) return 'city'
+  return 'unknown'
+}
+
+// Helper to detect source
+function detectSource(url) {
+  if (url.includes('sam.gov')) return 'SAM.gov'
+  if (url.includes('grants.gov')) return 'Grants.gov'
+  if (url.includes('ca.gov')) return 'California State Portal'
+  if (url.includes('lacounty')) return 'LA County'
+  if (url.includes('lacity')) return 'City of Los Angeles'
+  
+  // Extract domain
+  try {
+    const domain = new URL(url).hostname.replace('www.', '')
+    return domain
+  } catch {
+    return 'Web Search'
+  }
 }
 
 // Extract opportunities from natural language if JSON parsing fails
