@@ -902,16 +902,79 @@ function MyBucketPage({ session, profileData, onBack, onEditProfile }) {
           <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
             SERVICES ({profileData.services.length})
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'grid', gap: '10px' }}>
             {profileData.services.map((service, i) => (
+              <div key={i} style={{
+                backgroundColor: colors.background,
+                borderRadius: '8px',
+                padding: '12px',
+                border: `1px solid ${colors.gray}20`
+              }}>
+                <p style={{ color: colors.primary, margin: '0 0 4px 0', fontSize: '13px', fontWeight: '600' }}>
+                  {service.category || 'Service'}
+                </p>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>
+                  {service.description?.substring(0, 100) || 'No description'}
+                  {service.description?.length > 100 ? '...' : ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* NAICS Codes */}
+      {profileData?.naics_codes?.length > 0 && (
+        <div style={{
+          backgroundColor: colors.card,
+          borderRadius: '12px',
+          padding: '20px',
+          border: `1px solid ${colors.gray}30`,
+          marginBottom: '20px'
+        }}>
+          <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
+            NAICS CODES ({profileData.naics_codes.length})
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {profileData.naics_codes.map((naics, i) => (
               <span key={i} style={{
-                backgroundColor: `${colors.primary}20`,
-                color: colors.primary,
+                backgroundColor: naics.isPrimary ? `${colors.primary}20` : `${colors.gray}20`,
+                color: naics.isPrimary ? colors.primary : colors.white,
                 padding: '6px 12px',
                 borderRadius: '20px',
-                fontSize: '12px'
+                fontSize: '12px',
+                border: naics.isPrimary ? `1px solid ${colors.primary}` : 'none'
               }}>
-                {service.name || service}
+                {naics.isPrimary && '⭐ '}{naics.code} - {naics.description}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Certifications */}
+      {profileData?.certifications?.length > 0 && (
+        <div style={{
+          backgroundColor: colors.card,
+          borderRadius: '12px',
+          padding: '20px',
+          border: `1px solid ${colors.gray}30`,
+          marginBottom: '20px'
+        }}>
+          <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
+            CERTIFICATIONS ({profileData.certifications.length})
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {profileData.certifications.map((cert, i) => (
+              <span key={i} style={{
+                backgroundColor: `${colors.gold}20`,
+                color: colors.gold,
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                border: `1px solid ${colors.gold}50`
+              }}>
+                ✓ {cert.name || cert}
               </span>
             ))}
           </div>
@@ -937,6 +1000,40 @@ function MyBucketPage({ session, profileData, onBack, onEditProfile }) {
               </p>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Empty State - if nothing in profile */}
+      {!profileData?.company_name && !profileData?.services?.length && (
+        <div style={{
+          backgroundColor: colors.card,
+          borderRadius: '12px',
+          padding: '40px',
+          border: `2px dashed ${colors.gold}`,
+          textAlign: 'center',
+          marginBottom: '20px'
+        }}>
+          <p style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '18px', fontWeight: '600' }}>
+            Your BUCKET is empty!
+          </p>
+          <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>
+            Start filling your BUCKET in the Business Builder so CR-AI can help you win contracts.
+          </p>
+          <button
+            onClick={onEditProfile}
+            style={{
+              padding: '12px 24px',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: colors.primary,
+              color: colors.background,
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            Start Building →
+          </button>
         </div>
       )}
 
