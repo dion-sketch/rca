@@ -445,6 +445,17 @@ export default function ShopContracts({ session, onNavigate }) {
                   >
                     <div>
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                        {/* Contract or Grant badge */}
+                        <span style={{
+                          backgroundColor: (opp.bid_type?.toLowerCase().includes('grant') || opp.source === 'grants_gov') ? '#9B59B6' : '#3498DB',
+                          color: '#fff',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '10px',
+                          fontWeight: '700'
+                        }}>
+                          {(opp.bid_type?.toLowerCase().includes('grant') || opp.source === 'grants_gov') ? 'GRANT' : 'CONTRACT'}
+                        </span>
                         {score.isMatch && (
                           <span style={{
                             backgroundColor: getScoreColor(score.current),
@@ -539,6 +550,20 @@ export default function ShopContracts({ session, onNavigate }) {
               maxWidth: '600px', width: '100%', maxHeight: '85vh', overflow: 'auto'
             }}
           >
+            {/* Contract or Grant badge */}
+            <span style={{
+              display: 'inline-block',
+              backgroundColor: (selectedOpp.bid_type?.toLowerCase().includes('grant') || selectedOpp.source === 'grants_gov') ? '#9B59B6' : '#3498DB',
+              color: '#fff',
+              padding: '6px 14px',
+              borderRadius: '12px',
+              fontSize: '12px',
+              fontWeight: '700',
+              marginBottom: '15px'
+            }}>
+              {(selectedOpp.bid_type?.toLowerCase().includes('grant') || selectedOpp.source === 'grants_gov') ? '📋 GRANT' : '📄 CONTRACT'}
+            </span>
+
             <h2 style={{ color: colors.text, margin: '0 0 20px 0' }}>
               {selectedOpp.title || selectedOpp.commodity_description}
             </h2>
