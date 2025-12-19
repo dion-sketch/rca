@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import AdminCSVUpload from './AdminCSVUpload'
 
 const colors = {
   primary: '#00FF00',
@@ -19,7 +18,6 @@ function MyCart({ session, onBack, profileData }) {
   const [selectedOpportunity, setSelectedOpportunity] = useState(null)
   const [allSubmissions, setAllSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showCSVUpload, setShowCSVUpload] = useState(false) // Admin CSV upload modal
   
   const [showConfirm, setShowConfirm] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -382,17 +380,11 @@ function MyCart({ session, onBack, profileData }) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
-      {/* Admin CSV Upload Modal */}
-      {showCSVUpload && <AdminCSVUpload onClose={() => setShowCSVUpload(false)} />}
-      
       <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Dashboard</button>
           <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>My Cart</h1>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={() => setShowCSVUpload(true)} style={{ padding: '8px 12px', borderRadius: '8px', border: `1px solid ${colors.gold}50`, backgroundColor: 'transparent', color: colors.gold, cursor: 'pointer', fontSize: '12px' }} title="Import opportunities from CSV">📥 Import</button>
-            <button onClick={() => setShowAddManual(true)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>+ Add</button>
-          </div>
+          <button onClick={() => setShowAddManual(true)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>+ Add</button>
         </div>
       </div>
 
@@ -590,22 +582,7 @@ function MyCart({ session, onBack, profileData }) {
             {searchMode === 'results' && searchResults && (
               <>
                 <h2 style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '20px' }}>✓ Found It!</h2>
-                <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '14px' }}>Is this the opportunity you're looking for?</p>
-                
-                {/* Search Method Badge */}
-                {searchResults.searchMethod && (
-                  <div style={{ 
-                    display: 'inline-block',
-                    padding: '4px 10px', 
-                    borderRadius: '12px', 
-                    backgroundColor: searchResults.searchMethod === 'database' ? `${colors.primary}20` : `${colors.gold}20`,
-                    color: searchResults.searchMethod === 'database' ? colors.primary : colors.gold,
-                    fontSize: '11px',
-                    marginBottom: '15px'
-                  }}>
-                    {searchResults.searchMethod === 'database' ? '⚡ Instant Match (Database)' : '🔍 Web Search'}
-                  </div>
-                )}
+                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>Is this the opportunity you're looking for?</p>
                 
                 <div style={{ backgroundColor: colors.background, borderRadius: '12px', padding: '20px', marginBottom: '20px', border: `1px solid ${colors.primary}50` }}>
                   <h3 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '18px' }}>{searchResults.title}</h3>
@@ -642,7 +619,7 @@ function MyCart({ session, onBack, profileData }) {
                       </div>
                     )}
                     
-                    {/* Contact Info (from database) */}
+                    {/* Contact Info */}
                     {(searchResults.contactName || searchResults.contactEmail || searchResults.contactPhone) && (
                       <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${colors.gray}30` }}>
                         <span style={{ color: colors.gray, fontSize: '13px', display: 'block', marginBottom: '8px' }}>Contact:</span>
@@ -655,7 +632,6 @@ function MyCart({ session, onBack, profileData }) {
                     {searchResults.source && (
                       <div style={{ marginTop: '5px' }}>
                         <span style={{ color: colors.gray, fontSize: '11px' }}>Source: {searchResults.source}</span>
-                        {searchResults.confidence && <span style={{ color: searchResults.confidence === 'high' ? colors.primary : colors.gold, fontSize: '11px', marginLeft: '10px' }}>({searchResults.confidence} confidence)</span>}
                       </div>
                     )}
                   </div>
