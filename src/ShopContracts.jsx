@@ -5,6 +5,14 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { 
+  SKIP_WORDS, 
+  NAICS_KEYWORDS, 
+  SCORING, 
+  MATCH_LEVELS, 
+  CERT_KEYWORDS,
+  MIN_KEYWORD_LENGTH 
+} from './matchingConfig'
 
 export default function ShopContracts({ session }) {
   const [profile, setProfile] = useState(null)
@@ -145,37 +153,36 @@ export default function ShopContracts({ session }) {
         if (oppNaics.startsWith(code4) || code.startsWith(oppNaics.substring(0, 4))) {
           naicsMatched = true
           matchedCode = description || code
-          score += 40
-          breakdown.naics = { points: 40, matched: description || code }
+          score += SCORING.NAICS_DIRECT_CODE_MATCH
+          breakdown.naics = { points: SCORING.NAICS_DIRECT_CODE_MATCH, matched: description || code }
           break
         }
       }
       
       // Second: KEYWORD matching from NAICS description
-      // Extract meaningful keywords from the NAICS description
       if (!naicsMatched && description) {
-        const keywords = description.split(/[\s,]+/).filter(w => w.length > 4)
+        const keywords = description.split(/[\s,]+/).filter(w => w.length > MIN_KEYWORD_LENGTH && !SKIP_WORDS.includes(w))
         for (const keyword of keywords) {
           if (oppText.includes(keyword)) {
             naicsMatched = true
             matchedCode = description
-            score += 35
-            breakdown.naics = { points: 35, matched: `${keyword} (${code})` }
+            score += SCORING.NAICS_KEYWORD_FROM_DESC
+            breakdown.naics = { points: SCORING.NAICS_KEYWORD_FROM_DESC, matched: `${keyword} (${code})` }
             break
           }
         }
         if (naicsMatched) break
       }
 
-      // Third: Check common industry keywords based on NAICS code prefix
+      // Third: Check industry keywords from config
       if (!naicsMatched) {
         const industryKeywords = getNaicsKeywords(code)
         for (const keyword of industryKeywords) {
           if (oppText.includes(keyword)) {
             naicsMatched = true
             matchedCode = keyword
-            score += 30
-            breakdown.naics = { points: 30, matched: keyword }
+            score += SCORING.NAICS_INDUSTRY_KEYWORD
+            breakdown.naics = { points: SCORING.NAICS_INDUSTRY_KEYWORD, matched: keyword }
             break
           }
         }
@@ -196,21 +203,18 @@ export default function ShopContracts({ session }) {
     let serviceMatched = false
     let matchedService = null
 
-    // Generic words to SKIP - too common
-    const skipWords = ['services', 'service', 'management', 'support', 'professional', 'general', 'other', 'consulting', 'solutions', 'development', 'training', 'program', 'project']
-
     // Create keyword list from services
     const serviceKeywords = []
     for (const svc of userServices) {
       const name = (svc.category || svc.name || svc || '').toLowerCase()
-      if (name && name.length > 5) {
+      if (name && name.length > MIN_KEYWORD_LENGTH) {
         // Add full service name if specific enough
-        if (!skipWords.some(skip => name === skip)) {
+        if (!SKIP_WORDS.some(skip => name === skip)) {
           serviceKeywords.push(name)
         }
         // Only add individual words if they're specific (not in skip list)
         name.split(/[\s,]+/).forEach(word => {
-          if (word.length > 5 && !skipWords.includes(word)) {
+          if (word.length > MIN_KEYWORD_LENGTH && !SKIP_WORDS.includes(word)) {
             serviceKeywords.push(word)
           }
         })
@@ -219,11 +223,11 @@ export default function ShopContracts({ session }) {
 
     // Check for matches - require word to be meaningful
     for (const keyword of serviceKeywords) {
-      if (keyword.length > 5 && oppText.includes(keyword)) {
+      if (keyword.length > MIN_KEYWORD_LENGTH && oppText.includes(keyword)) {
         serviceMatched = true
         matchedService = keyword
-        score += 25
-        breakdown.services = { points: 25, matched: keyword }
+        score += SCORING.SERVICES_KEYWORD_MATCH
+        breakdown.services = { points: SCORING.SERVICES_KEYWORD_MATCH, matched: keyword }
         break
       }
     }
@@ -240,15 +244,15 @@ export default function ShopContracts({ session }) {
 
     if (userState && oppState) {
       if (userState === oppState) {
-        score += 20
-        breakdown.location = { points: 20, matched: oppState }
+        score += SCORING.LOCATION_STATE_MATCH
+        breakdown.location = { points: SCORING.LOCATION_STATE_MATCH, matched: oppState }
       } else {
         breakdown.location = { points: 0, matched: null, userState, oppState }
       }
     } else if (!oppState) {
       // No location requirement = available to all
-      score += 10
-      breakdown.location = { points: 10, matched: 'Open to all locations' }
+      score += SCORING.LOCATION_OPEN_TO_ALL
+      breakdown.location = { points: SCORING.LOCATION_OPEN_TO_ALL, matched: 'Open to all locations' }
     }
 
     // ============================================
@@ -257,11 +261,10 @@ export default function ShopContracts({ session }) {
     const userCerts = userProfile.certifications || []
     if (userCerts.length > 0) {
       // Check if any cert keywords in description
-      const certKeywords = ['small business', 'minority', 'woman', 'veteran', 'dvbe', 'mbe', 'wbe', 'sbe', 'dbe', '8(a)', 'hubzone']
-      for (const kw of certKeywords) {
+      for (const kw of CERT_KEYWORDS) {
         if (oppText.includes(kw)) {
-          score += 10
-          breakdown.certifications = { points: 10, matched: kw }
+          score += SCORING.CERTIFICATIONS_BONUS
+          breakdown.certifications = { points: SCORING.CERTIFICATIONS_BONUS, matched: kw }
           break
         }
       }
@@ -272,8 +275,8 @@ export default function ShopContracts({ session }) {
     // ============================================
     const pastPerf = userProfile.past_performance || []
     if (pastPerf.length > 0) {
-      score += 5
-      breakdown.pastPerformance = { points: 5 }
+      score += SCORING.PAST_PERFORMANCE_BONUS
+      breakdown.pastPerformance = { points: SCORING.PAST_PERFORMANCE_BONUS }
     }
 
     // ============================================
@@ -283,15 +286,15 @@ export default function ShopContracts({ session }) {
     
     // Must have NAICS or Services match to be considered a real match
     if (naicsMatched || serviceMatched) {
-      if (score >= 55) matchLevel = 'high'
-      else if (score >= 35) matchLevel = 'medium'
+      if (score >= MATCH_LEVELS.HIGH) matchLevel = 'high'
+      else if (score >= MATCH_LEVELS.MEDIUM) matchLevel = 'medium'
       else matchLevel = 'low'
     } else if (score > 0) {
       matchLevel = 'low'
     }
 
-    // CR-AI potential boost (max +25, not +30)
-    const potential = Math.min(score + 25, 95)
+    // CR-AI potential boost
+    const potential = Math.min(score + SCORING.CRAI_BOOST, SCORING.MAX_SCORE)
 
     return {
       current: Math.min(score, 100),
@@ -356,50 +359,10 @@ export default function ShopContracts({ session }) {
     return colors.muted
   }
 
-  // Helper: Get industry keywords based on NAICS code prefix
-  // ONLY specific keywords - no generic words like "services"
+  // Helper: Get industry keywords from config
   const getNaicsKeywords = (code) => {
     const prefix = code.substring(0, 4)
-    const keywords = {
-      // Professional Services
-      '5411': ['legal', 'attorney', 'law firm'],
-      '5412': ['accounting', 'bookkeeping', 'audit', 'tax preparation'],
-      '5413': ['architect', 'engineering', 'surveying'],
-      '5414': ['graphic design', 'interior design'],
-      '5415': ['software', 'programming', 'IT support', 'cybersecurity'],
-      '5416': ['consulting', 'strategic planning'],
-      '5417': ['research', 'laboratory', 'scientific'],
-      '5418': ['advertising', 'public relations', 'media buying', 'marketing campaign'],
-      '5419': ['veterinary', 'photography'],
-      // Healthcare - SPECIFIC terms
-      '6211': ['physician', 'doctor', 'medical practice'],
-      '6212': ['dental', 'dentist', 'orthodont'],
-      '6213': ['mental health', 'behavioral health', 'counseling', 'therapy', 'psychiatric', 'psychologist', 'therapist'],
-      '6214': ['outpatient', 'health center', 'clinic'],
-      '6215': ['laboratory', 'diagnostic', 'blood test'],
-      '6216': ['home health', 'home care', 'nursing home'],
-      '6219': ['ambulance', 'paramedic'],
-      // Social Services - SPECIFIC terms
-      '6241': ['family service', 'youth program', 'child welfare', 'social work', 'case management', 'foster', 'adoption', 'permanency'],
-      '6242': ['emergency shelter', 'homeless', 'food bank', 'relief'],
-      '6243': ['vocational', 'rehabilitation', 'job training', 'workforce development'],
-      '6244': ['child care', 'daycare', 'preschool', 'childcare'],
-      // Arts/Entertainment - SPECIFIC terms
-      '7111': ['performing arts', 'theater', 'theatre', 'symphony', 'opera', 'ballet'],
-      '7112': ['sports team', 'stadium'],
-      '7113': ['concert', 'festival', 'event promotion', 'live event', 'entertainment event'],
-      '7114': ['talent agent', 'artist manager'],
-      '7115': ['artist', 'musician', 'performer'],
-      // Education
-      '6111': ['elementary school', 'secondary school', 'K-12'],
-      '6112': ['university', 'college', 'higher education'],
-      '6113': ['community college'],
-      '6114': ['business school', 'professional training'],
-      '6115': ['trade school', 'technical training'],
-      '6116': ['tutoring', 'test prep'],
-      '6117': ['education support']
-    }
-    return keywords[prefix] || []
+    return NAICS_KEYWORDS[prefix] || []
   }
 
   const getMatchLabel = (matchLevel) => {
