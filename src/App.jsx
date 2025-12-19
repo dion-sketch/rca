@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import BusinessBuilder from './BusinessBuilder'
 import MyCart from './MyCart'
 import ShopContracts from './ShopContracts'
+import ResponseRoom from './ResponseRoom'
 
 // Contract Ready Brand Colors
 const colors = {
@@ -393,7 +394,7 @@ function App() {
         <ResponseRoom 
           session={session}
           profileData={profileData}
-          onBack={() => setCurrentPage('my-cart')}
+          onBack={() => setCurrentPage('dashboard')}
         />
       ) : currentPage === 'my-bucket' ? (
         <MyBucketPage 
@@ -660,60 +661,6 @@ function App() {
       }}>
         <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>
           Powered by <span style={{ color: colors.primary }}>Contract Ready</span> • RCA Technology
-        </p>
-      </div>
-    </div>
-  )
-}
-
-// ==========================================
-// RESPONSE ROOM
-// ==========================================
-function ResponseRoom({ session, profileData, onBack }) {
-  return (
-    <div style={{ padding: '40px 30px', maxWidth: '900px', margin: '0 auto', paddingBottom: '100px' }}>
-      <button 
-        onClick={onBack} 
-        style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '16px', marginBottom: '20px' }}
-      >
-        ← Back to My Cart
-      </button>
-
-      <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-        <div style={{ fontSize: '60px', marginBottom: '15px' }}>📝</div>
-        <h1 style={{ color: '#fff', margin: '0 0 10px 0' }}>Response Room</h1>
-        <p style={{ color: '#888', margin: 0 }}>Where BUCKET + RCA write winning responses together</p>
-      </div>
-
-      <div style={{
-        backgroundColor: '#1a1a1a',
-        borderRadius: '16px',
-        padding: '40px',
-        border: '2px solid #00FF00',
-        textAlign: 'center'
-      }}>
-        <h2 style={{ color: '#00FF00', margin: '0 0 20px 0' }}>The 5 Phases</h2>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          gap: '15px', 
-          flexWrap: 'wrap',
-          marginBottom: '20px'
-        }}>
-          {['Overview', 'Strategy', 'Answers', 'Review', 'Submit'].map((phase, i) => (
-            <div key={phase} style={{
-              backgroundColor: '#000',
-              padding: '10px 20px',
-              borderRadius: '8px',
-              border: '1px solid #333'
-            }}>
-              <span style={{ color: '#00FF00', fontWeight: '700' }}>{i + 1}.</span>
-              <span style={{ color: '#fff', marginLeft: '8px' }}>{phase}</span>
-            </div>
-          ))}
-        </div>
-        <p style={{ color: '#FFD700', margin: 0, fontSize: '14px' }}>
-          Select an opportunity from My Cart to start
         </p>
       </div>
     </div>
