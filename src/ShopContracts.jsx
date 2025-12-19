@@ -310,6 +310,8 @@ export default function ShopContracts({ session, onNavigate }) {
         description: opportunity.description || opportunity.commodity_description || '',
         estimated_value: opportunity.estimated_value || '',
         cr_match_score: opportunity.matchScore?.current || 50,
+        source_url: opportunity.source_url || '',
+        source: opportunity.source || '',
         created_at: new Date().toISOString()
       })
       
