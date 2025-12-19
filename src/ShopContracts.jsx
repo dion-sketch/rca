@@ -1,67 +1,56 @@
 // ============================================
-// ShopContracts.jsx
-// Search & Match Opportunities from Database
-// SELF-CONTAINED - No external dependencies
+// ShopContracts.jsx - V2
+// REAL BUCKET MATCHING - Sorted by Best Match
 // ============================================
 
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 export default function ShopContracts({ session }) {
   const [profile, setProfile] = useState(null)
   const [opportunities, setOpportunities] = useState([])
-  const [filteredOpps, setFilteredOpps] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searching, setSearching] = useState(false)
   const [error, setError] = useState(null)
   
-  // Search & Filter State
+  // Search & Filter
   const [searchTerm, setSearchTerm] = useState('')
-  const [filters, setFilters] = useState({
-    level: 'all',
-    state: '',
-    showExpired: false
-  })
+  const [stateFilter, setStateFilter] = useState('')
+  const [showLowMatches, setShowLowMatches] = useState(false)
   
   // Pagination
-  const [page, setPage] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const perPage = 20
+  const [displayCount, setDisplayCount] = useState(20)
   
-  // Selected opportunity for detail view
+  // Selected opportunity
   const [selectedOpp, setSelectedOpp] = useState(null)
   const [addingToCart, setAddingToCart] = useState(false)
 
-  // Colors - ALL INLINE, no imports
+  // Colors
   const colors = {
-    primary: '#39FF14',
+    primary: '#00FF00',
     gold: '#FFD700',
     background: '#000000',
-    surface: '#111111',
-    card: '#1a1a1a',
+    surface: '#0a0a0a',
+    card: '#111111',
     text: '#FFFFFF',
-    textMuted: '#888888',
+    muted: '#888888',
     border: '#333333',
-    error: '#FF4444',
-    success: '#39FF14'
+    lowMatch: '#FF6B6B',
+    medMatch: '#FFD700',
+    highMatch: '#00FF00'
   }
 
   // ==========================================
-  // LOAD PROFILE & INITIAL OPPORTUNITIES
+  // LOAD PROFILE ON MOUNT
   // ==========================================
   useEffect(() => {
     if (session?.user?.id) {
       loadProfile()
-      loadOpportunities()
     }
   }, [session])
 
   const loadProfile = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('business_profiles')
         .select('*')
         .eq('user_id', session.user.id)
@@ -69,229 +58,288 @@ export default function ShopContracts({ session }) {
       
       if (data) {
         setProfile(data)
+        loadOpportunities(data)
+      } else {
+        // No profile yet - still load opps but with 0 scores
+        loadOpportunities(null)
       }
     } catch (err) {
-      console.error('Error loading profile:', err)
+      console.error('Profile load error:', err)
+      loadOpportunities(null)
     }
   }
 
-  const loadOpportunities = async () => {
+  // ==========================================
+  // LOAD & SCORE OPPORTUNITIES
+  // ==========================================
+  const loadOpportunities = async (userProfile) => {
     setLoading(true)
     setError(null)
+    
     try {
-      // Get total count first
-      const { count, error: countError } = await supabase
-        .from('opportunities')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_active', true)
-        .gte('close_date', new Date().toISOString())
-      
-      if (countError) {
-        console.error('Count error:', countError)
-      }
-      
-      setTotalCount(count || 0)
-
-      // Get first page
+      // Get active, non-expired opportunities
       const { data, error } = await supabase
         .from('opportunities')
         .select('*')
         .eq('is_active', true)
         .gte('close_date', new Date().toISOString())
         .order('close_date', { ascending: true })
-        .range(0, perPage - 1)
+        .limit(1000)
 
       if (error) throw error
       
-      setOpportunities(data || [])
-      setFilteredOpps(data || [])
+      if (!data || data.length === 0) {
+        setOpportunities([])
+        setLoading(false)
+        return
+      }
+
+      // Score each opportunity against BUCKET
+      const scored = data.map(opp => ({
+        ...opp,
+        matchScore: calculateMatchScore(opp, userProfile)
+      }))
+
+      // Sort by match score (HIGHEST FIRST)
+      scored.sort((a, b) => b.matchScore.current - a.matchScore.current)
+
+      setOpportunities(scored)
     } catch (err) {
-      console.error('Error loading opportunities:', err)
-      setError('Failed to load opportunities. Check console for details.')
+      console.error('Load error:', err)
+      setError('Failed to load opportunities')
     } finally {
       setLoading(false)
     }
   }
 
   // ==========================================
-  // SEARCH & FILTER
+  // REAL MATCH SCORING - Based on BUCKET
   // ==========================================
-  const handleSearch = async () => {
-    setSearching(true)
-    setPage(1)
-    setError(null)
-    
-    try {
-      let query = supabase
-        .from('opportunities')
-        .select('*', { count: 'exact' })
-        .eq('is_active', true)
-      
-      // Don't show expired unless explicitly requested
-      if (!filters.showExpired) {
-        query = query.gte('close_date', new Date().toISOString())
-      }
-      
-      // Search term - search multiple fields
-      if (searchTerm.trim()) {
-        const term = searchTerm.trim().toLowerCase()
-        query = query.or(`title.ilike.%${term}%,commodity_description.ilike.%${term}%,contact_name.ilike.%${term}%`)
-      }
-      
-      // State filter
-      if (filters.state) {
-        query = query.eq('state', filters.state)
-      }
-      
-      // Order by close date (soonest first)
-      query = query.order('close_date', { ascending: true })
-      
-      // Pagination
-      query = query.range(0, perPage - 1)
-      
-      const { data, error, count } = await query
-
-      if (error) throw error
-      
-      setFilteredOpps(data || [])
-      setTotalCount(count || 0)
-      
-    } catch (err) {
-      console.error('Search error:', err)
-      setError('Search failed. Please try again.')
-    } finally {
-      setSearching(false)
+  const calculateMatchScore = (opp, userProfile) => {
+    // No profile = 0% match
+    if (!userProfile) {
+      return { current: 0, potential: 40, breakdown: {}, matchLevel: 'none' }
     }
-  }
 
-  // ==========================================
-  // BUCKET MATCH - Search by User's Profile
-  // ==========================================
-  const searchByBucket = async () => {
-    if (!profile) {
-      setError('Please complete your BUCKET first to use smart matching')
-      return
-    }
-    
-    setSearching(true)
-    setPage(1)
-    setError(null)
-    
-    try {
-      let query = supabase
-        .from('opportunities')
-        .select('*', { count: 'exact' })
-        .eq('is_active', true)
-        .gte('close_date', new Date().toISOString())
-      
-      // Match by state/location if user has one set
-      if (profile.state) {
-        query = query.eq('state', profile.state)
-      }
-      
-      query = query.order('close_date', { ascending: true })
-      query = query.range(0, perPage - 1)
-      
-      const { data, error, count } = await query
-
-      if (error) throw error
-      
-      setFilteredOpps(data || [])
-      setTotalCount(count || 0)
-      setSearchTerm('')
-      
-    } catch (err) {
-      console.error('BUCKET search error:', err)
-      setError('Smart search failed. Showing all opportunities.')
-      loadOpportunities()
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  // ==========================================
-  // LOAD MORE (Pagination)
-  // ==========================================
-  const loadMore = async () => {
-    const nextPage = page + 1
-    const start = (nextPage - 1) * perPage
-    
-    try {
-      let query = supabase
-        .from('opportunities')
-        .select('*')
-        .eq('is_active', true)
-        .gte('close_date', new Date().toISOString())
-      
-      if (searchTerm.trim()) {
-        const term = searchTerm.trim().toLowerCase()
-        query = query.or(`title.ilike.%${term}%,commodity_description.ilike.%${term}%`)
-      }
-      
-      query = query.order('close_date', { ascending: true })
-      query = query.range(start, start + perPage - 1)
-      
-      const { data, error } = await query
-      
-      if (error) throw error
-      
-      setFilteredOpps([...filteredOpps, ...(data || [])])
-      setPage(nextPage)
-      
-    } catch (err) {
-      console.error('Load more error:', err)
-    }
-  }
-
-  // ==========================================
-  // CALCULATE MATCH SCORE
-  // ==========================================
-  const calculateMatchScore = (opportunity) => {
-    if (!profile) return { current: 30, potential: 65 }
-    
     let score = 0
-    
-    // Location match (25 points)
-    if (profile.state && opportunity.state) {
-      if (profile.state === opportunity.state) {
-        score += 25
+    const breakdown = {}
+    const oppText = `${opp.title || ''} ${opp.commodity_description || ''} ${opp.naics_code || ''}`.toLowerCase()
+
+    // ============================================
+    // 1. NAICS CODE MATCH (0-40 points)
+    // This is THE most important matching criteria
+    // ============================================
+    const userNaics = userProfile.naics_codes || []
+    let naicsMatched = false
+    let matchedCode = null
+
+    for (const naicsItem of userNaics) {
+      const code = (naicsItem.code || naicsItem || '').toString()
+      if (!code) continue
+
+      // Check if opportunity has this NAICS code
+      // Match on first 4 digits (industry group) or full code
+      const code4 = code.substring(0, 4)
+      const code6 = code.substring(0, 6)
+      
+      // Direct NAICS code match
+      if (opp.naics_code) {
+        const oppNaics = opp.naics_code.toString()
+        if (oppNaics.startsWith(code4) || code.startsWith(oppNaics.substring(0, 4))) {
+          naicsMatched = true
+          matchedCode = code
+          score += 40
+          breakdown.naics = { points: 40, matched: code }
+          break
+        }
       }
-    } else {
-      score += 15
+      
+      // Check if NAICS appears in description
+      if (!naicsMatched && oppText.includes(code4)) {
+        naicsMatched = true
+        matchedCode = code
+        score += 30
+        breakdown.naics = { points: 30, matched: code }
+        break
+      }
     }
-    
-    // NAICS codes (25 points)
-    if (profile.naics_codes?.length > 0) {
-      score += 20
+
+    // If no NAICS match at all, this is probably not a good fit
+    if (!naicsMatched && userNaics.length > 0) {
+      breakdown.naics = { points: 0, matched: null }
     }
-    
-    // Services (20 points)
-    if (profile.services?.length > 0) {
-      score += 15
+
+    // ============================================
+    // 2. SERVICES/KEYWORDS MATCH (0-25 points)
+    // Check if user's services appear in description
+    // ============================================
+    const userServices = userProfile.services || []
+    let serviceMatched = false
+    let matchedService = null
+
+    // Create keyword list from services
+    const serviceKeywords = []
+    for (const svc of userServices) {
+      const name = (svc.category || svc.name || svc || '').toLowerCase()
+      if (name) {
+        serviceKeywords.push(name)
+        // Also add individual words
+        name.split(/[\s,]+/).forEach(word => {
+          if (word.length > 3) serviceKeywords.push(word)
+        })
+      }
     }
-    
-    // Certifications (15 points)
-    if (profile.certifications?.length > 0) {
-      score += Math.min(profile.certifications.length * 5, 15)
+
+    // Check for matches
+    for (const keyword of serviceKeywords) {
+      if (keyword.length > 3 && oppText.includes(keyword)) {
+        serviceMatched = true
+        matchedService = keyword
+        score += 25
+        breakdown.services = { points: 25, matched: keyword }
+        break
+      }
     }
-    
-    // Past performance (15 points)
-    if (profile.past_performance?.length > 0) {
-      score += Math.min(profile.past_performance.length * 5, 15)
+
+    if (!serviceMatched && userServices.length > 0) {
+      breakdown.services = { points: 0, matched: null }
     }
-    
-    const potential = Math.min(score + 35, 95)
-    
+
+    // ============================================
+    // 3. LOCATION MATCH (0-20 points)
+    // ============================================
+    const userState = userProfile.state
+    const oppState = opp.state
+
+    if (userState && oppState) {
+      if (userState === oppState) {
+        score += 20
+        breakdown.location = { points: 20, matched: oppState }
+      } else {
+        breakdown.location = { points: 0, matched: null, userState, oppState }
+      }
+    } else if (!oppState) {
+      // No location requirement = available to all
+      score += 10
+      breakdown.location = { points: 10, matched: 'Open to all locations' }
+    }
+
+    // ============================================
+    // 4. CERTIFICATIONS BONUS (0-10 points)
+    // ============================================
+    const userCerts = userProfile.certifications || []
+    if (userCerts.length > 0) {
+      // Check if any cert keywords in description
+      const certKeywords = ['small business', 'minority', 'woman', 'veteran', 'dvbe', 'mbe', 'wbe', 'sbe', 'dbe', '8(a)', 'hubzone']
+      for (const kw of certKeywords) {
+        if (oppText.includes(kw)) {
+          score += 10
+          breakdown.certifications = { points: 10, matched: kw }
+          break
+        }
+      }
+    }
+
+    // ============================================
+    // 5. PAST PERFORMANCE BONUS (0-5 points)
+    // ============================================
+    const pastPerf = userProfile.past_performance || []
+    if (pastPerf.length > 0) {
+      score += 5
+      breakdown.pastPerformance = { points: 5 }
+    }
+
+    // ============================================
+    // DETERMINE MATCH LEVEL
+    // ============================================
+    let matchLevel = 'low'
+    if (score >= 60) matchLevel = 'high'
+    else if (score >= 35) matchLevel = 'medium'
+    else if (score > 0) matchLevel = 'low'
+    else matchLevel = 'none'
+
+    // CR-AI potential boost (max +30)
+    const potential = Math.min(score + 30, 95)
+
     return {
       current: Math.min(score, 100),
-      potential: potential
+      potential,
+      breakdown,
+      matchLevel,
+      naicsMatched,
+      serviceMatched
     }
   }
 
   // ==========================================
-  // START RESPONSE - Save and go to Response Room
+  // FILTER OPPORTUNITIES
   // ==========================================
-  const addToCart = async (opportunity) => {
+  const getFilteredOpportunities = () => {
+    let filtered = [...opportunities]
+
+    // Search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(opp => 
+        (opp.title || '').toLowerCase().includes(term) ||
+        (opp.commodity_description || '').toLowerCase().includes(term) ||
+        (opp.contact_name || '').toLowerCase().includes(term)
+      )
+    }
+
+    // State filter
+    if (stateFilter) {
+      filtered = filtered.filter(opp => opp.state === stateFilter)
+    }
+
+    // Hide low matches by default (unless toggled)
+    if (!showLowMatches) {
+      filtered = filtered.filter(opp => opp.matchScore.current >= 20)
+    }
+
+    return filtered
+  }
+
+  // ==========================================
+  // HELPER FUNCTIONS
+  // ==========================================
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'No date'
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  const getDaysLeft = (dateStr) => {
+    if (!dateStr) return null
+    const due = new Date(dateStr)
+    const now = new Date()
+    const diff = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
+    return diff
+  }
+
+  const getScoreColor = (score) => {
+    if (score >= 60) return colors.highMatch
+    if (score >= 35) return colors.medMatch
+    if (score > 0) return colors.lowMatch
+    return colors.muted
+  }
+
+  const getMatchLabel = (matchLevel) => {
+    switch (matchLevel) {
+      case 'high': return '🎯 Strong Match'
+      case 'medium': return '✨ Good Potential'
+      case 'low': return '📋 Review Needed'
+      default: return '❌ Low Match'
+    }
+  }
+
+  // Get unique states for filter
+  const availableStates = [...new Set(opportunities.map(o => o.state).filter(Boolean))].sort()
+
+  // ==========================================
+  // START RESPONSE
+  // ==========================================
+  const startResponse = async (opportunity) => {
     if (!session?.user?.id) return
     
     setAddingToCart(true)
@@ -306,19 +354,18 @@ export default function ShopContracts({ session }) {
         .single()
       
       if (existing) {
-        // Already exists - just notify and they can find it in Response Room
-        alert('✅ This opportunity is already in your Response Room!')
+        alert('✅ Already in your Response Room!')
         setAddingToCart(false)
         setSelectedOpp(null)
         return
       }
       
-      // Add to submissions with status 'in_progress'
+      // Add to submissions
       const { error } = await supabase
         .from('submissions')
         .insert({
           user_id: session.user.id,
-          title: opportunity.title || opportunity.commodity_description || 'Untitled Opportunity',
+          title: opportunity.title || opportunity.commodity_description || 'Untitled',
           agency: opportunity.contact_name || 'Agency not specified',
           due_date: opportunity.close_date,
           status: 'in_progress',
@@ -326,684 +373,542 @@ export default function ShopContracts({ session }) {
           description: opportunity.commodity_description || '',
           contact_email: opportunity.contact_email || '',
           contact_phone: opportunity.contact_phone || '',
-          location: opportunity.state ? `${opportunity.state}${opportunity.county ? ', ' + opportunity.county : ''}` : '',
+          location: opportunity.state || '',
+          match_score: opportunity.matchScore?.current || 0,
           created_at: new Date().toISOString()
         })
       
       if (error) throw error
       
-      alert('✅ Response started! Go to Response Room to continue.')
+      alert('✅ Added to Response Room! Go there to start your response.')
       setSelectedOpp(null)
       
     } catch (err) {
-      console.error('Start response error:', err)
-      alert('Failed to start response. Please try again.')
+      console.error('Error:', err)
+      alert('Failed to add. Please try again.')
     } finally {
       setAddingToCart(false)
     }
   }
 
   // ==========================================
-  // FORMAT DATE
-  // ==========================================
-  const formatDate = (dateString) => {
-    if (!dateString) return 'No deadline'
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
-    })
-  }
-
-  // ==========================================
-  // DAYS UNTIL DUE
-  // ==========================================
-  const getDaysUntil = (dateString) => {
-    if (!dateString) return null
-    const due = new Date(dateString)
-    const now = new Date()
-    const days = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
-    return days
-  }
-
-  // ==========================================
   // RENDER
   // ==========================================
+  const filtered = getFilteredOpportunities()
+  const displayed = filtered.slice(0, displayCount)
+  const hasMore = filtered.length > displayCount
+
+  // Count matches by level
+  const highMatches = opportunities.filter(o => o.matchScore.current >= 60).length
+  const medMatches = opportunities.filter(o => o.matchScore.current >= 35 && o.matchScore.current < 60).length
+  const lowMatches = opportunities.filter(o => o.matchScore.current > 0 && o.matchScore.current < 35).length
+
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: colors.background, 
-      color: colors.text,
-      padding: '20px',
-      paddingBottom: '80px'
+      backgroundColor: colors.background,
+      paddingBottom: '100px'
     }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        
-        {/* Header */}
-        <div style={{ marginBottom: '30px' }}>
-          <h1 style={{ 
-            fontSize: '28px', 
-            fontWeight: '700', 
-            margin: '0 0 10px 0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '15px'
-          }}>
+      {/* Header */}
+      <div style={{ 
+        padding: '30px',
+        borderBottom: `1px solid ${colors.border}`
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <h1 style={{ color: colors.text, margin: '0 0 10px 0', fontSize: '28px' }}>
             🛍️ Go Shopping
           </h1>
-          <p style={{ color: colors.textMuted, margin: 0 }}>
-            {totalCount.toLocaleString()} active opportunities • Find contracts & grants matched to your BUCKET
-          </p>
-        </div>
+          
+          {/* BUCKET Status */}
+          {profile ? (
+            <div style={{ 
+              backgroundColor: colors.card,
+              padding: '15px 20px',
+              borderRadius: '10px',
+              border: `1px solid ${colors.primary}30`,
+              marginBottom: '20px'
+            }}>
+              <p style={{ color: colors.primary, margin: 0, fontSize: '14px', fontWeight: '600' }}>
+                🪣 YOUR BUCKET IS READY
+              </p>
+              <p style={{ color: colors.muted, margin: '5px 0 0 0', fontSize: '13px' }}>
+                {profile.naics_codes?.length || 0} NAICS codes • 
+                {profile.services?.length || 0} services • 
+                {profile.state || 'No location set'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ 
+              backgroundColor: colors.card,
+              padding: '15px 20px',
+              borderRadius: '10px',
+              border: `1px solid ${colors.gold}`,
+              marginBottom: '20px'
+            }}>
+              <p style={{ color: colors.gold, margin: 0, fontSize: '14px', fontWeight: '600' }}>
+                ⚠️ Build Your BUCKET First
+              </p>
+              <p style={{ color: colors.muted, margin: '5px 0 0 0', fontSize: '13px' }}>
+                Add NAICS codes and services to see matched opportunities
+              </p>
+            </div>
+          )}
 
-        {/* BUCKET Match Banner */}
-        {profile && (
-          <div style={{
-            backgroundColor: colors.card,
-            border: `1px solid ${colors.primary}40`,
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '25px'
-          }}>
+          {/* Match Summary */}
+          {profile && !loading && (
             <div style={{ 
               display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '15px'
+              gap: '15px', 
+              marginBottom: '20px',
+              flexWrap: 'wrap'
             }}>
-              <div>
-                <p style={{ 
-                  color: colors.primary, 
-                  fontWeight: '600', 
-                  margin: '0 0 5px 0',
-                  fontSize: '14px'
-                }}>
-                  🪣 YOUR BUCKET IS READY
-                </p>
-                <p style={{ color: colors.textMuted, margin: 0, fontSize: '14px' }}>
-                  {profile.naics_codes?.length || 0} NAICS codes • {profile.services?.length || 0} services • {profile.state || 'No location set'}
-                </p>
+              <div style={{ 
+                backgroundColor: colors.card,
+                padding: '10px 15px',
+                borderRadius: '8px',
+                border: `1px solid ${colors.highMatch}50`
+              }}>
+                <span style={{ color: colors.highMatch, fontWeight: '700', fontSize: '18px' }}>{highMatches}</span>
+                <span style={{ color: colors.muted, fontSize: '13px', marginLeft: '8px' }}>Strong Matches</span>
               </div>
-              <button
-                onClick={searchByBucket}
-                disabled={searching}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: colors.primary,
-                  color: colors.background,
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontWeight: '700',
-                  cursor: searching ? 'not-allowed' : 'pointer',
-                  fontSize: '14px',
-                  opacity: searching ? 0.7 : 1
-                }}
-              >
-                {searching ? '🔍 Searching...' : '✨ Find Matches for My BUCKET'}
-              </button>
+              <div style={{ 
+                backgroundColor: colors.card,
+                padding: '10px 15px',
+                borderRadius: '8px',
+                border: `1px solid ${colors.medMatch}50`
+              }}>
+                <span style={{ color: colors.medMatch, fontWeight: '700', fontSize: '18px' }}>{medMatches}</span>
+                <span style={{ color: colors.muted, fontSize: '13px', marginLeft: '8px' }}>Good Potential</span>
+              </div>
+              <div style={{ 
+                backgroundColor: colors.card,
+                padding: '10px 15px',
+                borderRadius: '8px',
+                border: `1px solid ${colors.border}`
+              }}>
+                <span style={{ color: colors.muted, fontWeight: '700', fontSize: '18px' }}>{lowMatches}</span>
+                <span style={{ color: colors.muted, fontSize: '13px', marginLeft: '8px' }}>Low Match</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Search Bar */}
-        <div style={{
-          backgroundColor: colors.card,
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '25px'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            gap: '10px',
-            flexWrap: 'wrap'
-          }}>
+          {/* Search & Filters */}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               type="text"
-              placeholder="Search by keyword, agency, or description..."
+              placeholder="Search by keyword..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               style={{
-                flex: 1,
-                minWidth: '250px',
+                flex: '1',
+                minWidth: '200px',
                 padding: '12px 16px',
-                backgroundColor: colors.surface,
-                border: `1px solid ${colors.border}`,
                 borderRadius: '8px',
+                border: `1px solid ${colors.border}`,
+                backgroundColor: colors.card,
                 color: colors.text,
-                fontSize: '14px',
-                outline: 'none'
+                fontSize: '14px'
               }}
             />
             <select
-              value={filters.state}
-              onChange={(e) => setFilters({ ...filters, state: e.target.value })}
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
               style={{
                 padding: '12px 16px',
-                backgroundColor: colors.surface,
-                border: `1px solid ${colors.border}`,
                 borderRadius: '8px',
+                border: `1px solid ${colors.border}`,
+                backgroundColor: colors.card,
                 color: colors.text,
                 fontSize: '14px',
-                minWidth: '140px'
+                minWidth: '150px'
               }}
             >
               <option value="">All States</option>
-              <option value="CA">California</option>
-              <option value="TX">Texas</option>
-              <option value="NY">New York</option>
-              <option value="FL">Florida</option>
-              <option value="IL">Illinois</option>
-              <option value="PA">Pennsylvania</option>
-              <option value="OH">Ohio</option>
-              <option value="GA">Georgia</option>
-              <option value="NC">North Carolina</option>
-              <option value="MI">Michigan</option>
+              {availableStates.map(st => (
+                <option key={st} value={st}>{st}</option>
+              ))}
             </select>
-            <button
-              onClick={handleSearch}
-              disabled={searching}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: colors.primary,
-                color: colors.background,
-                border: 'none',
-                borderRadius: '8px',
-                fontWeight: '700',
-                cursor: searching ? 'not-allowed' : 'pointer',
-                opacity: searching ? 0.7 : 1
-              }}
-            >
-              {searching ? 'Searching...' : '🔍 Search'}
-            </button>
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              color: colors.muted,
+              fontSize: '13px',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="checkbox"
+                checked={showLowMatches}
+                onChange={(e) => setShowLowMatches(e.target.checked)}
+              />
+              Show low matches
+            </label>
           </div>
         </div>
+      </div>
 
-        {/* Results Count */}
-        <div style={{ 
-          marginBottom: '20px', 
-          display: 'flex', 
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <p style={{ color: colors.textMuted, margin: 0, fontSize: '14px' }}>
-            Showing {filteredOpps.length} of {totalCount.toLocaleString()} opportunities
-          </p>
-          <button
-            onClick={() => {
-              setSearchTerm('')
-              setFilters({ level: 'all', state: '', showExpired: false })
-              loadOpportunities()
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: colors.primary,
-              cursor: 'pointer',
-              fontSize: '13px'
-            }}
-          >
-            Clear All Filters
-          </button>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
+      {/* Results */}
+      <div style={{ padding: '30px', maxWidth: '1200px', margin: '0 auto' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px' }}>
+            <p style={{ color: colors.primary, fontSize: '18px' }}>Loading opportunities...</p>
+          </div>
+        ) : error ? (
+          <div style={{ textAlign: 'center', padding: '60px' }}>
+            <p style={{ color: colors.lowMatch }}>{error}</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
-            padding: '60px 20px',
+            padding: '60px',
             backgroundColor: colors.card,
-            borderRadius: '12px'
+            borderRadius: '16px',
+            border: `1px solid ${colors.border}`
           }}>
-            <p style={{ color: colors.primary, fontSize: '18px', margin: 0 }}>
-              🔍 Loading opportunities from your database...
-            </p>
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && (
-          <div style={{
-            backgroundColor: `${colors.error}15`,
-            border: `1px solid ${colors.error}50`,
-            borderRadius: '8px',
-            padding: '15px',
-            marginBottom: '20px'
-          }}>
-            <p style={{ color: colors.error, margin: 0 }}>{error}</p>
-          </div>
-        )}
-
-        {/* No Results */}
-        {!loading && !error && filteredOpps.length === 0 && (
-          <div style={{
-            backgroundColor: colors.card,
-            borderRadius: '12px',
-            padding: '60px 20px',
-            textAlign: 'center'
-          }}>
-            <p style={{ fontSize: '48px', margin: '0 0 15px 0' }}>🔍</p>
             <p style={{ color: colors.text, fontSize: '18px', margin: '0 0 10px 0' }}>
-              No opportunities found
+              No matching opportunities found
             </p>
-            <p style={{ color: colors.textMuted, margin: '0 0 20px 0' }}>
-              Try different search terms or clear your filters
+            <p style={{ color: colors.muted, margin: '0 0 20px 0' }}>
+              {!showLowMatches ? 'Try enabling "Show low matches" or adjust your BUCKET' : 'Try adjusting your search or filters'}
             </p>
-            <button
-              onClick={() => {
-                setSearchTerm('')
-                setFilters({ level: 'all', state: '', showExpired: false })
-                loadOpportunities()
-              }}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: colors.surface,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '8px',
-                color: colors.text,
-                cursor: 'pointer'
-              }}
-            >
-              Show All Opportunities
-            </button>
+            {!showLowMatches && (
+              <button
+                onClick={() => setShowLowMatches(true)}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: colors.card,
+                  border: `1px solid ${colors.primary}`,
+                  borderRadius: '8px',
+                  color: colors.primary,
+                  cursor: 'pointer'
+                }}
+              >
+                Show All Opportunities
+              </button>
+            )}
           </div>
-        )}
+        ) : (
+          <>
+            <p style={{ color: colors.muted, marginBottom: '20px', fontSize: '14px' }}>
+              Showing {displayed.length} of {filtered.length} opportunities (sorted by best match)
+            </p>
 
-        {/* Opportunity Cards */}
-        {!loading && filteredOpps.length > 0 && (
-          <div style={{ display: 'grid', gap: '15px' }}>
-            {filteredOpps.map((opp) => {
-              const matchScore = calculateMatchScore(opp)
-              const daysUntil = getDaysUntil(opp.close_date)
-              const isUrgent = daysUntil !== null && daysUntil <= 7 && daysUntil >= 0
-              const isExpired = daysUntil !== null && daysUntil < 0
-              
-              return (
-                <div
-                  key={opp.id}
-                  onClick={() => setSelectedOpp(opp)}
-                  style={{
-                    backgroundColor: colors.card,
-                    border: `1px solid ${isUrgent ? colors.gold : colors.border}`,
-                    borderRadius: '12px',
-                    padding: '20px',
-                    cursor: 'pointer',
-                    transition: 'border-color 0.2s ease',
-                    opacity: isExpired ? 0.6 : 1
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
-                  onMouseLeave={(e) => e.currentTarget.style.borderColor = isUrgent ? colors.gold : colors.border}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
+            {/* Opportunity Cards */}
+            <div style={{ display: 'grid', gap: '15px' }}>
+              {displayed.map((opp, i) => {
+                const score = opp.matchScore
+                const daysLeft = getDaysLeft(opp.close_date)
+                
+                return (
+                  <div
+                    key={opp.id || i}
+                    onClick={() => setSelectedOpp(opp)}
+                    style={{
+                      backgroundColor: colors.card,
+                      borderRadius: '12px',
+                      padding: '20px',
+                      border: `1px solid ${score.current >= 60 ? colors.highMatch + '50' : score.current >= 35 ? colors.medMatch + '30' : colors.border}`,
+                      cursor: 'pointer',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      gap: '20px',
+                      alignItems: 'center'
+                    }}
+                  >
                     {/* Left: Info */}
-                    <div style={{ flex: 1 }}>
+                    <div>
                       {/* Badges */}
-                      <div style={{ marginBottom: '10px' }}>
-                        {isUrgent && (
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                        {daysLeft !== null && daysLeft <= 7 && (
                           <span style={{
-                            display: 'inline-block',
-                            backgroundColor: `${colors.gold}20`,
-                            color: colors.gold,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            marginRight: '8px'
-                          }}>
-                            ⏰ {daysUntil} days left
-                          </span>
-                        )}
-                        {isExpired && (
-                          <span style={{
-                            display: 'inline-block',
-                            backgroundColor: `${colors.error}20`,
-                            color: colors.error,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                            fontSize: '12px',
+                            backgroundColor: daysLeft <= 3 ? colors.lowMatch : colors.gold,
+                            color: colors.background,
+                            padding: '3px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
                             fontWeight: '600'
                           }}>
-                            EXPIRED
+                            ⏰ {daysLeft} days left
                           </span>
                         )}
+                        <span style={{
+                          backgroundColor: getScoreColor(score.current) + '20',
+                          color: getScoreColor(score.current),
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: '600'
+                        }}>
+                          {getMatchLabel(score.matchLevel)}
+                        </span>
                       </div>
-                      
+
                       {/* Title */}
                       <h3 style={{ 
-                        margin: '0 0 8px 0', 
-                        fontSize: '16px', 
-                        fontWeight: '600',
-                        color: colors.text,
+                        color: colors.text, 
+                        margin: '0 0 8px 0',
+                        fontSize: '16px',
                         lineHeight: '1.4'
                       }}>
                         {opp.title || opp.commodity_description || 'Untitled Opportunity'}
                       </h3>
-                      
-                      {/* Agency & Location */}
-                      <p style={{ 
-                        color: colors.textMuted, 
-                        margin: '0 0 8px 0', 
-                        fontSize: '14px' 
-                      }}>
-                        {opp.contact_name || 'Agency not specified'} 
-                        {opp.state && ` • ${opp.state}`}
-                        {opp.county && `, ${opp.county}`}
+
+                      {/* Meta */}
+                      <p style={{ color: colors.muted, margin: 0, fontSize: '13px' }}>
+                        {opp.contact_name || 'Agency not specified'} • {opp.state || 'Location not specified'}
                       </p>
-                      
-                      {/* Due Date */}
-                      <p style={{ 
-                        color: colors.textMuted, 
-                        margin: 0, 
-                        fontSize: '13px' 
-                      }}>
+                      <p style={{ color: colors.muted, margin: '4px 0 0 0', fontSize: '12px' }}>
                         📅 Due: {formatDate(opp.close_date)}
                       </p>
                     </div>
-                    
-                    {/* Right: Match Score */}
-                    <div style={{ 
-                      textAlign: 'center',
-                      minWidth: '100px'
-                    }}>
-                      <div style={{
-                        backgroundColor: colors.surface,
-                        borderRadius: '8px',
-                        padding: '12px',
-                        border: `1px solid ${colors.border}`
+
+                    {/* Right: Score */}
+                    <div style={{ textAlign: 'right', minWidth: '100px' }}>
+                      <p style={{ color: colors.muted, margin: '0 0 4px 0', fontSize: '10px', textTransform: 'uppercase' }}>
+                        YOUR SCORE
+                      </p>
+                      <p style={{ 
+                        color: getScoreColor(score.current),
+                        fontSize: '28px',
+                        fontWeight: '700',
+                        margin: '0 0 4px 0'
                       }}>
-                        <p style={{ 
-                          color: colors.textMuted, 
-                          fontSize: '10px', 
-                          margin: '0 0 4px 0',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px'
-                        }}>
-                          Your Score
-                        </p>
-                        <p style={{ 
-                          color: matchScore.current >= 60 ? colors.primary : colors.gold, 
-                          fontSize: '24px', 
-                          fontWeight: '700',
-                          margin: '0 0 6px 0'
-                        }}>
-                          {matchScore.current}%
-                        </p>
-                        <p style={{ 
-                          color: colors.primary, 
-                          fontSize: '12px', 
-                          margin: 0,
-                          fontWeight: '600'
-                        }}>
-                          → {matchScore.potential}% ✨
-                        </p>
-                        <p style={{ 
-                          color: colors.textMuted, 
-                          fontSize: '9px', 
-                          margin: '2px 0 0 0' 
-                        }}>
-                          with CR-AI
-                        </p>
-                      </div>
+                        {score.current}%
+                      </p>
+                      <p style={{ color: colors.primary, margin: 0, fontSize: '11px' }}>
+                        → {score.potential}% <span style={{ opacity: 0.7 }}>with CR-AI</span>
+                      </p>
                     </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Load More */}
-        {filteredOpps.length > 0 && filteredOpps.length < totalCount && (
-          <div style={{ textAlign: 'center', marginTop: '30px' }}>
-            <button
-              onClick={loadMore}
-              style={{
-                padding: '14px 32px',
-                backgroundColor: colors.surface,
-                border: `1px solid ${colors.border}`,
-                borderRadius: '8px',
-                color: colors.text,
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Load More ({totalCount - filteredOpps.length} remaining)
-            </button>
-          </div>
-        )}
-
-        {/* Detail Modal */}
-        {selectedOpp && (
-          <div
-            onClick={() => setSelectedOpp(null)}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.85)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px',
-              zIndex: 1000
-            }}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                backgroundColor: colors.card,
-                borderRadius: '16px',
-                padding: '30px',
-                maxWidth: '600px',
-                width: '100%',
-                maxHeight: '85vh',
-                overflow: 'auto',
-                border: `1px solid ${colors.border}`
-              }}
-            >
-              {/* Modal Header */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'flex-start',
-                marginBottom: '20px'
-              }}>
-                <div style={{ flex: 1, paddingRight: '20px' }}>
-                  <h2 style={{ 
-                    margin: '0 0 10px 0', 
-                    fontSize: '20px',
-                    lineHeight: '1.4',
-                    color: colors.text
-                  }}>
-                    {selectedOpp.title || selectedOpp.commodity_description || 'Opportunity Details'}
-                  </h2>
-                  <p style={{ color: colors.textMuted, margin: 0, fontSize: '14px' }}>
-                    {selectedOpp.contact_name || 'Agency not specified'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSelectedOpp(null)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: colors.textMuted,
-                    fontSize: '28px',
-                    cursor: 'pointer',
-                    padding: '0',
-                    lineHeight: '1'
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Match Score Display */}
-              {(() => {
-                const score = calculateMatchScore(selectedOpp)
-                return (
-                  <div style={{
-                    backgroundColor: colors.surface,
-                    borderRadius: '12px',
-                    padding: '20px',
-                    marginBottom: '20px',
-                    border: `1px solid ${colors.primary}30`
-                  }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-around',
-                      textAlign: 'center',
-                      alignItems: 'center'
-                    }}>
-                      <div>
-                        <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 5px 0', textTransform: 'uppercase' }}>
-                          YOUR SCORE
-                        </p>
-                        <p style={{ 
-                          color: score.current >= 60 ? colors.primary : colors.gold, 
-                          fontSize: '36px', 
-                          fontWeight: '700',
-                          margin: 0
-                        }}>
-                          {score.current}%
-                        </p>
-                      </div>
-                      <div style={{ color: colors.textMuted, fontSize: '24px' }}>
-                        →
-                      </div>
-                      <div>
-                        <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 5px 0', textTransform: 'uppercase' }}>
-                          WITH CR-AI
-                        </p>
-                        <p style={{ 
-                          color: colors.primary, 
-                          fontSize: '36px', 
-                          fontWeight: '700',
-                          margin: 0
-                        }}>
-                          {score.potential}% ✨
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {/* Empowering Message */}
-                    <p style={{ 
-                      color: colors.primary, 
-                      textAlign: 'center', 
-                      marginTop: '15px',
-                      marginBottom: 0,
-                      fontSize: '14px',
-                      fontWeight: '500'
-                    }}>
-                      {score.current >= 70 
-                        ? "You're competitive! Time to go for it." 
-                        : score.current >= 50 
-                          ? "You're closer than you think. CR-AI can help." 
-                          : "This is doable. Let CR-AI help you build a winning response."}
-                    </p>
                   </div>
                 )
-              })()}
+              })}
+            </div>
 
-              {/* Details Grid */}
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: '1fr 1fr', 
-                  gap: '15px',
-                  marginBottom: '15px'
-                }}>
-                  <div>
-                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 4px 0', textTransform: 'uppercase' }}>
-                      DUE DATE
-                    </p>
-                    <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>
-                      {formatDate(selectedOpp.close_date)}
-                    </p>
-                  </div>
-                  <div>
-                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 4px 0', textTransform: 'uppercase' }}>
-                      LOCATION
-                    </p>
-                    <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>
-                      {selectedOpp.state || 'Not specified'}
-                      {selectedOpp.county && `, ${selectedOpp.county}`}
-                    </p>
-                  </div>
-                </div>
-                
-                {selectedOpp.commodity_description && (
-                  <div style={{ marginTop: '15px' }}>
-                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
-                      DESCRIPTION
-                    </p>
-                    <p style={{ 
-                      color: colors.text, 
-                      margin: 0,
-                      lineHeight: '1.6',
-                      fontSize: '14px'
-                    }}>
-                      {selectedOpp.commodity_description}
-                    </p>
-                  </div>
-                )}
-                
-                {/* Contact Info */}
-                {(selectedOpp.contact_name || selectedOpp.contact_email || selectedOpp.contact_phone) && (
-                  <div style={{ marginTop: '15px' }}>
-                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
-                      CONTACT
-                    </p>
-                    <p style={{ color: colors.text, margin: 0, fontSize: '14px' }}>
-                      {selectedOpp.contact_name && <span>{selectedOpp.contact_name}</span>}
-                      {selectedOpp.contact_email && <span> • {selectedOpp.contact_email}</span>}
-                      {selectedOpp.contact_phone && <span> • {selectedOpp.contact_phone}</span>}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'grid', gap: '10px' }}>
+            {/* Load More */}
+            {hasMore && (
+              <div style={{ textAlign: 'center', marginTop: '30px' }}>
                 <button
-                  onClick={() => addToCart(selectedOpp)}
-                  disabled={addingToCart}
+                  onClick={() => setDisplayCount(displayCount + 20)}
                   style={{
-                    padding: '14px',
-                    backgroundColor: colors.primary,
-                    border: 'none',
+                    padding: '12px 30px',
+                    backgroundColor: colors.card,
+                    border: `1px solid ${colors.primary}`,
                     borderRadius: '8px',
-                    color: colors.background,
-                    cursor: addingToCart ? 'not-allowed' : 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    opacity: addingToCart ? 0.7 : 1
-                  }}
-                >
-                  {addingToCart ? 'Starting...' : '📝 Start Response'}
-                </button>
-                <button
-                  onClick={() => setSelectedOpp(null)}
-                  style={{
-                    padding: '14px',
-                    backgroundColor: colors.surface,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '8px',
-                    color: colors.text,
+                    color: colors.primary,
                     cursor: 'pointer',
                     fontSize: '14px'
                   }}
                 >
-                  Close
+                  Load More ({filtered.length - displayCount} remaining)
                 </button>
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Detail Modal */}
+      {selectedOpp && (
+        <div
+          onClick={() => setSelectedOpp(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            zIndex: 1000
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: '16px',
+              padding: '30px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '85vh',
+              overflow: 'auto',
+              border: `1px solid ${colors.border}`
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h2 style={{ color: colors.text, margin: 0, fontSize: '20px', flex: 1, paddingRight: '20px', lineHeight: '1.4' }}>
+                {selectedOpp.title || selectedOpp.commodity_description || 'Opportunity Details'}
+              </h2>
+              <button
+                onClick={() => setSelectedOpp(null)}
+                style={{ background: 'none', border: 'none', color: colors.muted, fontSize: '28px', cursor: 'pointer' }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Score Display */}
+            {(() => {
+              const score = selectedOpp.matchScore
+              return (
+                <div style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: '12px',
+                  padding: '20px',
+                  marginBottom: '20px',
+                  border: `1px solid ${getScoreColor(score.current)}30`
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
+                    <div>
+                      <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 5px 0' }}>YOUR SCORE</p>
+                      <p style={{ color: getScoreColor(score.current), fontSize: '36px', fontWeight: '700', margin: 0 }}>
+                        {score.current}%
+                      </p>
+                    </div>
+                    <div style={{ color: colors.muted, fontSize: '24px', alignSelf: 'center' }}>→</div>
+                    <div>
+                      <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 5px 0' }}>WITH CR-AI</p>
+                      <p style={{ color: colors.primary, fontSize: '36px', fontWeight: '700', margin: 0 }}>
+                        {score.potential}% ✨
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Match Breakdown */}
+                  {score.breakdown && Object.keys(score.breakdown).length > 0 && (
+                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: `1px solid ${colors.border}` }}>
+                      <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 8px 0' }}>MATCH BREAKDOWN:</p>
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {score.breakdown.naics && (
+                          <span style={{ 
+                            backgroundColor: score.breakdown.naics.points > 0 ? colors.highMatch + '20' : colors.lowMatch + '20',
+                            color: score.breakdown.naics.points > 0 ? colors.highMatch : colors.lowMatch,
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px'
+                          }}>
+                            NAICS: {score.breakdown.naics.points > 0 ? `+${score.breakdown.naics.points}` : 'No match'}
+                          </span>
+                        )}
+                        {score.breakdown.services && (
+                          <span style={{ 
+                            backgroundColor: score.breakdown.services.points > 0 ? colors.highMatch + '20' : colors.lowMatch + '20',
+                            color: score.breakdown.services.points > 0 ? colors.highMatch : colors.lowMatch,
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px'
+                          }}>
+                            Services: {score.breakdown.services.points > 0 ? `+${score.breakdown.services.points}` : 'No match'}
+                          </span>
+                        )}
+                        {score.breakdown.location && (
+                          <span style={{ 
+                            backgroundColor: score.breakdown.location.points > 0 ? colors.highMatch + '20' : colors.medMatch + '20',
+                            color: score.breakdown.location.points > 0 ? colors.highMatch : colors.medMatch,
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px'
+                          }}>
+                            Location: {score.breakdown.location.points > 0 ? `+${score.breakdown.location.points}` : 'Different state'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Empowering Message */}
+                  <p style={{ 
+                    color: colors.primary, 
+                    textAlign: 'center', 
+                    marginTop: '15px',
+                    marginBottom: 0,
+                    fontSize: '14px'
+                  }}>
+                    {score.current >= 60 
+                      ? "🎯 Strong match! You're competitive for this one."
+                      : score.current >= 35 
+                        ? "✨ Good potential. BUCKET + CR-AI can help you win."
+                        : score.current > 0
+                          ? "📋 Worth reviewing. CR-AI can help identify gaps."
+                          : "Consider updating your BUCKET with relevant NAICS codes."}
+                  </p>
+                </div>
+              )
+            })()}
+
+            {/* Details */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                <div>
+                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 4px 0' }}>DUE DATE</p>
+                  <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>{formatDate(selectedOpp.close_date)}</p>
+                </div>
+                <div>
+                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 4px 0' }}>LOCATION</p>
+                  <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>{selectedOpp.state || 'Not specified'}</p>
+                </div>
+              </div>
+              
+              {selectedOpp.commodity_description && (
+                <div>
+                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 8px 0' }}>DESCRIPTION</p>
+                  <p style={{ color: colors.text, margin: 0, lineHeight: '1.6', fontSize: '14px' }}>
+                    {selectedOpp.commodity_description}
+                  </p>
+                </div>
+              )}
+
+              {selectedOpp.contact_name && (
+                <div style={{ marginTop: '15px' }}>
+                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 4px 0' }}>CONTACT</p>
+                  <p style={{ color: colors.text, margin: 0, fontSize: '14px' }}>
+                    {selectedOpp.contact_name}
+                    {selectedOpp.contact_email && ` • ${selectedOpp.contact_email}`}
+                    {selectedOpp.contact_phone && ` • ${selectedOpp.contact_phone}`}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'grid', gap: '10px' }}>
+              <button
+                onClick={() => startResponse(selectedOpp)}
+                disabled={addingToCart}
+                style={{
+                  padding: '14px',
+                  backgroundColor: colors.primary,
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: colors.background,
+                  cursor: addingToCart ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '700'
+                }}
+              >
+                {addingToCart ? 'Adding...' : '📝 Start Response'}
+              </button>
+              <button
+                onClick={() => setSelectedOpp(null)}
+                style={{
+                  padding: '14px',
+                  backgroundColor: colors.surface,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  color: colors.text,
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
