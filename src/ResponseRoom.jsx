@@ -696,157 +696,95 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             </div>
           </div>
 
-          {/* RFP CONTENT SECTION - THE DNA */}
+          {/* RFP INFO SECTION */}
           <div style={{
             backgroundColor: colors.card,
             borderRadius: '16px',
             padding: '25px',
-            border: `2px solid ${rfpContent ? colors.primary : colors.gold}`,
+            border: `1px solid ${colors.border}`,
             marginBottom: '20px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-              <span style={{ fontSize: '24px' }}>{rfpContent ? '✅' : '📄'}</span>
+              <span style={{ fontSize: '24px' }}>📋</span>
               <div>
                 <p style={{ color: colors.text, fontSize: '16px', fontWeight: '600', margin: 0 }}>
-                  {rfpContent ? 'RFP Content Loaded' : 'Load RFP Document'}
+                  What We Know
                 </p>
                 <p style={{ color: colors.muted, fontSize: '12px', margin: 0 }}>
-                  {rfpContent ? 'RCA can now generate accurate responses' : 'Upload the RFP/Grant document so RCA can read it'}
+                  From {selectedSubmission.source === 'grants_gov' ? 'Grants.gov' : 'the source listing'}
                 </p>
               </div>
             </div>
 
-            {/* Error message */}
-            {rfpError && (
-              <p style={{ color: colors.danger, fontSize: '13px', marginBottom: '15px' }}>
-                ⚠️ {rfpError}
+            {/* Show the description we have */}
+            {selectedSubmission.description && selectedSubmission.description.length > 30 ? (
+              <div style={{ marginBottom: '15px' }}>
+                <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>DESCRIPTION</p>
+                <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>
+                  {selectedSubmission.description}
+                </p>
+              </div>
+            ) : (
+              <p style={{ color: colors.muted, fontSize: '13px', fontStyle: 'italic' }}>
+                Limited details available. RCA will use the title and your BUCKET to generate strategy.
               </p>
+            )}
+
+            {/* Optional: Let advanced users upload if they want better results */}
+            {!rfpContent && (
+              <details style={{ marginTop: '15px' }}>
+                <summary style={{ color: colors.muted, fontSize: '12px', cursor: 'pointer' }}>
+                  Have the RFP PDF? Upload for better results (optional)
+                </summary>
+                <div style={{ marginTop: '10px' }}>
+                  <label style={{
+                    display: 'inline-block',
+                    padding: '10px 16px',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '8px',
+                    color: colors.muted,
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}>
+                    📎 Upload PDF
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handlePdfUpload}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+              </details>
+            )}
+
+            {/* Show if PDF was uploaded */}
+            {rfpContent && (
+              <div style={{ 
+                marginTop: '15px', 
+                padding: '10px', 
+                backgroundColor: `${colors.primary}10`, 
+                borderRadius: '8px' 
+              }}>
+                <p style={{ color: colors.primary, fontSize: '13px', margin: 0 }}>
+                  ✅ {rfpContent.fileName ? `Uploaded: ${rfpContent.fileName}` : 'Additional details loaded'}
+                </p>
+              </div>
             )}
 
             {/* Loading state */}
             {loadingRfp && (
-              <div style={{ textAlign: 'center', padding: '20px' }}>
+              <div style={{ textAlign: 'center', padding: '15px' }}>
                 <p style={{ color: colors.gold, fontSize: '14px' }}>🔄 Reading document...</p>
               </div>
             )}
 
-            {/* Upload/Fetch buttons when no content */}
-            {!rfpContent && !loadingRfp && (
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                {/* Auto-fetch from source if available */}
-                {selectedSubmission.source_url && (
-                  <button
-                    onClick={() => fetchRfpFromUrl(selectedSubmission.source_url)}
-                    style={{
-                      flex: 1,
-                      padding: '14px',
-                      backgroundColor: colors.primary,
-                      border: 'none',
-                      borderRadius: '10px',
-                      color: colors.background,
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      textAlign: 'center'
-                    }}
-                  >
-                    🔄 Fetch from {selectedSubmission.source === 'grants_gov' ? 'Grants.gov' : 'Source'}
-                  </button>
-                )}
-                <label style={{
-                  flex: 1,
-                  padding: '14px',
-                  backgroundColor: selectedSubmission.source_url ? 'transparent' : colors.gold,
-                  border: selectedSubmission.source_url ? `1px solid ${colors.border}` : 'none',
-                  borderRadius: '10px',
-                  color: selectedSubmission.source_url ? colors.text : colors.background,
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  textAlign: 'center'
-                }}>
-                  📎 Upload PDF
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handlePdfUpload}
-                    style={{ display: 'none' }}
-                  />
-                </label>
-              </div>
-            )}
-
-            {/* Show extracted content */}
-            {rfpContent && !loadingRfp && (
-              <div style={{ marginTop: '15px' }}>
-                {/* Source indicator */}
-                <p style={{ color: colors.primary, fontSize: '13px', marginBottom: '10px' }}>
-                  {rfpContent.source === 'upload' 
-                    ? `📎 ${rfpContent.fileName}` 
-                    : `🔗 Fetched from source`}
-                </p>
-                
-                {rfpContent.description && (
-                  <div style={{ marginBottom: '15px' }}>
-                    <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>DESCRIPTION</p>
-                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', maxHeight: '100px', overflow: 'auto' }}>
-                      {rfpContent.description.substring(0, 500)}...
-                    </p>
-                  </div>
-                )}
-
-                {rfpContent.scope && (
-                  <div style={{ marginBottom: '15px' }}>
-                    <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>SCOPE OF WORK</p>
-                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', maxHeight: '100px', overflow: 'auto' }}>
-                      {rfpContent.scope.substring(0, 500)}...
-                    </p>
-                  </div>
-                )}
-
-                {rfpContent.questions && rfpContent.questions.length > 0 && (
-                  <div style={{ marginBottom: '15px' }}>
-                    <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>
-                      QUESTIONS FOUND ({rfpContent.questions.length})
-                    </p>
-                    <ul style={{ color: '#ccc', fontSize: '13px', paddingLeft: '20px', margin: 0 }}>
-                      {rfpContent.questions.slice(0, 3).map((q, i) => (
-                        <li key={i} style={{ marginBottom: '5px' }}>{q.substring(0, 100)}...</li>
-                      ))}
-                      {rfpContent.questions.length > 3 && (
-                        <li style={{ color: colors.muted }}>+{rfpContent.questions.length - 3} more</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-
-                {rfpContent.pageLimit && (
-                  <p style={{ color: colors.gold, fontSize: '12px' }}>
-                    📏 Page limit: {rfpContent.pageLimit}
-                  </p>
-                )}
-
-                {/* Re-upload button */}
-                <label style={{
-                  display: 'inline-block',
-                  padding: '8px 16px',
-                  backgroundColor: 'transparent',
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '8px',
-                  color: colors.muted,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  marginTop: '10px'
-                }}>
-                  Upload different PDF
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handlePdfUpload}
-                    style={{ display: 'none' }}
-                  />
-                </label>
-              </div>
+            {/* Error - but don't block them */}
+            {rfpError && (
+              <p style={{ color: colors.muted, fontSize: '12px', marginTop: '10px' }}>
+                Note: {rfpError}
+              </p>
             )}
           </div>
 
@@ -859,7 +797,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             style={{
               width: '100%',
               padding: '18px',
-              backgroundColor: rfpContent ? colors.gold : `${colors.gold}80`,
+              backgroundColor: colors.gold,
               border: 'none',
               borderRadius: '12px',
               color: colors.background,
@@ -869,7 +807,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               marginBottom: '12px'
             }}
           >
-            {rfpContent ? '📝 Start Draft' : '📝 Start Draft (Upload PDF for better results)'}
+            📝 Start Draft
           </button>
 
           <button
