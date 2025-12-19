@@ -1,12 +1,11 @@
 // ============================================
 // ShopContracts.jsx
 // Search & Match Opportunities from Database
-// Uses CR-AI Rules: Empowers, Never Discourages
+// SELF-CONTAINED - No external dependencies
 // ============================================
 
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import { COLORS, SCORING, DUAL_SCORE, VOICE, EXPIRED } from './constants'
 
 // ============================================
 // MAIN COMPONENT
@@ -22,10 +21,8 @@ export default function ShopContracts({ session }) {
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState({
-    level: 'all', // federal, state, county, city, all
+    level: 'all',
     state: '',
-    minValue: '',
-    maxValue: '',
     showExpired: false
   })
   
@@ -38,7 +35,7 @@ export default function ShopContracts({ session }) {
   const [selectedOpp, setSelectedOpp] = useState(null)
   const [addingToCart, setAddingToCart] = useState(false)
 
-  // Colors
+  // Colors - ALL INLINE, no imports
   const colors = {
     primary: '#39FF14',
     gold: '#FFD700',
@@ -80,13 +77,18 @@ export default function ShopContracts({ session }) {
 
   const loadOpportunities = async () => {
     setLoading(true)
+    setError(null)
     try {
       // Get total count first
-      const { count } = await supabase
+      const { count, error: countError } = await supabase
         .from('opportunities')
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true)
         .gte('close_date', new Date().toISOString())
+      
+      if (countError) {
+        console.error('Count error:', countError)
+      }
       
       setTotalCount(count || 0)
 
@@ -105,7 +107,7 @@ export default function ShopContracts({ session }) {
       setFilteredOpps(data || [])
     } catch (err) {
       console.error('Error loading opportunities:', err)
-      setError('Failed to load opportunities')
+      setError('Failed to load opportunities. Check console for details.')
     } finally {
       setLoading(false)
     }
@@ -117,6 +119,7 @@ export default function ShopContracts({ session }) {
   const handleSearch = async () => {
     setSearching(true)
     setPage(1)
+    setError(null)
     
     try {
       let query = supabase
@@ -131,18 +134,13 @@ export default function ShopContracts({ session }) {
       
       // Search term - search multiple fields
       if (searchTerm.trim()) {
-        const term = `%${searchTerm.trim()}%`
-        query = query.or(`title.ilike.${term},description.ilike.${term},commodity_description.ilike.${term},agency.ilike.${term}`)
+        const term = searchTerm.trim().toLowerCase()
+        query = query.or(`title.ilike.%${term}%,commodity_description.ilike.%${term}%,contact_name.ilike.%${term}%`)
       }
       
       // State filter
       if (filters.state) {
         query = query.eq('state', filters.state)
-      }
-      
-      // Level filter (if you have a level/type column)
-      if (filters.level !== 'all') {
-        query = query.eq('level', filters.level)
       }
       
       // Order by close date (soonest first)
@@ -177,6 +175,7 @@ export default function ShopContracts({ session }) {
     
     setSearching(true)
     setPage(1)
+    setError(null)
     
     try {
       let query = supabase
@@ -185,28 +184,9 @@ export default function ShopContracts({ session }) {
         .eq('is_active', true)
         .gte('close_date', new Date().toISOString())
       
-      // Match by state/location
+      // Match by state/location if user has one set
       if (profile.state) {
-        query = query.or(`state.eq.${profile.state},state.is.null`)
-      }
-      
-      // Match by NAICS codes (if your opportunities have naics field)
-      // This would need to be adjusted based on your actual data structure
-      if (profile.naics_codes?.length > 0) {
-        // For now, we'll do a broader search
-        // In production, you'd want to match NAICS codes properly
-      }
-      
-      // Match by services/keywords
-      if (profile.services?.length > 0) {
-        const serviceTerms = profile.services.slice(0, 3).map(s => `%${s}%`)
-        // Build OR condition for service matching
-        const orConditions = serviceTerms.map(term => 
-          `commodity_description.ilike.${term}`
-        ).join(',')
-        if (orConditions) {
-          query = query.or(orConditions)
-        }
+        query = query.eq('state', profile.state)
       }
       
       query = query.order('close_date', { ascending: true })
@@ -218,7 +198,7 @@ export default function ShopContracts({ session }) {
       
       setFilteredOpps(data || [])
       setTotalCount(count || 0)
-      setSearchTerm('') // Clear search term to show it's a BUCKET search
+      setSearchTerm('')
       
     } catch (err) {
       console.error('BUCKET search error:', err)
@@ -244,8 +224,8 @@ export default function ShopContracts({ session }) {
         .gte('close_date', new Date().toISOString())
       
       if (searchTerm.trim()) {
-        const term = `%${searchTerm.trim()}%`
-        query = query.or(`title.ilike.${term},description.ilike.${term},commodity_description.ilike.${term}`)
+        const term = searchTerm.trim().toLowerCase()
+        query = query.or(`title.ilike.%${term}%,commodity_description.ilike.%${term}%`)
       }
       
       query = query.order('close_date', { ascending: true })
@@ -267,10 +247,9 @@ export default function ShopContracts({ session }) {
   // CALCULATE MATCH SCORE
   // ==========================================
   const calculateMatchScore = (opportunity) => {
-    if (!profile) return { current: 0, potential: 50 }
+    if (!profile) return { current: 30, potential: 65 }
     
     let score = 0
-    const maxScore = 100
     
     // Location match (25 points)
     if (profile.state && opportunity.state) {
@@ -278,27 +257,22 @@ export default function ShopContracts({ session }) {
         score += 25
       }
     } else {
-      score += 15 // Partial credit if no location requirement
+      score += 15
     }
     
-    // NAICS match (25 points) - simplified
+    // NAICS codes (25 points)
     if (profile.naics_codes?.length > 0) {
-      score += 20 // Has NAICS codes
-      // In production, actually compare NAICS codes
+      score += 20
     }
     
-    // Services match (20 points)
+    // Services (20 points)
     if (profile.services?.length > 0) {
       score += 15
-      // In production, match services to commodity description
     }
     
     // Certifications (15 points)
     if (profile.certifications?.length > 0) {
-      const activeCerts = profile.certifications.filter(c => 
-        c.status === 'active' || c.status === 'certified'
-      )
-      score += Math.min(activeCerts.length * 5, 15)
+      score += Math.min(profile.certifications.length * 5, 15)
     }
     
     // Past performance (15 points)
@@ -306,11 +280,10 @@ export default function ShopContracts({ session }) {
       score += Math.min(profile.past_performance.length * 5, 15)
     }
     
-    // Calculate potential score with CR-AI help
-    const potential = Math.min(score + 35, 95) // CR-AI can help boost by up to 35 points
+    const potential = Math.min(score + 35, 95)
     
     return {
-      current: Math.min(score, maxScore),
+      current: Math.min(score, 100),
       potential: potential
     }
   }
@@ -324,12 +297,12 @@ export default function ShopContracts({ session }) {
     setAddingToCart(true)
     
     try {
-      // Check if already in cart
+      // Check if already in cart (using submissions table for now)
       const { data: existing } = await supabase
-        .from('user_opportunities')
+        .from('submissions')
         .select('id')
         .eq('user_id', session.user.id)
-        .eq('opportunity_id', opportunity.id)
+        .eq('title', opportunity.title || opportunity.commodity_description)
         .single()
       
       if (existing) {
@@ -338,18 +311,17 @@ export default function ShopContracts({ session }) {
         return
       }
       
-      // Add to cart
+      // Add to cart (submissions table with status 'considering')
       const { error } = await supabase
-        .from('user_opportunities')
+        .from('submissions')
         .insert({
           user_id: session.user.id,
-          opportunity_id: opportunity.id,
-          title: opportunity.title || opportunity.commodity_description,
-          agency: opportunity.agency || opportunity.contact_name,
+          title: opportunity.title || opportunity.commodity_description || 'Untitled Opportunity',
+          agency: opportunity.contact_name || 'Agency not specified',
           due_date: opportunity.close_date,
           status: 'considering',
-          source: 'shopping',
-          added_at: new Date().toISOString()
+          source_url: opportunity.source_url || '',
+          created_at: new Date().toISOString()
         })
       
       if (error) throw error
@@ -397,23 +369,25 @@ export default function ShopContracts({ session }) {
       minHeight: '100vh', 
       backgroundColor: colors.background, 
       color: colors.text,
-      padding: '20px'
+      padding: '20px',
+      paddingBottom: '80px'
     }}>
-      {/* Header */}
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        
+        {/* Header */}
         <div style={{ marginBottom: '30px' }}>
           <h1 style={{ 
-            fontSize: '32px', 
+            fontSize: '28px', 
             fontWeight: '700', 
             margin: '0 0 10px 0',
             display: 'flex',
             alignItems: 'center',
             gap: '15px'
           }}>
-            🛍️ Shop Contracts & Grants
+            🛍️ Go Shopping
           </h1>
           <p style={{ color: colors.textMuted, margin: 0 }}>
-            {totalCount.toLocaleString()} active opportunities • Matched to your BUCKET
+            {totalCount.toLocaleString()} active opportunities • Find contracts & grants matched to your BUCKET
           </p>
         </div>
 
@@ -421,7 +395,7 @@ export default function ShopContracts({ session }) {
         {profile && (
           <div style={{
             backgroundColor: colors.card,
-            border: `1px solid ${colors.primary}30`,
+            border: `1px solid ${colors.primary}40`,
             borderRadius: '12px',
             padding: '20px',
             marginBottom: '25px'
@@ -456,8 +430,9 @@ export default function ShopContracts({ session }) {
                   border: 'none',
                   borderRadius: '8px',
                   fontWeight: '700',
-                  cursor: 'pointer',
-                  fontSize: '14px'
+                  cursor: searching ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  opacity: searching ? 0.7 : 1
                 }}
               >
                 {searching ? '🔍 Searching...' : '✨ Find Matches for My BUCKET'}
@@ -492,7 +467,8 @@ export default function ShopContracts({ session }) {
                 border: `1px solid ${colors.border}`,
                 borderRadius: '8px',
                 color: colors.text,
-                fontSize: '14px'
+                fontSize: '14px',
+                outline: 'none'
               }}
             />
             <select
@@ -505,7 +481,7 @@ export default function ShopContracts({ session }) {
                 borderRadius: '8px',
                 color: colors.text,
                 fontSize: '14px',
-                minWidth: '120px'
+                minWidth: '140px'
               }}
             >
               <option value="">All States</option>
@@ -513,7 +489,12 @@ export default function ShopContracts({ session }) {
               <option value="TX">Texas</option>
               <option value="NY">New York</option>
               <option value="FL">Florida</option>
-              {/* Add more states as needed */}
+              <option value="IL">Illinois</option>
+              <option value="PA">Pennsylvania</option>
+              <option value="OH">Ohio</option>
+              <option value="GA">Georgia</option>
+              <option value="NC">North Carolina</option>
+              <option value="MI">Michigan</option>
             </select>
             <button
               onClick={handleSearch}
@@ -525,7 +506,8 @@ export default function ShopContracts({ session }) {
                 border: 'none',
                 borderRadius: '8px',
                 fontWeight: '700',
-                cursor: 'pointer'
+                cursor: searching ? 'not-allowed' : 'pointer',
+                opacity: searching ? 0.7 : 1
               }}
             >
               {searching ? 'Searching...' : '🔍 Search'}
@@ -540,34 +522,37 @@ export default function ShopContracts({ session }) {
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <p style={{ color: colors.textMuted, margin: 0 }}>
+          <p style={{ color: colors.textMuted, margin: 0, fontSize: '14px' }}>
             Showing {filteredOpps.length} of {totalCount.toLocaleString()} opportunities
           </p>
-          {!filters.showExpired && (
-            <button
-              onClick={() => {
-                setFilters({ ...filters, showExpired: true })
-                handleSearch()
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: colors.textMuted,
-                cursor: 'pointer',
-                fontSize: '13px',
-                textDecoration: 'underline'
-              }}
-            >
-              Show expired opportunities
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setSearchTerm('')
+              setFilters({ level: 'all', state: '', showExpired: false })
+              loadOpportunities()
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: colors.primary,
+              cursor: 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            Clear All Filters
+          </button>
         </div>
 
         {/* Loading State */}
         {loading && (
-          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <p style={{ color: colors.primary, fontSize: '18px' }}>
-              🔍 Loading opportunities...
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '60px 20px',
+            backgroundColor: colors.card,
+            borderRadius: '12px'
+          }}>
+            <p style={{ color: colors.primary, fontSize: '18px', margin: 0 }}>
+              🔍 Loading opportunities from your database...
             </p>
           </div>
         )}
@@ -575,8 +560,8 @@ export default function ShopContracts({ session }) {
         {/* Error State */}
         {error && (
           <div style={{
-            backgroundColor: `${colors.error}20`,
-            border: `1px solid ${colors.error}`,
+            backgroundColor: `${colors.error}15`,
+            border: `1px solid ${colors.error}50`,
             borderRadius: '8px',
             padding: '15px',
             marginBottom: '20px'
@@ -586,7 +571,7 @@ export default function ShopContracts({ session }) {
         )}
 
         {/* No Results */}
-        {!loading && filteredOpps.length === 0 && (
+        {!loading && !error && filteredOpps.length === 0 && (
           <div style={{
             backgroundColor: colors.card,
             borderRadius: '12px',
@@ -603,7 +588,7 @@ export default function ShopContracts({ session }) {
             <button
               onClick={() => {
                 setSearchTerm('')
-                setFilters({ level: 'all', state: '', minValue: '', maxValue: '', showExpired: false })
+                setFilters({ level: 'all', state: '', showExpired: false })
                 loadOpportunities()
               }}
               style={{
@@ -615,153 +600,156 @@ export default function ShopContracts({ session }) {
                 cursor: 'pointer'
               }}
             >
-              Clear Filters
+              Show All Opportunities
             </button>
           </div>
         )}
 
         {/* Opportunity Cards */}
-        <div style={{ display: 'grid', gap: '15px' }}>
-          {filteredOpps.map((opp) => {
-            const matchScore = calculateMatchScore(opp)
-            const daysUntil = getDaysUntil(opp.close_date)
-            const isUrgent = daysUntil !== null && daysUntil <= 7
-            const isExpired = daysUntil !== null && daysUntil < 0
-            
-            return (
-              <div
-                key={opp.id}
-                onClick={() => setSelectedOpp(opp)}
-                style={{
-                  backgroundColor: colors.card,
-                  border: `1px solid ${isUrgent ? colors.gold : colors.border}`,
-                  borderRadius: '12px',
-                  padding: '20px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  opacity: isExpired ? 0.6 : 1
-                }}
-                onMouseOver={(e) => e.currentTarget.style.borderColor = colors.primary}
-                onMouseOut={(e) => e.currentTarget.style.borderColor = isUrgent ? colors.gold : colors.border}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
-                  {/* Left: Info */}
-                  <div style={{ flex: 1 }}>
-                    {/* Urgent Badge */}
-                    {isUrgent && !isExpired && (
-                      <span style={{
-                        display: 'inline-block',
-                        backgroundColor: `${colors.gold}20`,
-                        color: colors.gold,
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
+        {!loading && filteredOpps.length > 0 && (
+          <div style={{ display: 'grid', gap: '15px' }}>
+            {filteredOpps.map((opp) => {
+              const matchScore = calculateMatchScore(opp)
+              const daysUntil = getDaysUntil(opp.close_date)
+              const isUrgent = daysUntil !== null && daysUntil <= 7 && daysUntil >= 0
+              const isExpired = daysUntil !== null && daysUntil < 0
+              
+              return (
+                <div
+                  key={opp.id}
+                  onClick={() => setSelectedOpp(opp)}
+                  style={{
+                    backgroundColor: colors.card,
+                    border: `1px solid ${isUrgent ? colors.gold : colors.border}`,
+                    borderRadius: '12px',
+                    padding: '20px',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.2s ease',
+                    opacity: isExpired ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = isUrgent ? colors.gold : colors.border}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
+                    {/* Left: Info */}
+                    <div style={{ flex: 1 }}>
+                      {/* Badges */}
+                      <div style={{ marginBottom: '10px' }}>
+                        {isUrgent && (
+                          <span style={{
+                            display: 'inline-block',
+                            backgroundColor: `${colors.gold}20`,
+                            color: colors.gold,
+                            padding: '4px 10px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            marginRight: '8px'
+                          }}>
+                            ⏰ {daysUntil} days left
+                          </span>
+                        )}
+                        {isExpired && (
+                          <span style={{
+                            display: 'inline-block',
+                            backgroundColor: `${colors.error}20`,
+                            color: colors.error,
+                            padding: '4px 10px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: '600'
+                          }}>
+                            EXPIRED
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Title */}
+                      <h3 style={{ 
+                        margin: '0 0 8px 0', 
+                        fontSize: '16px', 
                         fontWeight: '600',
-                        marginBottom: '10px'
+                        color: colors.text,
+                        lineHeight: '1.4'
                       }}>
-                        ⏰ {daysUntil} days left
-                      </span>
-                    )}
-                    {isExpired && (
-                      <span style={{
-                        display: 'inline-block',
-                        backgroundColor: `${colors.error}20`,
-                        color: colors.error,
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        marginBottom: '10px'
-                      }}>
-                        EXPIRED
-                      </span>
-                    )}
-                    
-                    {/* Title */}
-                    <h3 style={{ 
-                      margin: '0 0 8px 0', 
-                      fontSize: '16px', 
-                      fontWeight: '600',
-                      color: colors.text,
-                      lineHeight: '1.4'
-                    }}>
-                      {opp.title || opp.commodity_description || 'Untitled Opportunity'}
-                    </h3>
-                    
-                    {/* Agency & Location */}
-                    <p style={{ 
-                      color: colors.textMuted, 
-                      margin: '0 0 8px 0', 
-                      fontSize: '14px' 
-                    }}>
-                      {opp.agency || opp.contact_name || 'Agency not specified'} 
-                      {opp.state && ` • ${opp.state}`}
-                      {opp.county && `, ${opp.county}`}
-                    </p>
-                    
-                    {/* Due Date */}
-                    <p style={{ 
-                      color: colors.textMuted, 
-                      margin: 0, 
-                      fontSize: '13px' 
-                    }}>
-                      📅 Due: {formatDate(opp.close_date)}
-                      {opp.estimated_value && ` • 💰 ${opp.estimated_value}`}
-                    </p>
-                  </div>
-                  
-                  {/* Right: Match Score */}
-                  <div style={{ 
-                    textAlign: 'center',
-                    minWidth: '100px'
-                  }}>
-                    <div style={{
-                      backgroundColor: colors.surface,
-                      borderRadius: '8px',
-                      padding: '12px',
-                      border: `1px solid ${colors.border}`
-                    }}>
+                        {opp.title || opp.commodity_description || 'Untitled Opportunity'}
+                      </h3>
+                      
+                      {/* Agency & Location */}
                       <p style={{ 
                         color: colors.textMuted, 
-                        fontSize: '11px', 
-                        margin: '0 0 4px 0',
-                        textTransform: 'uppercase'
+                        margin: '0 0 8px 0', 
+                        fontSize: '14px' 
                       }}>
-                        Your Score
+                        {opp.contact_name || 'Agency not specified'} 
+                        {opp.state && ` • ${opp.state}`}
+                        {opp.county && `, ${opp.county}`}
                       </p>
-                      <p style={{ 
-                        color: matchScore.current >= 60 ? colors.primary : colors.gold, 
-                        fontSize: '24px', 
-                        fontWeight: '700',
-                        margin: '0 0 8px 0'
-                      }}>
-                        {matchScore.current}%
-                      </p>
-                      <p style={{ 
-                        color: colors.primary, 
-                        fontSize: '12px', 
-                        margin: 0,
-                        fontWeight: '600'
-                      }}>
-                        → {matchScore.potential}% ✨
-                      </p>
+                      
+                      {/* Due Date */}
                       <p style={{ 
                         color: colors.textMuted, 
-                        fontSize: '10px', 
-                        margin: '4px 0 0 0' 
+                        margin: 0, 
+                        fontSize: '13px' 
                       }}>
-                        with CR-AI
+                        📅 Due: {formatDate(opp.close_date)}
                       </p>
+                    </div>
+                    
+                    {/* Right: Match Score */}
+                    <div style={{ 
+                      textAlign: 'center',
+                      minWidth: '100px'
+                    }}>
+                      <div style={{
+                        backgroundColor: colors.surface,
+                        borderRadius: '8px',
+                        padding: '12px',
+                        border: `1px solid ${colors.border}`
+                      }}>
+                        <p style={{ 
+                          color: colors.textMuted, 
+                          fontSize: '10px', 
+                          margin: '0 0 4px 0',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Your Score
+                        </p>
+                        <p style={{ 
+                          color: matchScore.current >= 60 ? colors.primary : colors.gold, 
+                          fontSize: '24px', 
+                          fontWeight: '700',
+                          margin: '0 0 6px 0'
+                        }}>
+                          {matchScore.current}%
+                        </p>
+                        <p style={{ 
+                          color: colors.primary, 
+                          fontSize: '12px', 
+                          margin: 0,
+                          fontWeight: '600'
+                        }}>
+                          → {matchScore.potential}% ✨
+                        </p>
+                        <p style={{ 
+                          color: colors.textMuted, 
+                          fontSize: '9px', 
+                          margin: '2px 0 0 0' 
+                        }}>
+                          with CR-AI
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Load More */}
-        {filteredOpps.length < totalCount && (
+        {filteredOpps.length > 0 && filteredOpps.length < totalCount && (
           <div style={{ textAlign: 'center', marginTop: '30px' }}>
             <button
               onClick={loadMore}
@@ -775,7 +763,7 @@ export default function ShopContracts({ session }) {
                 fontSize: '14px'
               }}
             >
-              Load More Opportunities
+              Load More ({totalCount - filteredOpps.length} remaining)
             </button>
           </div>
         )}
@@ -790,7 +778,7 @@ export default function ShopContracts({ session }) {
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.8)',
+              backgroundColor: 'rgba(0,0,0,0.85)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -806,7 +794,7 @@ export default function ShopContracts({ session }) {
                 padding: '30px',
                 maxWidth: '600px',
                 width: '100%',
-                maxHeight: '80vh',
+                maxHeight: '85vh',
                 overflow: 'auto',
                 border: `1px solid ${colors.border}`
               }}
@@ -818,16 +806,17 @@ export default function ShopContracts({ session }) {
                 alignItems: 'flex-start',
                 marginBottom: '20px'
               }}>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, paddingRight: '20px' }}>
                   <h2 style={{ 
                     margin: '0 0 10px 0', 
                     fontSize: '20px',
-                    lineHeight: '1.4'
+                    lineHeight: '1.4',
+                    color: colors.text
                   }}>
                     {selectedOpp.title || selectedOpp.commodity_description || 'Opportunity Details'}
                   </h2>
-                  <p style={{ color: colors.textMuted, margin: 0 }}>
-                    {selectedOpp.agency || selectedOpp.contact_name}
+                  <p style={{ color: colors.textMuted, margin: 0, fontSize: '14px' }}>
+                    {selectedOpp.contact_name || 'Agency not specified'}
                   </p>
                 </div>
                 <button
@@ -836,7 +825,7 @@ export default function ShopContracts({ session }) {
                     background: 'none',
                     border: 'none',
                     color: colors.textMuted,
-                    fontSize: '24px',
+                    fontSize: '28px',
                     cursor: 'pointer',
                     padding: '0',
                     lineHeight: '1'
@@ -860,35 +849,32 @@ export default function ShopContracts({ session }) {
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-around',
-                      textAlign: 'center'
+                      textAlign: 'center',
+                      alignItems: 'center'
                     }}>
                       <div>
-                        <p style={{ color: colors.textMuted, fontSize: '12px', margin: '0 0 5px 0' }}>
+                        <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 5px 0', textTransform: 'uppercase' }}>
                           YOUR SCORE
                         </p>
                         <p style={{ 
                           color: score.current >= 60 ? colors.primary : colors.gold, 
-                          fontSize: '32px', 
+                          fontSize: '36px', 
                           fontWeight: '700',
                           margin: 0
                         }}>
                           {score.current}%
                         </p>
                       </div>
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center',
-                        color: colors.textMuted
-                      }}>
+                      <div style={{ color: colors.textMuted, fontSize: '24px' }}>
                         →
                       </div>
                       <div>
-                        <p style={{ color: colors.textMuted, fontSize: '12px', margin: '0 0 5px 0' }}>
+                        <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 5px 0', textTransform: 'uppercase' }}>
                           WITH CR-AI
                         </p>
                         <p style={{ 
                           color: colors.primary, 
-                          fontSize: '32px', 
+                          fontSize: '36px', 
                           fontWeight: '700',
                           margin: 0
                         }}>
@@ -916,7 +902,7 @@ export default function ShopContracts({ session }) {
                 )
               })()}
 
-              {/* Details */}
+              {/* Details Grid */}
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ 
                   display: 'grid', 
@@ -925,7 +911,7 @@ export default function ShopContracts({ session }) {
                   marginBottom: '15px'
                 }}>
                   <div>
-                    <p style={{ color: colors.textMuted, fontSize: '12px', margin: '0 0 4px 0' }}>
+                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 4px 0', textTransform: 'uppercase' }}>
                       DUE DATE
                     </p>
                     <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>
@@ -933,7 +919,7 @@ export default function ShopContracts({ session }) {
                     </p>
                   </div>
                   <div>
-                    <p style={{ color: colors.textMuted, fontSize: '12px', margin: '0 0 4px 0' }}>
+                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 4px 0', textTransform: 'uppercase' }}>
                       LOCATION
                     </p>
                     <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>
@@ -944,8 +930,8 @@ export default function ShopContracts({ session }) {
                 </div>
                 
                 {selectedOpp.commodity_description && (
-                  <div>
-                    <p style={{ color: colors.textMuted, fontSize: '12px', margin: '0 0 8px 0' }}>
+                  <div style={{ marginTop: '15px' }}>
+                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
                       DESCRIPTION
                     </p>
                     <p style={{ 
@@ -962,13 +948,13 @@ export default function ShopContracts({ session }) {
                 {/* Contact Info */}
                 {(selectedOpp.contact_name || selectedOpp.contact_email || selectedOpp.contact_phone) && (
                   <div style={{ marginTop: '15px' }}>
-                    <p style={{ color: colors.textMuted, fontSize: '12px', margin: '0 0 8px 0' }}>
+                    <p style={{ color: colors.textMuted, fontSize: '11px', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
                       CONTACT
                     </p>
                     <p style={{ color: colors.text, margin: 0, fontSize: '14px' }}>
-                      {selectedOpp.contact_name}
-                      {selectedOpp.contact_email && ` • ${selectedOpp.contact_email}`}
-                      {selectedOpp.contact_phone && ` • ${selectedOpp.contact_phone}`}
+                      {selectedOpp.contact_name && <span>{selectedOpp.contact_name}</span>}
+                      {selectedOpp.contact_email && <span> • {selectedOpp.contact_email}</span>}
+                      {selectedOpp.contact_phone && <span> • {selectedOpp.contact_phone}</span>}
                     </p>
                   </div>
                 )}
@@ -978,7 +964,7 @@ export default function ShopContracts({ session }) {
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: '1fr 1fr', 
-                gap: '10px' 
+                gap: '12px' 
               }}>
                 <button
                   onClick={() => setSelectedOpp(null)}
@@ -1003,9 +989,10 @@ export default function ShopContracts({ session }) {
                     border: 'none',
                     borderRadius: '8px',
                     color: colors.background,
-                    cursor: 'pointer',
+                    cursor: addingToCart ? 'not-allowed' : 'pointer',
                     fontSize: '14px',
-                    fontWeight: '700'
+                    fontWeight: '700',
+                    opacity: addingToCart ? 0.7 : 1
                   }}
                 >
                   {addingToCart ? 'Adding...' : '🛒 Add to My Cart'}
