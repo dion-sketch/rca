@@ -6,10 +6,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function ResponseRoom({ session, profileData, onBack }) {
+export default function ResponseRoom({ session, profileData, onBack, autoSelectLatest = false }) {
   const [submissions, setSubmissions] = useState([])
   const [selectedSubmission, setSelectedSubmission] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [currentPhase, setCurrentPhase] = useState(1) // 1=Overview, 2=Strategy (future)
 
   // Colors
   const colors = {
@@ -42,6 +43,11 @@ export default function ResponseRoom({ session, profileData, onBack }) {
 
       if (error) throw error
       setSubmissions(data || [])
+      
+      // Auto-select the most recent submission when coming from Go Shopping
+      if (data && data.length > 0 && !selectedSubmission) {
+        setSelectedSubmission(data[0])
+      }
     } catch (err) {
       console.error('Error loading submissions:', err)
     } finally {
@@ -75,10 +81,13 @@ export default function ResponseRoom({ session, profileData, onBack }) {
     })
   }
 
-  // Calculate potential score with RCA help
-  const getPotentialScore = (currentScore) => {
-    const boost = 15 + Math.floor(Math.random() * 8)
-    return Math.min((currentScore || 50) + boost, 95)
+  // Calculate potential score with RCA help (consistent based on submission ID)
+  const getPotentialScore = (submission) => {
+    const currentScore = submission?.cr_match_score || 50
+    // Use submission ID to generate consistent boost (not random each render)
+    const idSum = (submission?.id || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    const boost = 15 + (idSum % 8) // Consistent boost between 15-22
+    return Math.min(currentScore + boost, 95)
   }
 
   // Get score from submission (use cr_match_score column)
@@ -172,7 +181,7 @@ export default function ResponseRoom({ session, profileData, onBack }) {
   // ==========================================
   if (selectedSubmission) {
     const currentScore = getScore(selectedSubmission)
-    const potentialScore = getPotentialScore(currentScore)
+    const potentialScore = getPotentialScore(selectedSubmission)
     const daysLeft = getDaysLeft(selectedSubmission.due_date)
 
     return (
@@ -307,9 +316,10 @@ export default function ResponseRoom({ session, profileData, onBack }) {
           {/* Action Buttons */}
           <button
             onClick={() => {
-              // TODO: Phase 2 - Strategy
-              alert('Phase 2: Strategy — Coming next!')
+              // Phase 2 not built yet - button is placeholder
+              setCurrentPhase(2)
             }}
+            disabled={true}
             style={{
               width: '100%',
               padding: '18px',
@@ -319,11 +329,12 @@ export default function ResponseRoom({ session, profileData, onBack }) {
               color: colors.background,
               fontSize: '16px',
               fontWeight: '700',
-              cursor: 'pointer',
-              marginBottom: '12px'
+              cursor: 'not-allowed',
+              marginBottom: '12px',
+              opacity: 0.6
             }}
           >
-            📝 Start Draft
+            📝 Start Draft (Coming Soon)
           </button>
 
           <button
