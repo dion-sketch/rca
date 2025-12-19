@@ -129,7 +129,18 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
       // Fallback strategy if API fails
       setGeneratedStrategy({
         suggestedTitle: `${profileData?.company_name || 'Our'} Partnership Proposal`,
-        approach: `We will leverage our expertise and commitment to deliver exceptional results for this opportunity. Our team brings proven experience and a client-focused approach that aligns with the goals outlined in this request.`
+        angle: 'Position as experienced local provider with proven track record',
+        fromBucket: [
+          profileData?.company_name || 'Your company',
+          profileData?.city ? `${profileData.city} based` : 'Local presence',
+          'Relevant experience'
+        ],
+        keyPoints: [
+          'Emphasize relevant past performance',
+          'Highlight certifications and qualifications',
+          'Show understanding of agency needs',
+          'Demonstrate capacity to deliver'
+        ]
       })
     } finally {
       setGeneratingStrategy(false)
@@ -357,7 +368,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
 
           {/* Show generated strategy OR input form */}
           {generatedStrategy ? (
-            // GENERATED STRATEGY DISPLAY
+            // GENERATED STRATEGY DISPLAY - GAME PLAN FORMAT
             <div style={{
               backgroundColor: colors.card,
               border: `1px solid ${colors.primary}40`,
@@ -365,6 +376,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               padding: '25px',
               marginBottom: '25px'
             }}>
+              {/* Header */}
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -373,21 +385,89 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 paddingBottom: '15px',
                 borderBottom: `1px solid ${colors.border}`
               }}>
-                <span style={{ fontSize: '24px' }}>🪣+🤖</span>
+                <span style={{ fontSize: '24px' }}>🎯</span>
                 <span style={{ color: colors.primary, fontSize: '13px', fontWeight: '600' }}>
-                  BUCKET + RCA STRATEGY
+                  YOUR GAME PLAN
                 </span>
               </div>
               
-              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>SUGGESTED TITLE</p>
-              <p style={{ color: colors.primary, fontSize: '18px', fontWeight: '600', marginBottom: '20px' }}>
-                "{generatedStrategy.suggestedTitle}"
-              </p>
+              {/* Suggested Title - BIG at top */}
+              <div style={{ 
+                backgroundColor: `${colors.primary}15`, 
+                padding: '20px', 
+                borderRadius: '12px', 
+                marginBottom: '20px',
+                textAlign: 'center'
+              }}>
+                <p style={{ color: colors.muted, fontSize: '10px', marginBottom: '8px', textTransform: 'uppercase' }}>
+                  Suggested Program Title
+                </p>
+                <p style={{ color: colors.primary, fontSize: '22px', fontWeight: '700', margin: 0 }}>
+                  "{generatedStrategy.suggestedTitle}"
+                </p>
+              </div>
               
-              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>APPROACH</p>
-              <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.7', marginBottom: '25px' }}>
-                {generatedStrategy.approach}
-              </p>
+              {/* Angle - One liner */}
+              {generatedStrategy.angle && (
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '6px' }}>YOUR ANGLE</p>
+                  <p style={{ color: colors.gold, fontSize: '15px', fontStyle: 'italic', margin: 0 }}>
+                    "{generatedStrategy.angle}"
+                  </p>
+                </div>
+              )}
+              
+              {/* From Bucket - What to use */}
+              {generatedStrategy.fromBucket && generatedStrategy.fromBucket.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '10px' }}>
+                    🪣 FROM YOUR BUCKET - HIGHLIGHT THESE
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {generatedStrategy.fromBucket.map((item, i) => (
+                      <span key={i} style={{
+                        backgroundColor: `${colors.gold}20`,
+                        color: colors.gold,
+                        padding: '6px 12px',
+                        borderRadius: '20px',
+                        fontSize: '13px'
+                      }}>
+                        ✓ {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Key Points */}
+              {generatedStrategy.keyPoints && generatedStrategy.keyPoints.length > 0 && (
+                <div style={{ marginBottom: '25px' }}>
+                  <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '10px' }}>
+                    📋 KEY POINTS TO HIT
+                  </p>
+                  <ul style={{ 
+                    margin: 0, 
+                    paddingLeft: '20px', 
+                    color: '#ccc', 
+                    fontSize: '14px',
+                    lineHeight: '1.8'
+                  }}>
+                    {generatedStrategy.keyPoints.map((point, i) => (
+                      <li key={i} style={{ marginBottom: '6px' }}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Fallback for old format */}
+              {generatedStrategy.approach && !generatedStrategy.angle && (
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>APPROACH</p>
+                  <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.7' }}>
+                    {generatedStrategy.approach}
+                  </p>
+                </div>
+              )}
               
               {/* Action Buttons */}
               <div style={{ display: 'grid', gap: '12px' }}>
@@ -425,21 +505,6 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                   }}
                 >
                   🔄 Regenerate
-                </button>
-                <button
-                  onClick={() => setGeneratedStrategy(null)}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    backgroundColor: 'transparent',
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '10px',
-                    color: '#ccc',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ✏️ Edit
                 </button>
               </div>
             </div>
