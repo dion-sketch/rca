@@ -578,7 +578,7 @@ function App() {
                 <div style={{ fontSize: '36px', marginBottom: '12px' }}>📝</div>
                 <h3 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '18px' }}>Response Room</h3>
                 <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
-                  CR-AI helps you write winning responses
+                  BUCKET + CR-AI write winning responses together
                 </p>
               </div>
 
@@ -682,7 +682,7 @@ function ResponseRoom({ session, profileData, onBack }) {
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <div style={{ fontSize: '60px', marginBottom: '15px' }}>📝</div>
         <h1 style={{ color: '#fff', margin: '0 0 10px 0' }}>Response Room</h1>
-        <p style={{ color: '#888', margin: 0 }}>Where CR-AI helps you write winning responses</p>
+        <p style={{ color: '#888', margin: 0 }}>Where BUCKET + CR-AI write winning responses together</p>
       </div>
 
       <div style={{
