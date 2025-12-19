@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import AdminCSVUpload from './AdminCSVUpload'
 
 const colors = {
   primary: '#00FF00',
@@ -18,6 +19,7 @@ function MyCart({ session, onBack, profileData }) {
   const [selectedOpportunity, setSelectedOpportunity] = useState(null)
   const [allSubmissions, setAllSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showCSVUpload, setShowCSVUpload] = useState(false) // Admin CSV upload modal
   
   const [showConfirm, setShowConfirm] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -62,7 +64,7 @@ function MyCart({ session, onBack, profileData }) {
     }
   }
 
-  // REAL Contract Search - Searches the ENTIRE INTERNET
+  // REAL Contract Search - Searches DATABASE FIRST (instant), then web
   // Based on user location: Federal, State, County, City, everywhere
   const handleSmartSearch = async () => {
     if (!searchQuery.trim()) return
@@ -78,16 +80,18 @@ function MyCart({ session, onBack, profileData }) {
         state: profileData?.state || 'California'
       }
 
-      const response = await fetch('/api/contract-search', {
+      // Use the new smart search API (database first, then web fallback)
+      const response = await fetch('/api/search-opportunities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           searchQuery: searchQuery.trim(),
           searchType: 'specific', // Looking for a specific contract
           userLocation: userLocation,
+          geographicPreference: profileData?.geographic_preference || 'local',
           naicsCodes: profileData?.naics_codes || [],
           certifications: profileData?.certifications || [],
-          serviceAreas: profileData?.service_areas || []
+          sources: ['all'] // Search all sources
         })
       })
       
@@ -109,7 +113,12 @@ function MyCart({ session, onBack, profileData }) {
           matchScore: bestMatch.matchScore,
           matchLevel: bestMatch.matchLevel,
           confidence: bestMatch.matchScore >= 80 ? 'high' : bestMatch.matchScore >= 60 ? 'medium' : 'low',
-          allResults: data.opportunities // Store all results in case user wants to see more
+          allResults: data.opportunities, // Store all results in case user wants to see more
+          searchMethod: data.searchMethod, // 'database' or 'web'
+          fromDatabase: bestMatch.fromDatabase,
+          contactName: bestMatch.contactName,
+          contactPhone: bestMatch.contactPhone,
+          contactEmail: bestMatch.contactEmail
         })
         setSearchMode('results')
       } else {
@@ -373,11 +382,17 @@ function MyCart({ session, onBack, profileData }) {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: colors.background, fontFamily: 'Inter, system-ui, sans-serif' }}>
+      {/* Admin CSV Upload Modal */}
+      {showCSVUpload && <AdminCSVUpload onClose={() => setShowCSVUpload(false)} />}
+      
       <div style={{ backgroundColor: colors.card, padding: '20px 30px', borderBottom: `1px solid ${colors.primary}30` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.gray, cursor: 'pointer', fontSize: '16px' }}>← Dashboard</button>
           <h1 style={{ color: colors.white, margin: 0, fontSize: '20px' }}>My Cart</h1>
-          <button onClick={() => setShowAddManual(true)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>+ Add</button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={() => setShowCSVUpload(true)} style={{ padding: '8px 12px', borderRadius: '8px', border: `1px solid ${colors.gold}50`, backgroundColor: 'transparent', color: colors.gold, cursor: 'pointer', fontSize: '12px' }} title="Import opportunities from CSV">📥 Import</button>
+            <button onClick={() => setShowAddManual(true)} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', backgroundColor: colors.primary, color: colors.background, fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>+ Add</button>
+          </div>
         </div>
       </div>
 
@@ -575,7 +590,22 @@ function MyCart({ session, onBack, profileData }) {
             {searchMode === 'results' && searchResults && (
               <>
                 <h2 style={{ color: colors.primary, margin: '0 0 5px 0', fontSize: '20px' }}>✓ Found It!</h2>
-                <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>Is this the opportunity you're looking for?</p>
+                <p style={{ color: colors.gray, margin: '0 0 10px 0', fontSize: '14px' }}>Is this the opportunity you're looking for?</p>
+                
+                {/* Search Method Badge */}
+                {searchResults.searchMethod && (
+                  <div style={{ 
+                    display: 'inline-block',
+                    padding: '4px 10px', 
+                    borderRadius: '12px', 
+                    backgroundColor: searchResults.searchMethod === 'database' ? `${colors.primary}20` : `${colors.gold}20`,
+                    color: searchResults.searchMethod === 'database' ? colors.primary : colors.gold,
+                    fontSize: '11px',
+                    marginBottom: '15px'
+                  }}>
+                    {searchResults.searchMethod === 'database' ? '⚡ Instant Match (Database)' : '🔍 Web Search'}
+                  </div>
+                )}
                 
                 <div style={{ backgroundColor: colors.background, borderRadius: '12px', padding: '20px', marginBottom: '20px', border: `1px solid ${colors.primary}50` }}>
                   <h3 style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '18px' }}>{searchResults.title}</h3>
@@ -611,6 +641,17 @@ function MyCart({ session, onBack, profileData }) {
                         <p style={{ color: colors.white, fontSize: '14px', margin: 0, lineHeight: '1.5' }}>{searchResults.description}</p>
                       </div>
                     )}
+                    
+                    {/* Contact Info (from database) */}
+                    {(searchResults.contactName || searchResults.contactEmail || searchResults.contactPhone) && (
+                      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${colors.gray}30` }}>
+                        <span style={{ color: colors.gray, fontSize: '13px', display: 'block', marginBottom: '8px' }}>Contact:</span>
+                        {searchResults.contactName && <p style={{ color: colors.white, fontSize: '14px', margin: '0 0 4px 0' }}>{searchResults.contactName}</p>}
+                        {searchResults.contactPhone && <p style={{ color: colors.primary, fontSize: '13px', margin: '0 0 4px 0' }}>📞 {searchResults.contactPhone}</p>}
+                        {searchResults.contactEmail && <p style={{ color: colors.primary, fontSize: '13px', margin: 0 }}>✉️ {searchResults.contactEmail}</p>}
+                      </div>
+                    )}
+                    
                     {searchResults.source && (
                       <div style={{ marginTop: '5px' }}>
                         <span style={{ color: colors.gray, fontSize: '11px' }}>Source: {searchResults.source}</span>
