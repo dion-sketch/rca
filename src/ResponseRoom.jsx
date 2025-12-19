@@ -11,6 +11,11 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   const [selectedSubmission, setSelectedSubmission] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentPhase, setCurrentPhase] = useState(1) // 1=Overview, 2=Strategy (future)
+  
+  // Phase 2 Strategy state
+  const [userAngle, setUserAngle] = useState('')
+  const [generatingStrategy, setGeneratingStrategy] = useState(false)
+  const [generatedStrategy, setGeneratedStrategy] = useState(null)
 
   // Colors
   const colors = {
@@ -95,6 +100,36 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     return sub.cr_match_score || 50
   }
 
+  // Generate strategy with RCA
+  const generateStrategy = async (quickPick = null) => {
+    setGeneratingStrategy(true)
+    try {
+      const response = await fetch('/api/generate-strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          opportunity: selectedSubmission,
+          profile: profileData,
+          userAngle: quickPick || userAngle
+        })
+      })
+      
+      if (!response.ok) throw new Error('Failed to generate')
+      
+      const data = await response.json()
+      setGeneratedStrategy(data.strategy)
+    } catch (err) {
+      console.error('Strategy generation error:', err)
+      // Fallback strategy if API fails
+      setGeneratedStrategy({
+        suggestedTitle: `${profileData?.company_name || 'Our'} Partnership Proposal`,
+        approach: `We will leverage our expertise and commitment to deliver exceptional results for this opportunity. Our team brings proven experience and a client-focused approach that aligns with the goals outlined in this request.`
+      })
+    } finally {
+      setGeneratingStrategy(false)
+    }
+  }
+
   // ==========================================
   // LOADING STATE
   // ==========================================
@@ -177,9 +212,254 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   }
 
   // ==========================================
-  // DETAIL VIEW - Overview Screen
+  // PHASE 2 - Strategy Screen
   // ==========================================
-  if (selectedSubmission) {
+  if (selectedSubmission && currentPhase === 2) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        backgroundColor: colors.background, 
+        padding: '40px 30px',
+        paddingBottom: '100px'
+      }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          
+          {/* Back Button */}
+          <p 
+            onClick={() => {
+              setCurrentPhase(1)
+              setGeneratedStrategy(null)
+              setUserAngle('')
+            }}
+            style={{ 
+              color: colors.muted, 
+              fontSize: '16px', 
+              marginBottom: '20px',
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Overview
+          </p>
+
+          {/* Phase Progress Bar */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '30px' }}>
+            {['Overview', 'Strategy', 'Answers', 'Review', 'Submit'].map((phase, i) => (
+              <div key={phase} style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{
+                  height: '4px',
+                  backgroundColor: i === 0 ? colors.primary : i === 1 ? colors.gold : colors.border,
+                  borderRadius: '2px',
+                  marginBottom: '8px'
+                }} />
+                <span style={{ 
+                  color: i === 0 ? colors.primary : i === 1 ? colors.gold : colors.muted, 
+                  fontSize: '11px',
+                  fontWeight: i === 1 ? '600' : '400'
+                }}>
+                  {i + 1}. {phase}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Title */}
+          <h1 style={{ color: colors.text, fontSize: '20px', marginBottom: '30px' }}>
+            {selectedSubmission.title}
+          </h1>
+
+          {/* Show generated strategy OR input form */}
+          {generatedStrategy ? (
+            // GENERATED STRATEGY DISPLAY
+            <div style={{
+              backgroundColor: colors.card,
+              border: `1px solid ${colors.primary}40`,
+              borderRadius: '16px',
+              padding: '25px',
+              marginBottom: '25px'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '10px', 
+                marginBottom: '20px',
+                paddingBottom: '15px',
+                borderBottom: `1px solid ${colors.border}`
+              }}>
+                <span style={{ fontSize: '24px' }}>🪣+🤖</span>
+                <span style={{ color: colors.primary, fontSize: '13px', fontWeight: '600' }}>
+                  BUCKET + RCA STRATEGY
+                </span>
+              </div>
+              
+              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>SUGGESTED TITLE</p>
+              <p style={{ color: colors.primary, fontSize: '18px', fontWeight: '600', marginBottom: '20px' }}>
+                "{generatedStrategy.suggestedTitle}"
+              </p>
+              
+              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>APPROACH</p>
+              <p style={{ color: '#ccc', fontSize: '14px', lineHeight: '1.7', marginBottom: '25px' }}>
+                {generatedStrategy.approach}
+              </p>
+              
+              {/* Action Buttons */}
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <button
+                  disabled={true}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    backgroundColor: colors.gold,
+                    border: 'none',
+                    borderRadius: '10px',
+                    color: colors.background,
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    cursor: 'not-allowed',
+                    opacity: 0.6
+                  }}
+                >
+                  ✅ Use This → Continue to Answers (Coming Soon)
+                </button>
+                <button
+                  onClick={() => {
+                    setGeneratedStrategy(null)
+                    generateStrategy()
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '10px',
+                    color: '#ccc',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🔄 Regenerate
+                </button>
+                <button
+                  onClick={() => setGeneratedStrategy(null)}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '10px',
+                    color: '#ccc',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✏️ Edit
+                </button>
+              </div>
+            </div>
+          ) : generatingStrategy ? (
+            // LOADING STATE
+            <div style={{
+              backgroundColor: colors.card,
+              borderRadius: '16px',
+              padding: '60px 30px',
+              textAlign: 'center',
+              marginBottom: '25px'
+            }}>
+              <div style={{ fontSize: '40px', marginBottom: '20px' }}>🤖</div>
+              <p style={{ color: colors.gold, fontSize: '18px', marginBottom: '10px' }}>
+                RCA is thinking...
+              </p>
+              <p style={{ color: colors.muted, fontSize: '14px' }}>
+                Pulling from your BUCKET to create a winning strategy
+              </p>
+            </div>
+          ) : (
+            // INPUT FORM
+            <>
+              <div style={{
+                backgroundColor: colors.card,
+                border: `2px solid ${colors.gold}`,
+                borderRadius: '16px',
+                padding: '30px',
+                textAlign: 'center',
+                marginBottom: '25px'
+              }}>
+                <p style={{ color: colors.gold, fontSize: '20px', marginBottom: '25px' }}>
+                  What's your angle for this one?
+                </p>
+                
+                <textarea
+                  value={userAngle}
+                  onChange={(e) => setUserAngle(e.target.value)}
+                  placeholder="Example: Focus on our 10 years of experience and community partnerships..."
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#1a1a1a',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '8px',
+                    padding: '15px',
+                    color: colors.text,
+                    fontSize: '14px',
+                    resize: 'none',
+                    minHeight: '80px',
+                    marginBottom: '20px'
+                  }}
+                />
+                
+                <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '15px' }}>
+                  Or pick a quick approach:
+                </p>
+                
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
+                  {['🎯 Experience-focused', '🤝 Community partnerships', '📊 Data-driven', '💰 Cost-effective'].map(pick => (
+                    <button 
+                      key={pick} 
+                      onClick={() => generateStrategy(pick)}
+                      style={{
+                        backgroundColor: '#1a1a1a',
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '20px',
+                        padding: '8px 16px',
+                        color: '#ccc',
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {pick}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Generate Button */}
+              <button
+                onClick={() => generateStrategy()}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  backgroundColor: colors.gold,
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: colors.background,
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  marginBottom: '12px'
+                }}
+              >
+                🤖 Generate Strategy with RCA
+              </button>
+            </>
+          )}
+
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================
+  // DETAIL VIEW - Overview Screen (Phase 1)
+  // ==========================================
+  if (selectedSubmission && currentPhase === 1) {
     const currentScore = getScore(selectedSubmission)
     const potentialScore = getPotentialScore(selectedSubmission)
     const daysLeft = getDaysLeft(selectedSubmission.due_date)
@@ -232,8 +512,8 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               {selectedSubmission.title}
             </h2>
 
-            {/* Summary - What They Want */}
-            {selectedSubmission.description && (
+            {/* Only show description if it's actually descriptive (not just a category like "Construction") */}
+            {selectedSubmission.description && selectedSubmission.description.length > 30 && (
               <p style={{
                 color: '#ccc',
                 fontSize: '14px',
@@ -244,6 +524,21 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               }}>
                 {selectedSubmission.description}
               </p>
+            )}
+
+            {/* Show category as a tag if description is short */}
+            {selectedSubmission.description && selectedSubmission.description.length <= 30 && (
+              <div style={{ marginBottom: '15px' }}>
+                <span style={{
+                  backgroundColor: `${colors.primary}20`,
+                  color: colors.primary,
+                  padding: '4px 12px',
+                  borderRadius: '12px',
+                  fontSize: '12px'
+                }}>
+                  {selectedSubmission.description}
+                </span>
+              </div>
             )}
 
             {/* Meta Info */}
@@ -316,10 +611,9 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           {/* Action Buttons */}
           <button
             onClick={() => {
-              // Phase 2 not built yet - button is placeholder
+              // Go to Phase 2 - Strategy
               setCurrentPhase(2)
             }}
-            disabled={true}
             style={{
               width: '100%',
               padding: '18px',
@@ -329,12 +623,11 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               color: colors.background,
               fontSize: '16px',
               fontWeight: '700',
-              cursor: 'not-allowed',
-              marginBottom: '12px',
-              opacity: 0.6
+              cursor: 'pointer',
+              marginBottom: '12px'
             }}
           >
-            📝 Start Draft (Coming Soon)
+            📝 Start Draft
           </button>
 
           <button
@@ -403,7 +696,10 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           return (
             <div
               key={sub.id}
-              onClick={() => setSelectedSubmission(sub)}
+              onClick={() => {
+                setSelectedSubmission(sub)
+                setCurrentPhase(1) // Always start at Overview
+              }}
               style={{
                 backgroundColor: colors.card,
                 borderRadius: '12px',
