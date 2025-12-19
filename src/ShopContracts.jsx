@@ -25,7 +25,7 @@ const NAICS_PHRASES = {
   '7111': ['performing arts', 'theater', 'theatre', 'symphony', 'ballet', 'opera']
 }
 
-export default function ShopContracts({ session }) {
+export default function ShopContracts({ session, onNavigate }) {
   const [profile, setProfile] = useState(null)
   const [opportunities, setOpportunities] = useState([])
   const [loading, setLoading] = useState(true)
@@ -289,9 +289,12 @@ export default function ShopContracts({ session }) {
         .single()
       
       if (existing) {
-        alert('✅ Already in your Response Room!')
+        // Already in Response Room - just navigate there
         setAddingToCart(false)
         setSelectedOpp(null)
+        if (onNavigate) {
+          onNavigate('response-room')
+        }
         return
       }
       
@@ -307,8 +310,11 @@ export default function ShopContracts({ session }) {
         created_at: new Date().toISOString()
       })
       
-      alert('✅ Added to Response Room!')
+      // Go straight to Response Room
       setSelectedOpp(null)
+      if (onNavigate) {
+        onNavigate('response-room')
+      }
     } catch (err) {
       alert('Failed to add.')
     } finally {
