@@ -81,6 +81,11 @@ export default function ResponseRoom({ session, profileData, onBack }) {
     return Math.min((currentScore || 50) + boost, 95)
   }
 
+  // Get score from submission (use cr_match_score column)
+  const getScore = (sub) => {
+    return sub.cr_match_score || 50
+  }
+
   // ==========================================
   // LOADING STATE
   // ==========================================
@@ -166,7 +171,7 @@ export default function ResponseRoom({ session, profileData, onBack }) {
   // DETAIL VIEW - Overview Screen
   // ==========================================
   if (selectedSubmission) {
-    const currentScore = selectedSubmission.match_score || 50
+    const currentScore = getScore(selectedSubmission)
     const potentialScore = getPotentialScore(currentScore)
     const daysLeft = getDaysLeft(selectedSubmission.due_date)
 
@@ -234,11 +239,11 @@ export default function ResponseRoom({ session, profileData, onBack }) {
 
             {/* Meta Info */}
             <div style={{ display: 'flex', gap: '25px', flexWrap: 'wrap' }}>
-              {selectedSubmission.funding && (
+              {selectedSubmission.estimated_value && (
                 <div>
                   <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '4px' }}>Funding</p>
                   <p style={{ color: colors.primary, fontSize: '14px', fontWeight: '600', margin: 0 }}>
-                    {selectedSubmission.funding}
+                    {selectedSubmission.estimated_value}
                   </p>
                 </div>
               )}
@@ -254,14 +259,6 @@ export default function ResponseRoom({ session, profileData, onBack }) {
                   {selectedSubmission.agency || 'Not specified'}
                 </p>
               </div>
-              {selectedSubmission.location && (
-                <div>
-                  <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '4px' }}>Location</p>
-                  <p style={{ color: colors.text, fontSize: '14px', margin: 0 }}>
-                    {selectedSubmission.location}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
 
@@ -390,7 +387,7 @@ export default function ResponseRoom({ session, profileData, onBack }) {
         {/* List Items */}
         {submissions.map((sub) => {
           const daysLeft = getDaysLeft(sub.due_date)
-          const score = sub.match_score || 50
+          const score = getScore(sub)
 
           return (
             <div
@@ -454,7 +451,7 @@ export default function ResponseRoom({ session, profileData, onBack }) {
                 {/* Meta */}
                 <p style={{ color: colors.muted, fontSize: '13px', margin: 0 }}>
                   {sub.agency || 'Agency'} • Due: {formatShortDate(sub.due_date)}
-                  {sub.funding && ` • ${sub.funding}`}
+                  {sub.estimated_value && ` • ${sub.estimated_value}`}
                 </p>
               </div>
 
