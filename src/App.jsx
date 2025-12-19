@@ -173,10 +173,10 @@ function App() {
               margin: 0,
               textShadow: `0 0 10px ${colors.primary}`
             }}>
-              CR-AI
+              RCA
             </h1>
             <p style={{ color: colors.gray, margin: '5px 0 0 0' }}>
-              Contract Ready Assistant
+              Rambo Contract Assistant
             </p>
           </div>
 
@@ -313,7 +313,7 @@ function App() {
       backgroundColor: colors.background,
       fontFamily: 'Inter, system-ui, sans-serif'
     }}>
-      {/* Navigation - NEW CLEARER NAMES */}
+      {/* Navigation */}
       <nav style={{
         backgroundColor: colors.card,
         padding: '15px 30px',
@@ -326,11 +326,11 @@ function App() {
           onClick={() => setCurrentPage('dashboard')}
           style={{ cursor: 'pointer' }}
         >
-          <h1 style={{ color: colors.primary, margin: 0, fontSize: '24px', letterSpacing: '1px' }}>
-            CR-AI
+          <h1 style={{ color: colors.primary, margin: 0, fontSize: '28px', fontWeight: '700', letterSpacing: '2px' }}>
+            RCA
           </h1>
-          <p style={{ color: colors.gray, margin: '2px 0 0 0', fontSize: '10px', letterSpacing: '0.5px' }}>
-            Contract Ready Assistant
+          <p style={{ color: colors.gray, margin: '2px 0 0 0', fontSize: '11px', letterSpacing: '0.5px' }}>
+            Rambo Contract Assistant
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -454,7 +454,7 @@ function App() {
                 Welcome! 👋
               </h2>
               <p style={{ color: colors.gray, margin: 0 }}>
-                Your <strong style={{ color: colors.primary }}>Contract Ready AI Assistant</strong>. Let's win some contracts.
+                Your <strong style={{ color: colors.primary }}>Rambo Contract Assistant</strong>. Let's win some contracts.
               </p>
             </div>
 
@@ -578,7 +578,7 @@ function App() {
                 <div style={{ fontSize: '36px', marginBottom: '12px' }}>📝</div>
                 <h3 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '18px' }}>Response Room</h3>
                 <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
-                  BUCKET + CR-AI write winning responses together
+                  BUCKET + RCA write winning responses together
                 </p>
               </div>
 
@@ -659,7 +659,7 @@ function App() {
         textAlign: 'center'
       }}>
         <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>
-          Powered by <span style={{ color: colors.primary }}>Contract Ready</span> • CR-AI Technology
+          Powered by <span style={{ color: colors.primary }}>Contract Ready</span> • RCA Technology
         </p>
       </div>
     </div>
@@ -667,7 +667,7 @@ function App() {
 }
 
 // ==========================================
-// RESPONSE ROOM - Placeholder
+// RESPONSE ROOM
 // ==========================================
 function ResponseRoom({ session, profileData, onBack }) {
   return (
@@ -682,7 +682,7 @@ function ResponseRoom({ session, profileData, onBack }) {
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
         <div style={{ fontSize: '60px', marginBottom: '15px' }}>📝</div>
         <h1 style={{ color: '#fff', margin: '0 0 10px 0' }}>Response Room</h1>
-        <p style={{ color: '#888', margin: 0 }}>Where BUCKET + CR-AI write winning responses together</p>
+        <p style={{ color: '#888', margin: 0 }}>Where BUCKET + RCA write winning responses together</p>
       </div>
 
       <div style={{
@@ -765,7 +765,7 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
         <div style={{ fontSize: '60px', marginBottom: '15px' }}>🪣</div>
         <h1 style={{ color: colors.white, margin: '0 0 10px 0' }}>My BUCKET</h1>
-        <p style={{ color: colors.gray, margin: 0 }}>Everything CR-AI knows about your business</p>
+        <p style={{ color: colors.gray, margin: 0 }}>Everything RCA knows about your business</p>
       </div>
 
       <div style={{
