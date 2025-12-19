@@ -37,7 +37,7 @@ export default function ResponseRoom({ session, profileData, onBack }) {
         .from('submissions')
         .select('*')
         .eq('user_id', session.user.id)
-        .in('status', ['in_progress', 'considering'])
+        .neq('status', 'submitted')
         .order('created_at', { ascending: false })
 
       if (error) throw error
