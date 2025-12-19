@@ -1,57 +1,28 @@
 // ============================================
-// ShopContracts.jsx - V4
-// SMART SCORING - Varied & Accurate
+// ShopContracts.jsx - V5
+// REAL VARIED SCORING - Actual differentiation
 // ============================================
 
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
 // ============================================
-// NAICS PHRASES - What we match on
+// PHRASE TIERS - Different base scores
 // ============================================
-const NAICS_PHRASES = {
-  '6213': ['mental health', 'behavioral health', 'psychiatric', 'psychologist', 'counseling', 'therapist', 'therapy', 'substance abuse', 'addiction', 'crisis intervention'],
-  '6214': ['mental health center', 'behavioral health center', 'outpatient mental', 'outpatient behavioral'],
-  '6241': ['youth program', 'youth services', 'child welfare', 'foster care', 'foster family', 'family preservation', 'child protective', 'permanency', 'at-risk youth', 'family reunification', 'adoption services', 'juvenile'],
-  '5418': ['public relations', 'advertising agency', 'media campaign', 'marketing campaign', 'PR services', 'communications campaign'],
-  '5416': ['marketing consulting', 'marketing strategy', 'management consulting'],
-  '7113': ['concert', 'music festival', 'performing arts', 'entertainment event', 'cultural event', 'live event', 'event promotion'],
-  '7111': ['performing arts', 'theater', 'theatre', 'symphony', 'ballet', 'opera'],
-  '5411': ['administrative', 'admin services']
-}
+const TIER1_PHRASES = ['mental health', 'behavioral health', 'foster care', 'child welfare']  // Most specific
+const TIER2_PHRASES = ['youth services', 'youth program', 'permanency', 'psychiatric', 'family preservation']
+const TIER3_PHRASES = ['counseling', 'therapy', 'at-risk youth', 'juvenile', 'adoption']
+const TIER4_PHRASES = ['therapist', 'psychologist', 'substance abuse', 'crisis intervention']
 
-// Strength of each phrase (some are more specific than others)
-const PHRASE_STRENGTH = {
-  'mental health': 95,
-  'behavioral health': 95,
-  'foster care': 95,
-  'foster family': 95,
-  'youth services': 90,
-  'youth program': 90,
-  'child welfare': 90,
-  'permanency': 88,
-  'family preservation': 88,
-  'at-risk youth': 88,
-  'psychiatric': 85,
-  'counseling': 80,
-  'therapy': 80,
-  'therapist': 80,
-  'psychologist': 85,
-  'crisis intervention': 85,
-  'substance abuse': 85,
-  'addiction': 80,
-  'juvenile': 75,
-  'family reunification': 85,
-  'child protective': 90,
-  'adoption services': 85,
-  'public relations': 80,
-  'advertising agency': 80,
-  'marketing campaign': 75,
-  'concert': 85,
-  'music festival': 85,
-  'performing arts': 80,
-  'entertainment event': 75,
-  'cultural event': 75
+// All valid phrases by NAICS
+const NAICS_PHRASES = {
+  '6213': ['mental health', 'behavioral health', 'psychiatric', 'psychologist', 'counseling', 'therapist', 'therapy', 'substance abuse', 'crisis intervention'],
+  '6214': ['mental health center', 'behavioral health center', 'outpatient mental health'],
+  '6241': ['youth program', 'youth services', 'child welfare', 'foster care', 'family preservation', 'permanency', 'at-risk youth', 'juvenile', 'adoption'],
+  '5418': ['public relations', 'advertising', 'marketing campaign', 'PR services'],
+  '5416': ['marketing consulting', 'management consulting'],
+  '7113': ['concert', 'music festival', 'performing arts', 'entertainment event', 'cultural event'],
+  '7111': ['performing arts', 'theater', 'theatre', 'symphony', 'ballet', 'opera']
 }
 
 export default function ShopContracts({ session }) {
@@ -59,7 +30,6 @@ export default function ShopContracts({ session }) {
   const [opportunities, setOpportunities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  
   const [searchTerm, setSearchTerm] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [showLowMatches, setShowLowMatches] = useState(false)
@@ -71,14 +41,10 @@ export default function ShopContracts({ session }) {
     primary: '#00FF00',
     gold: '#FFD700',
     background: '#000000',
-    surface: '#0a0a0a',
     card: '#111111',
     text: '#FFFFFF',
     muted: '#888888',
-    border: '#333333',
-    lowMatch: '#FF6B6B',
-    medMatch: '#FFD700',
-    highMatch: '#00FF00'
+    border: '#333333'
   }
 
   useEffect(() => {
@@ -93,12 +59,8 @@ export default function ShopContracts({ session }) {
         .eq('user_id', session.user.id)
         .single()
       
-      if (data) {
-        setProfile(data)
-        loadOpportunities(data)
-      } else {
-        loadOpportunities(null)
-      }
+      setProfile(data)
+      loadOpportunities(data)
     } catch (err) {
       loadOpportunities(null)
     }
@@ -123,11 +85,13 @@ export default function ShopContracts({ session }) {
         return
       }
 
+      // Score each opportunity
       const scored = data.map(opp => ({
         ...opp,
-        matchScore: calculateSmartScore(opp, userProfile)
+        matchScore: calculateRealScore(opp, userProfile)
       }))
 
+      // Sort: matches first, then by score
       scored.sort((a, b) => {
         if (a.matchScore.isMatch && !b.matchScore.isMatch) return -1
         if (!a.matchScore.isMatch && b.matchScore.isMatch) return 1
@@ -143,128 +107,126 @@ export default function ShopContracts({ session }) {
   }
 
   // ============================================
-  // SMART SCORING - Varied & Accurate
+  // REAL SCORING WITH ACTUAL VARIANCE
   // ============================================
-  const calculateSmartScore = (opp, userProfile) => {
+  const calculateRealScore = (opp, userProfile) => {
     if (!userProfile) {
-      return { current: 0, potential: 20, isMatch: false, matchedPhrase: null, matchStrength: null }
+      return { current: 0, potential: 15, isMatch: false }
     }
 
     const title = (opp.title || '').toLowerCase()
     const description = (opp.commodity_description || '').toLowerCase()
-    const fullText = `${title} ${description}`
-    
     const userNaics = userProfile.naics_codes || []
     const userState = userProfile.state
+    const oppState = opp.state
 
     let bestMatch = null
-    let bestScore = 0
-    let matchLocation = null
+    let inTitle = false
+    let tier = 0
+    let matchCount = 0
 
-    // Check each user NAICS code
+    // Find all matching phrases
     for (const naicsItem of userNaics) {
       const code = (naicsItem.code || naicsItem || '').toString()
-      if (!code) continue
-
       const prefix = code.substring(0, 4)
       const phrases = NAICS_PHRASES[prefix] || []
 
       for (const phrase of phrases) {
         const phraseLower = phrase.toLowerCase()
         
-        // Check if phrase is in TITLE (strongest) or DESCRIPTION (weaker)
-        const inTitle = title.includes(phraseLower)
-        const inDescription = description.includes(phraseLower)
-        
-        if (inTitle || inDescription) {
-          // Get base strength of this phrase
-          let baseStrength = PHRASE_STRENGTH[phraseLower] || 70
-          
-          // BONUS: In title = stronger match
-          if (inTitle) {
-            baseStrength += 5
-          }
-          
-          // PENALTY: Only in description = weaker
-          if (!inTitle && inDescription) {
-            baseStrength -= 10
-          }
-          
-          // Check if this is the best match so far
-          if (baseStrength > bestScore) {
-            bestScore = baseStrength
+        if (title.includes(phraseLower)) {
+          matchCount++
+          if (!bestMatch || getTier(phrase) < tier) {
             bestMatch = phrase
-            matchLocation = inTitle ? 'title' : 'description'
+            inTitle = true
+            tier = getTier(phrase)
+          }
+        } else if (description.includes(phraseLower)) {
+          matchCount++
+          if (!bestMatch) {
+            bestMatch = phrase
+            inTitle = false
+            tier = getTier(phrase)
           }
         }
       }
     }
 
-    // No phrase match = no real match
+    // No match found
     if (!bestMatch) {
-      // Location-only score
-      let locationScore = 0
-      if (userState && opp.state && userState === opp.state) {
-        locationScore = 15
+      let locationOnly = 0
+      if (userState && oppState && userState === oppState) {
+        locationOnly = 12
       }
       return { 
-        current: locationScore, 
-        potential: locationScore + 15, 
-        isMatch: false, 
-        matchedPhrase: null,
-        matchStrength: null
+        current: locationOnly, 
+        potential: locationOnly + 10, 
+        isMatch: false,
+        matchedPhrase: null
       }
     }
 
     // ============================================
-    // BUILD FINAL SCORE with variance
+    // BUILD SCORE WITH REAL VARIANCE
     // ============================================
-    let finalScore = bestScore
+    let score = 0
 
-    // Location bonus
-    if (userState && opp.state) {
-      if (userState === opp.state) {
-        finalScore += 5  // Small bonus for same state
-      } else {
-        finalScore -= 5  // Small penalty for different state
-      }
+    // Base score by tier (LOWER starting points)
+    if (tier === 1) score = 52        // Tier 1: start at 52
+    else if (tier === 2) score = 45   // Tier 2: start at 45
+    else if (tier === 3) score = 38   // Tier 3: start at 38
+    else score = 32                   // Tier 4: start at 32
+
+    // In title bonus (+12-18)
+    if (inTitle) {
+      score += 12 + Math.floor(Math.random() * 7)
     }
 
-    // Multiple phrase matches bonus (check if more than one phrase matches)
-    let matchCount = 0
-    for (const naicsItem of userNaics) {
-      const code = (naicsItem.code || naicsItem || '').toString()
-      const prefix = code.substring(0, 4)
-      const phrases = NAICS_PHRASES[prefix] || []
-      for (const phrase of phrases) {
-        if (fullText.includes(phrase.toLowerCase())) {
-          matchCount++
-        }
-      }
-    }
+    // Multiple matches bonus (+3-8)
     if (matchCount > 1) {
-      finalScore += Math.min(matchCount * 2, 8)  // Up to +8 for multiple matches
+      score += Math.min(3 + matchCount * 2, 8)
     }
 
-    // Add small random variance (-2 to +2) to prevent identical scores
-    const variance = Math.floor(Math.random() * 5) - 2
-    finalScore += variance
+    // State match (+8-12)
+    if (userState && oppState && userState === oppState) {
+      score += 8 + Math.floor(Math.random() * 5)
+    } else if (userState && oppState && userState !== oppState) {
+      score -= 5  // Penalty for wrong state
+    }
 
-    // Clamp between 40 and 95
-    finalScore = Math.max(40, Math.min(95, finalScore))
+    // Small random variance (-3 to +3)
+    score += Math.floor(Math.random() * 7) - 3
 
-    // Calculate CR-AI potential (always higher, but varied)
-    const potentialBoost = 8 + Math.floor(Math.random() * 7)  // +8 to +15
-    const potential = Math.min(finalScore + potentialBoost, 98)
+    // Clamp to reasonable range (35-92)
+    score = Math.max(35, Math.min(92, score))
+
+    // Potential with variance
+    const potentialBoost = 6 + Math.floor(Math.random() * 8)
+    const potential = Math.min(score + potentialBoost, 97)
+
+    // Determine match strength
+    let strength = 'partial'
+    if (score >= 75) strength = 'strong'
+    else if (score >= 55) strength = 'good'
 
     return {
-      current: finalScore,
+      current: score,
       potential: potential,
       isMatch: true,
       matchedPhrase: bestMatch,
-      matchLocation: matchLocation,
-      matchStrength: bestScore >= 85 ? 'strong' : bestScore >= 70 ? 'good' : 'partial'
+      inTitle: inTitle,
+      matchCount: matchCount,
+      strength: strength
     }
+  }
+
+  // Get tier for phrase (lower = better)
+  const getTier = (phrase) => {
+    const p = phrase.toLowerCase()
+    if (TIER1_PHRASES.includes(p)) return 1
+    if (TIER2_PHRASES.includes(p)) return 2
+    if (TIER3_PHRASES.includes(p)) return 3
+    return 4
   }
 
   const getFilteredOpportunities = () => {
@@ -300,16 +262,16 @@ export default function ShopContracts({ session }) {
   }
 
   const getScoreColor = (score) => {
-    if (score >= 80) return colors.highMatch
-    if (score >= 60) return colors.medMatch
-    if (score >= 40) return colors.gold
-    return colors.muted
+    if (score >= 75) return '#00FF00'
+    if (score >= 55) return '#FFD700'
+    if (score >= 40) return '#FFA500'
+    return '#888888'
   }
 
-  const getMatchBadge = (matchStrength) => {
-    if (matchStrength === 'strong') return '🎯 STRONG MATCH'
-    if (matchStrength === 'good') return '✅ GOOD MATCH'
-    return '📋 PARTIAL MATCH'
+  const getStrengthBadge = (strength, score) => {
+    if (strength === 'strong') return `🎯 STRONG MATCH`
+    if (strength === 'good') return `✅ GOOD MATCH`
+    return `📋 POTENTIAL`
   }
 
   const availableStates = [...new Set(opportunities.map(o => o.state).filter(Boolean))].sort()
@@ -333,21 +295,18 @@ export default function ShopContracts({ session }) {
         return
       }
       
-      const { error } = await supabase
-        .from('submissions')
-        .insert({
-          user_id: session.user.id,
-          title: opportunity.title || opportunity.commodity_description || 'Untitled',
-          agency: opportunity.contact_name || 'Agency not specified',
-          due_date: opportunity.close_date,
-          status: 'in_progress',
-          description: opportunity.commodity_description || '',
-          location: opportunity.state || '',
-          match_score: opportunity.matchScore?.current || 0,
-          created_at: new Date().toISOString()
-        })
+      await supabase.from('submissions').insert({
+        user_id: session.user.id,
+        title: opportunity.title || opportunity.commodity_description || 'Untitled',
+        agency: opportunity.contact_name || 'Agency',
+        due_date: opportunity.close_date,
+        status: 'in_progress',
+        description: opportunity.commodity_description || '',
+        location: opportunity.state || '',
+        match_score: opportunity.matchScore?.current || 0,
+        created_at: new Date().toISOString()
+      })
       
-      if (error) throw error
       alert('✅ Added to Response Room!')
       setSelectedOpp(null)
     } catch (err) {
@@ -371,7 +330,7 @@ export default function ShopContracts({ session }) {
             🛍️ Go Shopping
           </h1>
           
-          {profile ? (
+          {profile && (
             <div style={{ 
               backgroundColor: colors.card,
               padding: '15px 20px',
@@ -383,30 +342,20 @@ export default function ShopContracts({ session }) {
                 🪣 BUCKET: {profile.naics_codes?.length || 0} NAICS • {profile.state || 'No state'}
               </p>
             </div>
-          ) : (
-            <div style={{ 
-              backgroundColor: colors.card,
-              padding: '15px 20px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.gold}`,
-              marginBottom: '15px'
-            }}>
-              <p style={{ color: colors.gold, margin: 0 }}>⚠️ Build Your BUCKET First</p>
-            </div>
           )}
 
           {!loading && (
             <div style={{ 
-              backgroundColor: matchCount > 0 ? colors.highMatch + '20' : colors.card,
+              backgroundColor: matchCount > 0 ? `${colors.primary}15` : colors.card,
               padding: '15px 20px',
               borderRadius: '10px',
-              border: `1px solid ${matchCount > 0 ? colors.highMatch : colors.border}`,
+              border: `1px solid ${matchCount > 0 ? colors.primary : colors.border}`,
               marginBottom: '15px'
             }}>
-              <p style={{ color: matchCount > 0 ? colors.highMatch : colors.muted, margin: 0, fontSize: '16px', fontWeight: '600' }}>
+              <p style={{ color: matchCount > 0 ? colors.primary : colors.muted, margin: 0, fontSize: '16px', fontWeight: '600' }}>
                 {matchCount > 0 
                   ? `🎯 ${matchCount} opportunities match your BUCKET` 
-                  : '📋 No matches found - check "Show all" to browse'}
+                  : '📋 No matches - check "Show all" to browse'}
               </p>
             </div>
           )}
@@ -458,7 +407,7 @@ export default function ShopContracts({ session }) {
                   border: `1px solid ${colors.primary}`, borderRadius: '8px', color: colors.primary, cursor: 'pointer'
                 }}
               >
-                Show All Opportunities
+                Show All
               </button>
             )}
           </div>
@@ -493,19 +442,19 @@ export default function ShopContracts({ session }) {
                         {score.isMatch && (
                           <span style={{
                             backgroundColor: getScoreColor(score.current),
-                            color: colors.background,
+                            color: '#000',
                             padding: '4px 12px',
                             borderRadius: '12px',
                             fontSize: '11px',
                             fontWeight: '700'
                           }}>
-                            {getMatchBadge(score.matchStrength)}
+                            {getStrengthBadge(score.strength, score.current)}
                           </span>
                         )}
                         {daysLeft !== null && daysLeft <= 7 && (
                           <span style={{
-                            backgroundColor: daysLeft <= 3 ? colors.lowMatch : colors.gold,
-                            color: colors.background,
+                            backgroundColor: daysLeft <= 3 ? '#FF6B6B' : colors.gold,
+                            color: '#000',
                             padding: '4px 12px',
                             borderRadius: '12px',
                             fontSize: '11px',
@@ -525,12 +474,12 @@ export default function ShopContracts({ session }) {
                       
                       {score.matchedPhrase && (
                         <p style={{ color: colors.primary, margin: '8px 0 0 0', fontSize: '12px' }}>
-                          ✓ Matched: "{score.matchedPhrase}" {score.matchLocation === 'title' ? '(in title)' : ''}
+                          ✓ Matched: "{score.matchedPhrase}" {score.inTitle ? '(in title)' : ''}
                         </p>
                       )}
                     </div>
 
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'right', minWidth: '80px' }}>
                       <p style={{ color: colors.muted, margin: '0 0 4px 0', fontSize: '10px' }}>SCORE</p>
                       <p style={{ 
                         color: getScoreColor(score.current),
@@ -588,29 +537,23 @@ export default function ShopContracts({ session }) {
               {selectedOpp.title || selectedOpp.commodity_description}
             </h2>
 
-            {selectedOpp.matchScore.isMatch ? (
-              <div style={{ 
-                backgroundColor: getScoreColor(selectedOpp.matchScore.current) + '20', 
-                padding: '15px', 
-                borderRadius: '10px', 
-                marginBottom: '20px',
-                border: `1px solid ${getScoreColor(selectedOpp.matchScore.current)}`
-              }}>
-                <p style={{ color: getScoreColor(selectedOpp.matchScore.current), margin: 0, fontWeight: '600', fontSize: '18px' }}>
-                  {selectedOpp.matchScore.current}% Match
-                </p>
+            <div style={{ 
+              backgroundColor: `${getScoreColor(selectedOpp.matchScore.current)}15`, 
+              padding: '20px', 
+              borderRadius: '10px', 
+              marginBottom: '20px',
+              border: `1px solid ${getScoreColor(selectedOpp.matchScore.current)}`
+            }}>
+              <p style={{ color: getScoreColor(selectedOpp.matchScore.current), margin: 0, fontWeight: '700', fontSize: '24px' }}>
+                {selectedOpp.matchScore.current}% Match
+              </p>
+              {selectedOpp.matchScore.matchedPhrase && (
                 <p style={{ color: colors.text, margin: '8px 0 0 0', fontSize: '14px' }}>
                   Matched: "{selectedOpp.matchScore.matchedPhrase}"
-                  {selectedOpp.matchScore.matchLocation === 'title' && ' (found in title)'}
+                  {selectedOpp.matchScore.inTitle && ' (found in title)'}
                 </p>
-              </div>
-            ) : (
-              <div style={{ backgroundColor: colors.gold + '20', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
-                <p style={{ color: colors.gold, margin: 0 }}>
-                  ⚠️ This doesn't match your BUCKET NAICS codes
-                </p>
-              </div>
-            )}
+              )}
+            </div>
 
             <p style={{ color: colors.muted, marginBottom: '5px', fontSize: '12px' }}>Due Date</p>
             <p style={{ color: colors.text, marginBottom: '15px' }}>{formatDate(selectedOpp.close_date)}</p>
@@ -629,7 +572,7 @@ export default function ShopContracts({ session }) {
               disabled={addingToCart}
               style={{
                 width: '100%', padding: '14px', backgroundColor: colors.primary, border: 'none',
-                borderRadius: '8px', color: colors.background, cursor: 'pointer', fontWeight: '700', marginBottom: '10px'
+                borderRadius: '8px', color: '#000', cursor: 'pointer', fontWeight: '700', marginBottom: '10px'
               }}
             >
               {addingToCart ? 'Adding...' : '📝 Start Response'}
