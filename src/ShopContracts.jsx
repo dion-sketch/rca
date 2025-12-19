@@ -298,12 +298,12 @@ export default function ShopContracts({ session }) {
       await supabase.from('submissions').insert({
         user_id: session.user.id,
         title: opportunity.title || opportunity.commodity_description || 'Untitled',
-        agency: opportunity.contact_name || 'Agency',
+        agency: opportunity.contact_name || opportunity.agency || '',
         due_date: opportunity.close_date,
         status: 'in_progress',
         description: opportunity.commodity_description || '',
-        location: opportunity.state || '',
-        match_score: opportunity.matchScore?.current || 0,
+        estimated_value: opportunity.estimated_value || '',
+        cr_match_score: opportunity.matchScore?.current || 50,
         created_at: new Date().toISOString()
       })
       
