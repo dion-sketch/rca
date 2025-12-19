@@ -1,955 +1,196 @@
 // ============================================
-// ShopContracts.jsx - V2
-// REAL BUCKET MATCHING - Sorted by Best Match
+// matchingConfig.js
+// CR-AI MATCHING ALGORITHM CONFIGURATION
+// ============================================
+// 
+// LOCKED RULES - DO NOT MODIFY WITHOUT REVIEW
+// These rules ensure accurate opportunity matching
+// for 10,000+ Contract Ready users.
+//
+// Last Updated: December 19, 2024
 // ============================================
 
-import { useState, useEffect } from 'react'
-import { supabase } from './supabaseClient'
-import { 
-  SKIP_WORDS, 
-  NAICS_KEYWORDS, 
-  SCORING, 
-  MATCH_LEVELS, 
-  CERT_KEYWORDS,
-  MIN_KEYWORD_LENGTH 
-} from './matchingConfig'
+// ============================================
+// SKIP WORDS - Never match on these
+// These words are too common and cause false matches
+// ============================================
+export const SKIP_WORDS = [
+  'services',
+  'service', 
+  'management',
+  'support',
+  'professional',
+  'general',
+  'other',
+  'consulting',
+  'solutions',
+  'development',
+  'training',
+  'program',
+  'project',
+  'assistant',
+  'associate',
+  'specialist',
+  'coordinator',
+  'operations',
+  'administrative',
+  'technical',
+  'maintenance',
+  'inspection',
+  'assessment',
+  'evaluation',
+  'review',
+  'analysis',
+  'planning',
+  'implementation'
+]
 
-export default function ShopContracts({ session }) {
-  const [profile, setProfile] = useState(null)
-  const [opportunities, setOpportunities] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+// ============================================
+// NAICS KEYWORD MAPPING
+// Maps NAICS code prefixes to SPECIFIC keywords
+// Only match on terms that truly indicate industry fit
+// ============================================
+export const NAICS_KEYWORDS = {
+  // Professional Services
+  '5411': ['legal', 'attorney', 'law firm', 'paralegal'],
+  '5412': ['accounting', 'bookkeeping', 'audit', 'tax preparation', 'CPA'],
+  '5413': ['architect', 'engineering', 'surveying', 'drafting'],
+  '5414': ['graphic design', 'interior design', 'industrial design'],
+  '5415': ['software', 'programming', 'IT support', 'cybersecurity', 'web development', 'app development'],
+  '5416': ['strategic planning', 'business consulting'],
+  '5417': ['research', 'laboratory', 'scientific', 'R&D'],
+  '5418': ['advertising', 'public relations', 'media buying', 'marketing campaign', 'PR firm', 'ad agency'],
+  '5419': ['veterinary', 'photography', 'translation'],
   
-  // Search & Filter
-  const [searchTerm, setSearchTerm] = useState('')
-  const [stateFilter, setStateFilter] = useState('')
-  const [showLowMatches, setShowLowMatches] = useState(false)
+  // Healthcare - SPECIFIC mental health terms
+  '6211': ['physician', 'doctor', 'medical practice', 'primary care'],
+  '6212': ['dental', 'dentist', 'orthodont', 'oral health'],
+  '6213': [
+    'mental health', 
+    'behavioral health', 
+    'counseling', 
+    'therapy', 
+    'psychiatric', 
+    'psychologist', 
+    'therapist',
+    'substance abuse',
+    'addiction',
+    'crisis intervention',
+    'trauma',
+    'PTSD'
+  ],
+  '6214': ['outpatient', 'health center', 'clinic', 'ambulatory'],
+  '6215': ['laboratory', 'diagnostic', 'blood test', 'pathology'],
+  '6216': ['home health', 'home care', 'nursing home', 'hospice'],
+  '6219': ['ambulance', 'paramedic', 'emergency medical'],
   
-  // Pagination
-  const [displayCount, setDisplayCount] = useState(20)
+  // Social Services - SPECIFIC family/youth terms
+  '6241': [
+    'family service',
+    'youth program', 
+    'child welfare', 
+    'social work', 
+    'case management', 
+    'foster care',
+    'foster', 
+    'adoption', 
+    'permanency',
+    'juvenile',
+    'at-risk youth',
+    'family preservation',
+    'child protective',
+    'reunification'
+  ],
+  '6242': ['emergency shelter', 'homeless', 'food bank', 'relief', 'housing assistance'],
+  '6243': ['vocational rehabilitation', 'job training', 'workforce development', 'career counseling'],
+  '6244': ['child care', 'daycare', 'preschool', 'childcare', 'early childhood'],
   
-  // Selected opportunity
-  const [selectedOpp, setSelectedOpp] = useState(null)
-  const [addingToCart, setAddingToCart] = useState(false)
-
-  // Colors
-  const colors = {
-    primary: '#00FF00',
-    gold: '#FFD700',
-    background: '#000000',
-    surface: '#0a0a0a',
-    card: '#111111',
-    text: '#FFFFFF',
-    muted: '#888888',
-    border: '#333333',
-    lowMatch: '#FF6B6B',
-    medMatch: '#FFD700',
-    highMatch: '#00FF00'
-  }
-
-  // ==========================================
-  // LOAD PROFILE ON MOUNT
-  // ==========================================
-  useEffect(() => {
-    if (session?.user?.id) {
-      loadProfile()
-    }
-  }, [session])
-
-  const loadProfile = async () => {
-    try {
-      const { data } = await supabase
-        .from('business_profiles')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .single()
-      
-      if (data) {
-        setProfile(data)
-        loadOpportunities(data)
-      } else {
-        // No profile yet - still load opps but with 0 scores
-        loadOpportunities(null)
-      }
-    } catch (err) {
-      console.error('Profile load error:', err)
-      loadOpportunities(null)
-    }
-  }
-
-  // ==========================================
-  // LOAD & SCORE OPPORTUNITIES
-  // ==========================================
-  const loadOpportunities = async (userProfile) => {
-    setLoading(true)
-    setError(null)
-    
-    try {
-      // Get active, non-expired opportunities
-      const { data, error } = await supabase
-        .from('opportunities')
-        .select('*')
-        .eq('is_active', true)
-        .gte('close_date', new Date().toISOString())
-        .order('close_date', { ascending: true })
-        .limit(1000)
-
-      if (error) throw error
-      
-      if (!data || data.length === 0) {
-        setOpportunities([])
-        setLoading(false)
-        return
-      }
-
-      // Score each opportunity against BUCKET
-      const scored = data.map(opp => ({
-        ...opp,
-        matchScore: calculateMatchScore(opp, userProfile)
-      }))
-
-      // Sort by match score (HIGHEST FIRST)
-      scored.sort((a, b) => b.matchScore.current - a.matchScore.current)
-
-      setOpportunities(scored)
-    } catch (err) {
-      console.error('Load error:', err)
-      setError('Failed to load opportunities')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ==========================================
-  // REAL MATCH SCORING - Based on BUCKET
-  // ==========================================
-  const calculateMatchScore = (opp, userProfile) => {
-    // No profile = 0% match
-    if (!userProfile) {
-      return { current: 0, potential: 40, breakdown: {}, matchLevel: 'none' }
-    }
-
-    let score = 0
-    const breakdown = {}
-    const oppText = `${opp.title || ''} ${opp.commodity_description || ''} ${opp.naics_code || ''}`.toLowerCase()
-
-    // ============================================
-    // 1. NAICS CODE MATCH (0-40 points)
-    // Match on KEYWORDS from NAICS descriptions
-    // ============================================
-    const userNaics = userProfile.naics_codes || []
-    let naicsMatched = false
-    let matchedCode = null
-
-    for (const naicsItem of userNaics) {
-      const code = (naicsItem.code || naicsItem || '').toString()
-      const description = (naicsItem.description || '').toLowerCase()
-      if (!code) continue
-
-      // First: Direct NAICS code match (if opp has naics_code field)
-      if (opp.naics_code) {
-        const oppNaics = opp.naics_code.toString()
-        const code4 = code.substring(0, 4)
-        if (oppNaics.startsWith(code4) || code.startsWith(oppNaics.substring(0, 4))) {
-          naicsMatched = true
-          matchedCode = description || code
-          score += SCORING.NAICS_DIRECT_CODE_MATCH
-          breakdown.naics = { points: SCORING.NAICS_DIRECT_CODE_MATCH, matched: description || code }
-          break
-        }
-      }
-      
-      // Second: KEYWORD matching from NAICS description
-      if (!naicsMatched && description) {
-        const keywords = description.split(/[\s,]+/).filter(w => w.length > MIN_KEYWORD_LENGTH && !SKIP_WORDS.includes(w))
-        for (const keyword of keywords) {
-          if (oppText.includes(keyword)) {
-            naicsMatched = true
-            matchedCode = description
-            score += SCORING.NAICS_KEYWORD_FROM_DESC
-            breakdown.naics = { points: SCORING.NAICS_KEYWORD_FROM_DESC, matched: `${keyword} (${code})` }
-            break
-          }
-        }
-        if (naicsMatched) break
-      }
-
-      // Third: Check industry keywords from config
-      if (!naicsMatched) {
-        const industryKeywords = getNaicsKeywords(code)
-        for (const keyword of industryKeywords) {
-          if (oppText.includes(keyword)) {
-            naicsMatched = true
-            matchedCode = keyword
-            score += SCORING.NAICS_INDUSTRY_KEYWORD
-            breakdown.naics = { points: SCORING.NAICS_INDUSTRY_KEYWORD, matched: keyword }
-            break
-          }
-        }
-        if (naicsMatched) break
-      }
-    }
-
-    if (!naicsMatched && userNaics.length > 0) {
-      breakdown.naics = { points: 0, matched: null }
-    }
-
-    // ============================================
-    // 2. SERVICES/KEYWORDS MATCH (0-25 points)
-    // Check if user's services appear in description
-    // Only match on meaningful phrases, not single generic words
-    // ============================================
-    const userServices = userProfile.services || []
-    let serviceMatched = false
-    let matchedService = null
-
-    // Create keyword list from services
-    const serviceKeywords = []
-    for (const svc of userServices) {
-      const name = (svc.category || svc.name || svc || '').toLowerCase()
-      if (name && name.length > MIN_KEYWORD_LENGTH) {
-        // Add full service name if specific enough
-        if (!SKIP_WORDS.some(skip => name === skip)) {
-          serviceKeywords.push(name)
-        }
-        // Only add individual words if they're specific (not in skip list)
-        name.split(/[\s,]+/).forEach(word => {
-          if (word.length > MIN_KEYWORD_LENGTH && !SKIP_WORDS.includes(word)) {
-            serviceKeywords.push(word)
-          }
-        })
-      }
-    }
-
-    // Check for matches - require word to be meaningful
-    for (const keyword of serviceKeywords) {
-      if (keyword.length > MIN_KEYWORD_LENGTH && oppText.includes(keyword)) {
-        serviceMatched = true
-        matchedService = keyword
-        score += SCORING.SERVICES_KEYWORD_MATCH
-        breakdown.services = { points: SCORING.SERVICES_KEYWORD_MATCH, matched: keyword }
-        break
-      }
-    }
-
-    if (!serviceMatched && userServices.length > 0) {
-      breakdown.services = { points: 0, matched: null }
-    }
-
-    // ============================================
-    // 3. LOCATION MATCH (0-20 points)
-    // ============================================
-    const userState = userProfile.state
-    const oppState = opp.state
-
-    if (userState && oppState) {
-      if (userState === oppState) {
-        score += SCORING.LOCATION_STATE_MATCH
-        breakdown.location = { points: SCORING.LOCATION_STATE_MATCH, matched: oppState }
-      } else {
-        breakdown.location = { points: 0, matched: null, userState, oppState }
-      }
-    } else if (!oppState) {
-      // No location requirement = available to all
-      score += SCORING.LOCATION_OPEN_TO_ALL
-      breakdown.location = { points: SCORING.LOCATION_OPEN_TO_ALL, matched: 'Open to all locations' }
-    }
-
-    // ============================================
-    // 4. CERTIFICATIONS BONUS (0-10 points)
-    // ============================================
-    const userCerts = userProfile.certifications || []
-    if (userCerts.length > 0) {
-      // Check if any cert keywords in description
-      for (const kw of CERT_KEYWORDS) {
-        if (oppText.includes(kw)) {
-          score += SCORING.CERTIFICATIONS_BONUS
-          breakdown.certifications = { points: SCORING.CERTIFICATIONS_BONUS, matched: kw }
-          break
-        }
-      }
-    }
-
-    // ============================================
-    // 5. PAST PERFORMANCE BONUS (0-5 points)
-    // ============================================
-    const pastPerf = userProfile.past_performance || []
-    if (pastPerf.length > 0) {
-      score += SCORING.PAST_PERFORMANCE_BONUS
-      breakdown.pastPerformance = { points: SCORING.PAST_PERFORMANCE_BONUS }
-    }
-
-    // ============================================
-    // DETERMINE MATCH LEVEL - More strict thresholds
-    // ============================================
-    let matchLevel = 'none'
-    
-    // Must have NAICS or Services match to be considered a real match
-    if (naicsMatched || serviceMatched) {
-      if (score >= MATCH_LEVELS.HIGH) matchLevel = 'high'
-      else if (score >= MATCH_LEVELS.MEDIUM) matchLevel = 'medium'
-      else matchLevel = 'low'
-    } else if (score > 0) {
-      matchLevel = 'low'
-    }
-
-    // CR-AI potential boost
-    const potential = Math.min(score + SCORING.CRAI_BOOST, SCORING.MAX_SCORE)
-
-    return {
-      current: Math.min(score, 100),
-      potential,
-      breakdown,
-      matchLevel,
-      naicsMatched,
-      serviceMatched
-    }
-  }
-
-  // ==========================================
-  // FILTER OPPORTUNITIES
-  // ==========================================
-  const getFilteredOpportunities = () => {
-    let filtered = [...opportunities]
-
-    // Search filter
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(opp => 
-        (opp.title || '').toLowerCase().includes(term) ||
-        (opp.commodity_description || '').toLowerCase().includes(term) ||
-        (opp.contact_name || '').toLowerCase().includes(term)
-      )
-    }
-
-    // State filter
-    if (stateFilter) {
-      filtered = filtered.filter(opp => opp.state === stateFilter)
-    }
-
-    // Hide low matches by default (unless toggled)
-    if (!showLowMatches) {
-      filtered = filtered.filter(opp => opp.matchScore.current >= 20)
-    }
-
-    return filtered
-  }
-
-  // ==========================================
-  // HELPER FUNCTIONS
-  // ==========================================
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'No date'
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
-
-  const getDaysLeft = (dateStr) => {
-    if (!dateStr) return null
-    const due = new Date(dateStr)
-    const now = new Date()
-    const diff = Math.ceil((due - now) / (1000 * 60 * 60 * 24))
-    return diff
-  }
-
-  const getScoreColor = (score) => {
-    if (score >= 60) return colors.highMatch
-    if (score >= 35) return colors.medMatch
-    if (score > 0) return colors.lowMatch
-    return colors.muted
-  }
-
-  // Helper: Get industry keywords from config
-  const getNaicsKeywords = (code) => {
-    const prefix = code.substring(0, 4)
-    return NAICS_KEYWORDS[prefix] || []
-  }
-
-  const getMatchLabel = (matchLevel) => {
-    switch (matchLevel) {
-      case 'high': return '🎯 Strong Match'
-      case 'medium': return '✨ Good Potential'
-      case 'low': return '📋 Review Needed'
-      default: return '❌ Low Match'
-    }
-  }
-
-  // Get unique states for filter
-  const availableStates = [...new Set(opportunities.map(o => o.state).filter(Boolean))].sort()
-
-  // ==========================================
-  // START RESPONSE
-  // ==========================================
-  const startResponse = async (opportunity) => {
-    if (!session?.user?.id) return
-    
-    setAddingToCart(true)
-    
-    try {
-      // Check if already exists
-      const { data: existing } = await supabase
-        .from('submissions')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .eq('title', opportunity.title || opportunity.commodity_description)
-        .single()
-      
-      if (existing) {
-        alert('✅ Already in your Response Room!')
-        setAddingToCart(false)
-        setSelectedOpp(null)
-        return
-      }
-      
-      // Add to submissions
-      const { error } = await supabase
-        .from('submissions')
-        .insert({
-          user_id: session.user.id,
-          title: opportunity.title || opportunity.commodity_description || 'Untitled',
-          agency: opportunity.contact_name || 'Agency not specified',
-          due_date: opportunity.close_date,
-          status: 'in_progress',
-          source_url: opportunity.source_url || '',
-          description: opportunity.commodity_description || '',
-          contact_email: opportunity.contact_email || '',
-          contact_phone: opportunity.contact_phone || '',
-          location: opportunity.state || '',
-          match_score: opportunity.matchScore?.current || 0,
-          created_at: new Date().toISOString()
-        })
-      
-      if (error) throw error
-      
-      alert('✅ Added to Response Room! Go there to start your response.')
-      setSelectedOpp(null)
-      
-    } catch (err) {
-      console.error('Error:', err)
-      alert('Failed to add. Please try again.')
-    } finally {
-      setAddingToCart(false)
-    }
-  }
-
-  // ==========================================
-  // RENDER
-  // ==========================================
-  const filtered = getFilteredOpportunities()
-  const displayed = filtered.slice(0, displayCount)
-  const hasMore = filtered.length > displayCount
-
-  // Count matches by level
-  const highMatches = opportunities.filter(o => o.matchScore.current >= 60).length
-  const medMatches = opportunities.filter(o => o.matchScore.current >= 35 && o.matchScore.current < 60).length
-  const lowMatches = opportunities.filter(o => o.matchScore.current > 0 && o.matchScore.current < 35).length
-
-  return (
-    <div style={{ 
-      minHeight: '100vh', 
-      backgroundColor: colors.background,
-      paddingBottom: '100px'
-    }}>
-      {/* Header */}
-      <div style={{ 
-        padding: '30px',
-        borderBottom: `1px solid ${colors.border}`
-      }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h1 style={{ color: colors.text, margin: '0 0 10px 0', fontSize: '28px' }}>
-            🛍️ Go Shopping
-          </h1>
-          
-          {/* BUCKET Status */}
-          {profile ? (
-            <div style={{ 
-              backgroundColor: colors.card,
-              padding: '15px 20px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.primary}30`,
-              marginBottom: '20px'
-            }}>
-              <p style={{ color: colors.primary, margin: 0, fontSize: '14px', fontWeight: '600' }}>
-                🪣 YOUR BUCKET IS READY
-              </p>
-              <p style={{ color: colors.muted, margin: '5px 0 0 0', fontSize: '13px' }}>
-                {profile.naics_codes?.length || 0} NAICS codes • 
-                {profile.services?.length || 0} services • 
-                {profile.state || 'No location set'}
-              </p>
-            </div>
-          ) : (
-            <div style={{ 
-              backgroundColor: colors.card,
-              padding: '15px 20px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.gold}`,
-              marginBottom: '20px'
-            }}>
-              <p style={{ color: colors.gold, margin: 0, fontSize: '14px', fontWeight: '600' }}>
-                ⚠️ Build Your BUCKET First
-              </p>
-              <p style={{ color: colors.muted, margin: '5px 0 0 0', fontSize: '13px' }}>
-                Add NAICS codes and services to see matched opportunities
-              </p>
-            </div>
-          )}
-
-          {/* Match Summary */}
-          {profile && !loading && (
-            <div style={{ 
-              display: 'flex', 
-              gap: '15px', 
-              marginBottom: '20px',
-              flexWrap: 'wrap'
-            }}>
-              <div style={{ 
-                backgroundColor: colors.card,
-                padding: '10px 15px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.highMatch}50`
-              }}>
-                <span style={{ color: colors.highMatch, fontWeight: '700', fontSize: '18px' }}>{highMatches}</span>
-                <span style={{ color: colors.muted, fontSize: '13px', marginLeft: '8px' }}>Strong Matches</span>
-              </div>
-              <div style={{ 
-                backgroundColor: colors.card,
-                padding: '10px 15px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.medMatch}50`
-              }}>
-                <span style={{ color: colors.medMatch, fontWeight: '700', fontSize: '18px' }}>{medMatches}</span>
-                <span style={{ color: colors.muted, fontSize: '13px', marginLeft: '8px' }}>Good Potential</span>
-              </div>
-              <div style={{ 
-                backgroundColor: colors.card,
-                padding: '10px 15px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.border}`
-              }}>
-                <span style={{ color: colors.muted, fontWeight: '700', fontSize: '18px' }}>{lowMatches}</span>
-                <span style={{ color: colors.muted, fontSize: '13px', marginLeft: '8px' }}>Low Match</span>
-              </div>
-            </div>
-          )}
-
-          {/* Search & Filters */}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              type="text"
-              placeholder="Search by keyword..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                flex: '1',
-                minWidth: '200px',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.border}`,
-                backgroundColor: colors.card,
-                color: colors.text,
-                fontSize: '14px'
-              }}
-            />
-            <select
-              value={stateFilter}
-              onChange={(e) => setStateFilter(e.target.value)}
-              style={{
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.border}`,
-                backgroundColor: colors.card,
-                color: colors.text,
-                fontSize: '14px',
-                minWidth: '150px'
-              }}
-            >
-              <option value="">All States</option>
-              {availableStates.map(st => (
-                <option key={st} value={st}>{st}</option>
-              ))}
-            </select>
-            <label style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px',
-              color: colors.muted,
-              fontSize: '13px',
-              cursor: 'pointer'
-            }}>
-              <input
-                type="checkbox"
-                checked={showLowMatches}
-                onChange={(e) => setShowLowMatches(e.target.checked)}
-              />
-              Show low matches
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* Results */}
-      <div style={{ padding: '30px', maxWidth: '1200px', margin: '0 auto' }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px' }}>
-            <p style={{ color: colors.primary, fontSize: '18px' }}>Loading opportunities...</p>
-          </div>
-        ) : error ? (
-          <div style={{ textAlign: 'center', padding: '60px' }}>
-            <p style={{ color: colors.lowMatch }}>{error}</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '60px',
-            backgroundColor: colors.card,
-            borderRadius: '16px',
-            border: `1px solid ${colors.border}`
-          }}>
-            <p style={{ color: colors.text, fontSize: '18px', margin: '0 0 10px 0' }}>
-              No matching opportunities found
-            </p>
-            <p style={{ color: colors.muted, margin: '0 0 20px 0' }}>
-              {!showLowMatches ? 'Try enabling "Show low matches" or adjust your BUCKET' : 'Try adjusting your search or filters'}
-            </p>
-            {!showLowMatches && (
-              <button
-                onClick={() => setShowLowMatches(true)}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: colors.card,
-                  border: `1px solid ${colors.primary}`,
-                  borderRadius: '8px',
-                  color: colors.primary,
-                  cursor: 'pointer'
-                }}
-              >
-                Show All Opportunities
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <p style={{ color: colors.muted, marginBottom: '20px', fontSize: '14px' }}>
-              Showing {displayed.length} of {filtered.length} opportunities (sorted by best match)
-            </p>
-
-            {/* Opportunity Cards */}
-            <div style={{ display: 'grid', gap: '15px' }}>
-              {displayed.map((opp, i) => {
-                const score = opp.matchScore
-                const daysLeft = getDaysLeft(opp.close_date)
-                
-                return (
-                  <div
-                    key={opp.id || i}
-                    onClick={() => setSelectedOpp(opp)}
-                    style={{
-                      backgroundColor: colors.card,
-                      borderRadius: '12px',
-                      padding: '20px',
-                      border: `1px solid ${score.current >= 60 ? colors.highMatch + '50' : score.current >= 35 ? colors.medMatch + '30' : colors.border}`,
-                      cursor: 'pointer',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto',
-                      gap: '20px',
-                      alignItems: 'center'
-                    }}
-                  >
-                    {/* Left: Info */}
-                    <div>
-                      {/* Badges */}
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                        {daysLeft !== null && daysLeft <= 7 && (
-                          <span style={{
-                            backgroundColor: daysLeft <= 3 ? colors.lowMatch : colors.gold,
-                            color: colors.background,
-                            padding: '3px 10px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: '600'
-                          }}>
-                            ⏰ {daysLeft} days left
-                          </span>
-                        )}
-                        <span style={{
-                          backgroundColor: getScoreColor(score.current) + '20',
-                          color: getScoreColor(score.current),
-                          padding: '3px 10px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: '600'
-                        }}>
-                          {getMatchLabel(score.matchLevel)}
-                        </span>
-                      </div>
-
-                      {/* Title */}
-                      <h3 style={{ 
-                        color: colors.text, 
-                        margin: '0 0 8px 0',
-                        fontSize: '16px',
-                        lineHeight: '1.4'
-                      }}>
-                        {opp.title || opp.commodity_description || 'Untitled Opportunity'}
-                      </h3>
-
-                      {/* Meta */}
-                      <p style={{ color: colors.muted, margin: 0, fontSize: '13px' }}>
-                        {opp.contact_name || 'Agency not specified'} • {opp.state || 'Location not specified'}
-                      </p>
-                      <p style={{ color: colors.muted, margin: '4px 0 0 0', fontSize: '12px' }}>
-                        📅 Due: {formatDate(opp.close_date)}
-                      </p>
-                    </div>
-
-                    {/* Right: Score */}
-                    <div style={{ textAlign: 'right', minWidth: '100px' }}>
-                      <p style={{ color: colors.muted, margin: '0 0 4px 0', fontSize: '10px', textTransform: 'uppercase' }}>
-                        YOUR SCORE
-                      </p>
-                      <p style={{ 
-                        color: getScoreColor(score.current),
-                        fontSize: '28px',
-                        fontWeight: '700',
-                        margin: '0 0 4px 0'
-                      }}>
-                        {score.current}%
-                      </p>
-                      <p style={{ color: colors.primary, margin: 0, fontSize: '11px' }}>
-                        → {score.potential}% <span style={{ opacity: 0.7 }}>with CR-AI</span>
-                      </p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Load More */}
-            {hasMore && (
-              <div style={{ textAlign: 'center', marginTop: '30px' }}>
-                <button
-                  onClick={() => setDisplayCount(displayCount + 20)}
-                  style={{
-                    padding: '12px 30px',
-                    backgroundColor: colors.card,
-                    border: `1px solid ${colors.primary}`,
-                    borderRadius: '8px',
-                    color: colors.primary,
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  Load More ({filtered.length - displayCount} remaining)
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Detail Modal */}
-      {selectedOpp && (
-        <div
-          onClick={() => setSelectedOpp(null)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.9)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            zIndex: 1000
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: colors.card,
-              borderRadius: '16px',
-              padding: '30px',
-              maxWidth: '600px',
-              width: '100%',
-              maxHeight: '85vh',
-              overflow: 'auto',
-              border: `1px solid ${colors.border}`
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h2 style={{ color: colors.text, margin: 0, fontSize: '20px', flex: 1, paddingRight: '20px', lineHeight: '1.4' }}>
-                {selectedOpp.title || selectedOpp.commodity_description || 'Opportunity Details'}
-              </h2>
-              <button
-                onClick={() => setSelectedOpp(null)}
-                style={{ background: 'none', border: 'none', color: colors.muted, fontSize: '28px', cursor: 'pointer' }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Score Display */}
-            {(() => {
-              const score = selectedOpp.matchScore
-              return (
-                <div style={{
-                  backgroundColor: colors.surface,
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginBottom: '20px',
-                  border: `1px solid ${getScoreColor(score.current)}30`
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
-                    <div>
-                      <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 5px 0' }}>YOUR SCORE</p>
-                      <p style={{ color: getScoreColor(score.current), fontSize: '36px', fontWeight: '700', margin: 0 }}>
-                        {score.current}%
-                      </p>
-                    </div>
-                    <div style={{ color: colors.muted, fontSize: '24px', alignSelf: 'center' }}>→</div>
-                    <div>
-                      <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 5px 0' }}>WITH CR-AI</p>
-                      <p style={{ color: colors.primary, fontSize: '36px', fontWeight: '700', margin: 0 }}>
-                        {score.potential}% ✨
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Match Breakdown */}
-                  {score.breakdown && Object.keys(score.breakdown).length > 0 && (
-                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: `1px solid ${colors.border}` }}>
-                      <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 8px 0' }}>MATCH BREAKDOWN:</p>
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                        {score.breakdown.naics && (
-                          <span style={{ 
-                            backgroundColor: score.breakdown.naics.points > 0 ? colors.highMatch + '20' : colors.lowMatch + '20',
-                            color: score.breakdown.naics.points > 0 ? colors.highMatch : colors.lowMatch,
-                            padding: '4px 10px',
-                            borderRadius: '12px',
-                            fontSize: '11px'
-                          }}>
-                            NAICS: {score.breakdown.naics.points > 0 ? `+${score.breakdown.naics.points}` : 'No match'}
-                          </span>
-                        )}
-                        {score.breakdown.services && (
-                          <span style={{ 
-                            backgroundColor: score.breakdown.services.points > 0 ? colors.highMatch + '20' : colors.lowMatch + '20',
-                            color: score.breakdown.services.points > 0 ? colors.highMatch : colors.lowMatch,
-                            padding: '4px 10px',
-                            borderRadius: '12px',
-                            fontSize: '11px'
-                          }}>
-                            Services: {score.breakdown.services.points > 0 ? `+${score.breakdown.services.points}` : 'No match'}
-                          </span>
-                        )}
-                        {score.breakdown.location && (
-                          <span style={{ 
-                            backgroundColor: score.breakdown.location.points > 0 ? colors.highMatch + '20' : colors.medMatch + '20',
-                            color: score.breakdown.location.points > 0 ? colors.highMatch : colors.medMatch,
-                            padding: '4px 10px',
-                            borderRadius: '12px',
-                            fontSize: '11px'
-                          }}>
-                            Location: {score.breakdown.location.points > 0 ? `+${score.breakdown.location.points}` : 'Different state'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Empowering Message */}
-                  <p style={{ 
-                    color: colors.primary, 
-                    textAlign: 'center', 
-                    marginTop: '15px',
-                    marginBottom: 0,
-                    fontSize: '14px'
-                  }}>
-                    {score.current >= 60 
-                      ? "🎯 Strong match! You're competitive for this one."
-                      : score.current >= 35 
-                        ? "✨ Good potential. BUCKET + CR-AI can help you win."
-                        : score.current > 0
-                          ? "📋 Worth reviewing. CR-AI can help identify gaps."
-                          : "Consider updating your BUCKET with relevant NAICS codes."}
-                  </p>
-                </div>
-              )
-            })()}
-
-            {/* Details */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                <div>
-                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 4px 0' }}>DUE DATE</p>
-                  <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>{formatDate(selectedOpp.close_date)}</p>
-                </div>
-                <div>
-                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 4px 0' }}>LOCATION</p>
-                  <p style={{ color: colors.text, margin: 0, fontWeight: '500' }}>{selectedOpp.state || 'Not specified'}</p>
-                </div>
-              </div>
-              
-              {selectedOpp.commodity_description && (
-                <div>
-                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 8px 0' }}>DESCRIPTION</p>
-                  <p style={{ color: colors.text, margin: 0, lineHeight: '1.6', fontSize: '14px' }}>
-                    {selectedOpp.commodity_description}
-                  </p>
-                </div>
-              )}
-
-              {selectedOpp.contact_name && (
-                <div style={{ marginTop: '15px' }}>
-                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 4px 0' }}>CONTACT</p>
-                  <p style={{ color: colors.text, margin: 0, fontSize: '14px' }}>
-                    {selectedOpp.contact_name}
-                    {selectedOpp.contact_email && ` • ${selectedOpp.contact_email}`}
-                    {selectedOpp.contact_phone && ` • ${selectedOpp.contact_phone}`}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: 'grid', gap: '10px' }}>
-              <button
-                onClick={() => startResponse(selectedOpp)}
-                disabled={addingToCart}
-                style={{
-                  padding: '14px',
-                  backgroundColor: colors.primary,
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: colors.background,
-                  cursor: addingToCart ? 'not-allowed' : 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '700'
-                }}
-              >
-                {addingToCart ? 'Adding...' : '📝 Start Response'}
-              </button>
-              <button
-                onClick={() => setSelectedOpp(null)}
-                style={{
-                  padding: '14px',
-                  backgroundColor: colors.surface,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '8px',
-                  color: colors.text,
-                  cursor: 'pointer'
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  // Arts/Entertainment - SPECIFIC event terms
+  '7111': ['performing arts', 'theater', 'theatre', 'symphony', 'opera', 'ballet', 'dance company'],
+  '7112': ['sports team', 'stadium', 'arena'],
+  '7113': [
+    'concert', 
+    'festival', 
+    'event promotion', 
+    'live event', 
+    'entertainment event',
+    'music festival',
+    'cultural event',
+    'community event'
+  ],
+  '7114': ['talent agent', 'artist manager', 'booking agent'],
+  '7115': ['artist', 'musician', 'performer', 'entertainer'],
+  
+  // Education
+  '6111': ['elementary school', 'secondary school', 'K-12', 'public school'],
+  '6112': ['university', 'college', 'higher education', 'academic'],
+  '6113': ['community college', 'junior college'],
+  '6114': ['business school', 'professional development'],
+  '6115': ['trade school', 'technical training', 'vocational school'],
+  '6116': ['tutoring', 'test prep', 'educational support'],
+  '6117': ['education consulting']
 }
+
+// ============================================
+// SCORING WEIGHTS
+// Points awarded for each match type
+// ============================================
+export const SCORING = {
+  // NAICS Matching
+  NAICS_DIRECT_CODE_MATCH: 40,      // Exact NAICS code match
+  NAICS_KEYWORD_FROM_DESC: 35,      // Keyword from NAICS description
+  NAICS_INDUSTRY_KEYWORD: 30,       // Industry keyword match
+  
+  // Location Matching
+  LOCATION_STATE_MATCH: 20,         // User state = Opp state
+  LOCATION_OPEN_TO_ALL: 10,         // No location requirement
+  
+  // Services Matching
+  SERVICES_KEYWORD_MATCH: 25,       // Service keyword found
+  
+  // Bonus Points
+  CERTIFICATIONS_BONUS: 10,         // Has relevant certifications
+  PAST_PERFORMANCE_BONUS: 5,        // Has past performance
+  
+  // CR-AI Potential Boost
+  CRAI_BOOST: 25,                   // Max points CR-AI can add
+  MAX_SCORE: 95                     // Never show 100% (nothing is guaranteed)
+}
+
+// ============================================
+// MATCH LEVEL THRESHOLDS
+// ============================================
+export const MATCH_LEVELS = {
+  HIGH: 55,      // Score >= 55 = Strong Match
+  MEDIUM: 35,    // Score >= 35 = Good Potential
+  LOW: 1         // Score >= 1 = Review Needed
+  // Score = 0 = No Match (hidden by default)
+}
+
+// ============================================
+// CERTIFICATION KEYWORDS
+// Terms in opportunity text that indicate cert relevance
+// ============================================
+export const CERT_KEYWORDS = [
+  'small business',
+  'minority',
+  'woman owned',
+  'women owned',
+  'veteran',
+  'dvbe',
+  'mbe',
+  'wbe',
+  'sbe',
+  'dbe',
+  '8(a)',
+  'hubzone',
+  'disadvantaged',
+  'set-aside',
+  'set aside'
+]
+
+// ============================================
+// MINIMUM KEYWORD LENGTH
+// Skip words shorter than this
+// ============================================
+export const MIN_KEYWORD_LENGTH = 5
