@@ -289,7 +289,7 @@ export default function ShopContracts({ session }) {
   }
 
   // ==========================================
-  // ADD TO CART
+  // START RESPONSE - Save and go to Response Room
   // ==========================================
   const addToCart = async (opportunity) => {
     if (!session?.user?.id) return
@@ -297,7 +297,7 @@ export default function ShopContracts({ session }) {
     setAddingToCart(true)
     
     try {
-      // Check if already in cart (using submissions table for now)
+      // Check if already exists
       const { data: existing } = await supabase
         .from('submissions')
         .select('id')
@@ -306,12 +306,14 @@ export default function ShopContracts({ session }) {
         .single()
       
       if (existing) {
-        alert('This opportunity is already in your cart!')
+        // Already exists - just notify and they can find it in Response Room
+        alert('✅ This opportunity is already in your Response Room!')
         setAddingToCart(false)
+        setSelectedOpp(null)
         return
       }
       
-      // Add to cart (submissions table with status 'considering')
+      // Add to submissions with status 'in_progress'
       const { error } = await supabase
         .from('submissions')
         .insert({
@@ -319,19 +321,23 @@ export default function ShopContracts({ session }) {
           title: opportunity.title || opportunity.commodity_description || 'Untitled Opportunity',
           agency: opportunity.contact_name || 'Agency not specified',
           due_date: opportunity.close_date,
-          status: 'considering',
+          status: 'in_progress',
           source_url: opportunity.source_url || '',
+          description: opportunity.commodity_description || '',
+          contact_email: opportunity.contact_email || '',
+          contact_phone: opportunity.contact_phone || '',
+          location: opportunity.state ? `${opportunity.state}${opportunity.county ? ', ' + opportunity.county : ''}` : '',
           created_at: new Date().toISOString()
         })
       
       if (error) throw error
       
-      alert('✅ Added to your cart!')
+      alert('✅ Response started! Go to Response Room to continue.')
       setSelectedOpp(null)
       
     } catch (err) {
-      console.error('Add to cart error:', err)
-      alert('Failed to add to cart. Please try again.')
+      console.error('Start response error:', err)
+      alert('Failed to start response. Please try again.')
     } finally {
       setAddingToCart(false)
     }
@@ -961,25 +967,7 @@ export default function ShopContracts({ session }) {
               </div>
 
               {/* Actions */}
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr', 
-                gap: '12px' 
-              }}>
-                <button
-                  onClick={() => setSelectedOpp(null)}
-                  style={{
-                    padding: '14px',
-                    backgroundColor: colors.surface,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '8px',
-                    color: colors.text,
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  Close
-                </button>
+              <div style={{ display: 'grid', gap: '10px' }}>
                 <button
                   onClick={() => addToCart(selectedOpp)}
                   disabled={addingToCart}
@@ -995,7 +983,21 @@ export default function ShopContracts({ session }) {
                     opacity: addingToCart ? 0.7 : 1
                   }}
                 >
-                  {addingToCart ? 'Adding...' : '🛒 Add to My Cart'}
+                  {addingToCart ? 'Starting...' : '📝 Start Response'}
+                </button>
+                <button
+                  onClick={() => setSelectedOpp(null)}
+                  style={{
+                    padding: '14px',
+                    backgroundColor: colors.surface,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '8px',
+                    color: colors.text,
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Close
                 </button>
               </div>
             </div>
