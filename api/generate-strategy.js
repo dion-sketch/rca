@@ -1,12 +1,12 @@
 // /api/generate-strategy.js - RCA Strategy Generator
-// Generates approach strategy based on opportunity + BUCKET
+// Generates approach strategy based on opportunity + BUCKET + RFP Content
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { opportunity, profile, userAngle } = req.body
+  const { opportunity, profile, userAngle, rfpContent } = req.body
 
   if (!opportunity) {
     return res.status(400).json({ error: 'Opportunity data required' })
@@ -28,34 +28,55 @@ SERVICES: ${profile.services?.join(', ') || 'Not specified'}
 MISSION: ${profile.mission_statement || 'Not specified'}
 ` : 'No company profile available.'
 
+    // Build RFP context from uploaded/fetched document
+    const rfpContext = rfpContent ? `
+=== ACTUAL RFP/GRANT DOCUMENT CONTENT ===
+${rfpContent.description ? `DESCRIPTION:\n${rfpContent.description.substring(0, 2000)}` : ''}
+${rfpContent.scope ? `\nSCOPE OF WORK:\n${rfpContent.scope.substring(0, 2000)}` : ''}
+${rfpContent.requirements ? `\nREQUIREMENTS:\n${rfpContent.requirements.substring(0, 1500)}` : ''}
+${rfpContent.qualifications ? `\nQUALIFICATIONS:\n${rfpContent.qualifications.substring(0, 1500)}` : ''}
+${rfpContent.evaluation ? `\nEVALUATION CRITERIA:\n${rfpContent.evaluation.substring(0, 1000)}` : ''}
+${rfpContent.questions?.length > 0 ? `\nQUESTIONS TO ADDRESS:\n${rfpContent.questions.slice(0, 10).join('\n')}` : ''}
+${rfpContent.pageLimit ? `\nPAGE LIMIT: ${rfpContent.pageLimit}` : ''}
+${rfpContent.budget ? `\nBUDGET: $${rfpContent.budget}` : ''}
+=== END RFP CONTENT ===
+` : 'No RFP document uploaded - using opportunity title and description only.'
+
     const systemPrompt = `You are RCA (Rambo Contract Assistant), an expert at helping small businesses win government contracts and grants.
 
-Your job is to create a WINNING STRATEGY for this opportunity based on what you know about the company.
+Your job is to create a SHORT, ACTIONABLE game plan - NOT a long paragraph.
 
 COMPANY BUCKET:
 ${profileContext}
 
-RULES:
-1. Create a compelling program TITLE (5-10 words, memorable)
-2. Write an APPROACH paragraph (3-4 sentences) explaining how they should position themselves
-3. Be SPECIFIC - use their actual company name, certifications, location
-4. Sound CONFIDENT but realistic
-5. Focus on what makes them UNIQUELY qualified
-6. If they lack certain qualifications, focus on strengths they DO have`
+${rfpContext}
 
-    const userPrompt = `Create a winning strategy for this opportunity:
+OUTPUT FORMAT - Keep it tight:
+1. SUGGESTED TITLE: A compelling 5-8 word program name
+2. YOUR ANGLE: One sentence - the main positioning strategy
+3. FROM YOUR BUCKET - USE THESE: List 3-4 specific things from their profile to highlight
+4. KEY POINTS TO HIT: 3-4 bullet points of what to emphasize in the response
+
+RULES:
+- Be SPECIFIC - use their actual company name, certs, location
+- Keep it SHORT - this is a game plan, not the actual response
+- Focus on what makes them UNIQUELY qualified
+- Reference actual RFP requirements if available`
+
+    const userPrompt = `Create a winning game plan for this opportunity:
 
 TITLE: ${opportunity.title}
 DESCRIPTION: ${opportunity.description || 'Not provided'}
 AGENCY: ${opportunity.agency || 'Not specified'}
-DUE DATE: ${opportunity.due_date || 'Not specified'}
 
-${userAngle ? `THE USER'S ANGLE/APPROACH IDEA: "${userAngle}"` : 'No specific angle provided - suggest the best approach based on their BUCKET.'}
+${userAngle ? `USER'S ANGLE: "${userAngle}"` : ''}
 
 Respond in this EXACT JSON format:
 {
-  "suggestedTitle": "Your suggested program title here",
-  "approach": "Your 3-4 sentence approach strategy here"
+  "suggestedTitle": "Your 5-8 word program title",
+  "angle": "One sentence positioning strategy",
+  "fromBucket": ["Specific item 1 to highlight", "Specific item 2", "Specific item 3"],
+  "keyPoints": ["Point 1 to emphasize", "Point 2", "Point 3"]
 }`
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -96,7 +117,9 @@ Respond in this EXACT JSON format:
       // If JSON parsing fails, create structure from text
       strategy = {
         suggestedTitle: 'Strategic Partnership Proposal',
-        approach: text
+        angle: text.substring(0, 150),
+        fromBucket: ['Your relevant experience', 'Key qualifications'],
+        keyPoints: ['Review and customize this strategy']
       }
     }
 
