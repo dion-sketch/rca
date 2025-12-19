@@ -573,23 +573,6 @@ export default function ShopContracts({ session, onNavigate }) {
               </>
             )}
 
-            {selectedOpp.source_url && (
-              <a 
-                href={selectedOpp.source_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ 
-                  display: 'block',
-                  color: colors.primary, 
-                  fontSize: '13px', 
-                  marginBottom: '15px',
-                  textDecoration: 'underline'
-                }}
-              >
-                View full listing →
-              </a>
-            )}
-
             <button
               onClick={() => startResponse(selectedOpp)}
               disabled={addingToCart}
