@@ -304,7 +304,7 @@ export default function ShopContracts({ session, onNavigate }) {
         agency: opportunity.contact_name || opportunity.agency || '',
         due_date: opportunity.close_date,
         status: 'in_progress',
-        description: opportunity.commodity_description || '',
+        description: opportunity.description || opportunity.commodity_description || '',
         estimated_value: opportunity.estimated_value || '',
         cr_match_score: opportunity.matchScore?.current || 50,
         created_at: new Date().toISOString()
@@ -564,13 +564,30 @@ export default function ShopContracts({ session, onNavigate }) {
             <p style={{ color: colors.muted, marginBottom: '5px', fontSize: '12px' }}>Due Date</p>
             <p style={{ color: colors.text, marginBottom: '15px' }}>{formatDate(selectedOpp.close_date)}</p>
 
-            {selectedOpp.commodity_description && (
+            {(selectedOpp.description || selectedOpp.commodity_description) && (
               <>
                 <p style={{ color: colors.muted, marginBottom: '5px', fontSize: '12px' }}>Description</p>
-                <p style={{ color: colors.text, marginBottom: '20px', lineHeight: '1.6' }}>
-                  {selectedOpp.commodity_description}
+                <p style={{ color: colors.text, marginBottom: '20px', lineHeight: '1.6', maxHeight: '150px', overflow: 'auto' }}>
+                  {selectedOpp.description || selectedOpp.commodity_description}
                 </p>
               </>
+            )}
+
+            {selectedOpp.source_url && (
+              <a 
+                href={selectedOpp.source_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ 
+                  display: 'block',
+                  color: colors.primary, 
+                  fontSize: '13px', 
+                  marginBottom: '15px',
+                  textDecoration: 'underline'
+                }}
+              >
+                View full listing →
+              </a>
             )}
 
             <button
