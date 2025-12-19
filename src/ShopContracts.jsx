@@ -190,27 +190,36 @@ export default function ShopContracts({ session }) {
     // ============================================
     // 2. SERVICES/KEYWORDS MATCH (0-25 points)
     // Check if user's services appear in description
+    // Only match on meaningful phrases, not single generic words
     // ============================================
     const userServices = userProfile.services || []
     let serviceMatched = false
     let matchedService = null
 
+    // Generic words to SKIP - too common
+    const skipWords = ['services', 'service', 'management', 'support', 'professional', 'general', 'other', 'consulting', 'solutions', 'development', 'training', 'program', 'project']
+
     // Create keyword list from services
     const serviceKeywords = []
     for (const svc of userServices) {
       const name = (svc.category || svc.name || svc || '').toLowerCase()
-      if (name) {
-        serviceKeywords.push(name)
-        // Also add individual words
+      if (name && name.length > 5) {
+        // Add full service name if specific enough
+        if (!skipWords.some(skip => name === skip)) {
+          serviceKeywords.push(name)
+        }
+        // Only add individual words if they're specific (not in skip list)
         name.split(/[\s,]+/).forEach(word => {
-          if (word.length > 3) serviceKeywords.push(word)
+          if (word.length > 5 && !skipWords.includes(word)) {
+            serviceKeywords.push(word)
+          }
         })
       }
     }
 
-    // Check for matches
+    // Check for matches - require word to be meaningful
     for (const keyword of serviceKeywords) {
-      if (keyword.length > 3 && oppText.includes(keyword)) {
+      if (keyword.length > 5 && oppText.includes(keyword)) {
         serviceMatched = true
         matchedService = keyword
         score += 25
@@ -268,16 +277,21 @@ export default function ShopContracts({ session }) {
     }
 
     // ============================================
-    // DETERMINE MATCH LEVEL
+    // DETERMINE MATCH LEVEL - More strict thresholds
     // ============================================
-    let matchLevel = 'low'
-    if (score >= 60) matchLevel = 'high'
-    else if (score >= 35) matchLevel = 'medium'
-    else if (score > 0) matchLevel = 'low'
-    else matchLevel = 'none'
+    let matchLevel = 'none'
+    
+    // Must have NAICS or Services match to be considered a real match
+    if (naicsMatched || serviceMatched) {
+      if (score >= 55) matchLevel = 'high'
+      else if (score >= 35) matchLevel = 'medium'
+      else matchLevel = 'low'
+    } else if (score > 0) {
+      matchLevel = 'low'
+    }
 
-    // CR-AI potential boost (max +30)
-    const potential = Math.min(score + 30, 95)
+    // CR-AI potential boost (max +25, not +30)
+    const potential = Math.min(score + 25, 95)
 
     return {
       current: Math.min(score, 100),
@@ -343,45 +357,46 @@ export default function ShopContracts({ session }) {
   }
 
   // Helper: Get industry keywords based on NAICS code prefix
+  // ONLY specific keywords - no generic words like "services"
   const getNaicsKeywords = (code) => {
     const prefix = code.substring(0, 4)
     const keywords = {
       // Professional Services
-      '5411': ['legal', 'attorney', 'law'],
-      '5412': ['accounting', 'bookkeeping', 'audit', 'tax'],
-      '5413': ['architect', 'engineering', 'design'],
-      '5414': ['graphic', 'design', 'interior'],
-      '5415': ['computer', 'software', 'programming', 'IT', 'technology'],
-      '5416': ['management', 'consulting', 'strategic', 'marketing'],
-      '5417': ['research', 'scientific', 'laboratory'],
-      '5418': ['advertising', 'public relations', 'media', 'marketing', 'communications'],
+      '5411': ['legal', 'attorney', 'law firm'],
+      '5412': ['accounting', 'bookkeeping', 'audit', 'tax preparation'],
+      '5413': ['architect', 'engineering', 'surveying'],
+      '5414': ['graphic design', 'interior design'],
+      '5415': ['software', 'programming', 'IT support', 'cybersecurity'],
+      '5416': ['consulting', 'strategic planning'],
+      '5417': ['research', 'laboratory', 'scientific'],
+      '5418': ['advertising', 'public relations', 'media buying', 'marketing campaign'],
       '5419': ['veterinary', 'photography'],
-      // Healthcare
-      '6211': ['physician', 'doctor', 'medical'],
-      '6212': ['dental', 'dentist'],
-      '6213': ['mental health', 'behavioral', 'counseling', 'therapy', 'psychiatric', 'psychologist'],
-      '6214': ['outpatient', 'clinic', 'health center', 'mental health'],
-      '6215': ['laboratory', 'diagnostic'],
-      '6216': ['home health', 'nursing'],
-      '6219': ['ambulance', 'emergency'],
-      // Social Services
-      '6241': ['family', 'individual', 'social', 'community', 'youth', 'child', 'services'],
-      '6242': ['emergency', 'relief', 'shelter'],
-      '6243': ['vocational', 'rehabilitation', 'training', 'workforce'],
-      '6244': ['child care', 'daycare', 'childcare'],
-      // Arts/Entertainment
-      '7111': ['performing arts', 'theater', 'theatre', 'concert'],
-      '7112': ['spectator sports', 'sports'],
-      '7113': ['promoter', 'event', 'arts', 'entertainment', 'concert', 'festival'],
-      '7114': ['agent', 'manager', 'talent'],
-      '7115': ['artist', 'writer', 'performer'],
+      // Healthcare - SPECIFIC terms
+      '6211': ['physician', 'doctor', 'medical practice'],
+      '6212': ['dental', 'dentist', 'orthodont'],
+      '6213': ['mental health', 'behavioral health', 'counseling', 'therapy', 'psychiatric', 'psychologist', 'therapist'],
+      '6214': ['outpatient', 'health center', 'clinic'],
+      '6215': ['laboratory', 'diagnostic', 'blood test'],
+      '6216': ['home health', 'home care', 'nursing home'],
+      '6219': ['ambulance', 'paramedic'],
+      // Social Services - SPECIFIC terms
+      '6241': ['family service', 'youth program', 'child welfare', 'social work', 'case management', 'foster', 'adoption', 'permanency'],
+      '6242': ['emergency shelter', 'homeless', 'food bank', 'relief'],
+      '6243': ['vocational', 'rehabilitation', 'job training', 'workforce development'],
+      '6244': ['child care', 'daycare', 'preschool', 'childcare'],
+      // Arts/Entertainment - SPECIFIC terms
+      '7111': ['performing arts', 'theater', 'theatre', 'symphony', 'opera', 'ballet'],
+      '7112': ['sports team', 'stadium'],
+      '7113': ['concert', 'festival', 'event promotion', 'live event', 'entertainment event'],
+      '7114': ['talent agent', 'artist manager'],
+      '7115': ['artist', 'musician', 'performer'],
       // Education
-      '6111': ['elementary', 'secondary', 'school'],
-      '6112': ['college', 'university'],
-      '6113': ['college', 'junior'],
-      '6114': ['business school', 'training'],
-      '6115': ['trade school', 'technical'],
-      '6116': ['education support', 'tutoring'],
+      '6111': ['elementary school', 'secondary school', 'K-12'],
+      '6112': ['university', 'college', 'higher education'],
+      '6113': ['community college'],
+      '6114': ['business school', 'professional training'],
+      '6115': ['trade school', 'technical training'],
+      '6116': ['tutoring', 'test prep'],
       '6117': ['education support']
     }
     return keywords[prefix] || []
