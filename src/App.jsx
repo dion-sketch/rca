@@ -380,7 +380,7 @@ function App() {
 
       {/* Page Router */}
       {currentPage === 'go-shopping' ? (
-        <ShopContracts session={session} />
+        <ShopContracts session={session} onNavigate={setCurrentPage} />
       ) : currentPage === 'my-cart' ? (
         <MyCart 
           session={session} 
