@@ -17,6 +17,11 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   const [generatingStrategy, setGeneratingStrategy] = useState(false)
   const [generatedStrategy, setGeneratedStrategy] = useState(null)
 
+  // Phase 3 Answers state
+  const [sections, setSections] = useState([])
+  const [generatingAnswers, setGeneratingAnswers] = useState(false)
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
+
   // RFP Content state - THE DNA
   const [rfpContent, setRfpContent] = useState(null)
   const [loadingRfp, setLoadingRfp] = useState(false)
@@ -227,6 +232,116 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     } finally {
       setLoadingRfp(false)
     }
+  }
+
+  // ==========================================
+  // PHASE 3: ANSWERS FUNCTIONS
+  // ==========================================
+
+  // Default sections for grant/contract responses
+  const defaultSections = [
+    { 
+      id: 'narrative', 
+      title: 'Project Narrative / Approach', 
+      prompt: 'Describe your approach to delivering this project or service.',
+      charLimit: 2000,
+      answer: '',
+      status: 'pending' // pending, generating, complete
+    },
+    { 
+      id: 'qualifications', 
+      title: 'Qualifications & Experience', 
+      prompt: 'Describe your relevant qualifications and past experience.',
+      charLimit: 1500,
+      answer: '',
+      status: 'pending'
+    },
+    { 
+      id: 'team', 
+      title: 'Team & Capacity', 
+      prompt: 'Describe your team and organizational capacity to perform this work.',
+      charLimit: 1000,
+      answer: '',
+      status: 'pending'
+    },
+    { 
+      id: 'timeline', 
+      title: 'Timeline & Deliverables', 
+      prompt: 'Provide a timeline and key deliverables for the project.',
+      charLimit: 800,
+      answer: '',
+      status: 'pending'
+    }
+  ]
+
+  // Initialize sections from RFP questions or use defaults
+  const initializeSections = () => {
+    if (rfpContent?.questions && rfpContent.questions.length > 0) {
+      // Use extracted RFP questions
+      const rfpSections = rfpContent.questions.map((q, i) => ({
+        id: `q${i}`,
+        title: `Question ${i + 1}`,
+        prompt: q,
+        charLimit: 1500,
+        answer: '',
+        status: 'pending'
+      }))
+      setSections(rfpSections)
+    } else {
+      // Use default sections
+      setSections(defaultSections)
+    }
+    setCurrentSectionIndex(0)
+  }
+
+  // Generate answer for a section
+  const generateAnswer = async (sectionIndex) => {
+    const section = sections[sectionIndex]
+    
+    // Update status to generating
+    setSections(prev => prev.map((s, i) => 
+      i === sectionIndex ? { ...s, status: 'generating' } : s
+    ))
+
+    try {
+      const response = await fetch('/api/generate-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          section: section,
+          opportunity: selectedSubmission,
+          profile: profileData,
+          strategy: generatedStrategy,
+          rfpContent: rfpContent,
+          charLimit: section.charLimit
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to generate')
+
+      const data = await response.json()
+      
+      setSections(prev => prev.map((s, i) => 
+        i === sectionIndex ? { ...s, answer: data.answer, status: 'complete' } : s
+      ))
+    } catch (err) {
+      console.error('Answer generation error:', err)
+      // Set fallback
+      setSections(prev => prev.map((s, i) => 
+        i === sectionIndex ? { 
+          ...s, 
+          answer: 'Unable to generate. Please write your response manually.',
+          status: 'complete' 
+        } : s
+      ))
+    }
+  }
+
+  // Update answer manually
+  const updateAnswer = (sectionIndex, newAnswer) => {
+    setSections(prev => prev.map((s, i) => 
+      i === sectionIndex ? { ...s, answer: newAnswer, status: 'complete' } : s
+    ))
   }
 
   // ==========================================
@@ -472,7 +587,11 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               {/* Action Buttons */}
               <div style={{ display: 'grid', gap: '12px' }}>
                 <button
-                  disabled={true}
+                  onClick={() => {
+                    // Initialize sections and go to Phase 3
+                    initializeSections()
+                    setCurrentPhase(3)
+                  }}
                   style={{
                     width: '100%',
                     padding: '16px',
@@ -482,11 +601,10 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                     color: colors.background,
                     fontSize: '16px',
                     fontWeight: '700',
-                    cursor: 'not-allowed',
-                    opacity: 0.6
+                    cursor: 'pointer'
                   }}
                 >
-                  ✅ Use This → Continue to Answers (Coming Soon)
+                  ✅ Use This → Continue to Answers
                 </button>
                 <button
                   onClick={() => {
@@ -603,6 +721,363 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               </button>
             </>
           )}
+
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================
+  // PHASE 3: ANSWERS SCREEN
+  // ==========================================
+  if (selectedSubmission && currentPhase === 3) {
+    const currentSection = sections[currentSectionIndex]
+    const completedCount = sections.filter(s => s.status === 'complete').length
+
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        backgroundColor: colors.background, 
+        padding: '40px 30px',
+        paddingBottom: '100px'
+      }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          
+          {/* Header */}
+          <p 
+            onClick={() => setCurrentPhase(2)}
+            style={{ color: colors.muted, fontSize: '16px', marginBottom: '20px', cursor: 'pointer' }}
+          >
+            ← Back to Strategy
+          </p>
+
+          {/* Progress Bar */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '8px', 
+            marginBottom: '30px' 
+          }}>
+            {[1, 2, 3, 4, 5].map(phase => (
+              <div 
+                key={phase}
+                style={{
+                  flex: 1,
+                  height: '4px',
+                  backgroundColor: phase <= 3 ? colors.primary : colors.border,
+                  borderRadius: '2px'
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', fontSize: '12px', color: colors.muted }}>
+            <span>1. Overview</span>
+            <span>2. Strategy</span>
+            <span style={{ color: colors.primary, fontWeight: '600' }}>3. Answers</span>
+            <span>4. Review</span>
+            <span>5. Submit</span>
+          </div>
+
+          {/* Title */}
+          <h2 style={{ color: colors.text, fontSize: '20px', marginBottom: '5px' }}>
+            {selectedSubmission.title}
+          </h2>
+          <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '30px' }}>
+            {completedCount} of {sections.length} sections complete
+          </p>
+
+          {/* Section Navigation */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '8px', 
+            marginBottom: '25px',
+            overflowX: 'auto',
+            paddingBottom: '10px'
+          }}>
+            {sections.map((section, i) => (
+              <button
+                key={section.id}
+                onClick={() => setCurrentSectionIndex(i)}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: i === currentSectionIndex ? colors.card : 'transparent',
+                  border: `1px solid ${i === currentSectionIndex ? colors.primary : colors.border}`,
+                  borderRadius: '8px',
+                  color: section.status === 'complete' ? colors.primary : (i === currentSectionIndex ? colors.text : colors.muted),
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {section.status === 'complete' && '✓'} {section.title}
+              </button>
+            ))}
+          </div>
+
+          {/* Current Section */}
+          {currentSection && (
+            <div style={{
+              backgroundColor: colors.card,
+              borderRadius: '16px',
+              padding: '25px',
+              border: `1px solid ${colors.border}`,
+              marginBottom: '20px'
+            }}>
+              {/* Section Header */}
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ color: colors.text, fontSize: '18px', margin: '0 0 8px 0' }}>
+                  {currentSection.title}
+                </h3>
+                <p style={{ color: colors.muted, fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+                  {currentSection.prompt}
+                </p>
+              </div>
+
+              {/* Answer Area */}
+              {currentSection.status === 'generating' ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <p style={{ color: colors.gold, fontSize: '16px' }}>🤖 RCA is writing...</p>
+                  <p style={{ color: colors.muted, fontSize: '13px' }}>Crafting your response based on the strategy</p>
+                </div>
+              ) : (
+                <>
+                  <textarea
+                    value={currentSection.answer}
+                    onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
+                    placeholder="Click 'Generate with RCA' or write your response here..."
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#1a1a1a',
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: '8px',
+                      padding: '15px',
+                      color: colors.text,
+                      fontSize: '14px',
+                      lineHeight: '1.7',
+                      resize: 'vertical',
+                      minHeight: '200px',
+                      marginBottom: '15px'
+                    }}
+                  />
+
+                  {/* Character Count */}
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    marginBottom: '20px'
+                  }}>
+                    <span style={{ 
+                      color: currentSection.answer.length > currentSection.charLimit ? colors.danger : colors.muted,
+                      fontSize: '12px'
+                    }}>
+                      {currentSection.answer.length} / {currentSection.charLimit} characters
+                    </span>
+                    {currentSection.answer.length > currentSection.charLimit && (
+                      <span style={{ color: colors.danger, fontSize: '12px' }}>
+                        ⚠️ Over limit
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Generate Button */}
+                  {!currentSection.answer && (
+                    <button
+                      onClick={() => generateAnswer(currentSectionIndex)}
+                      style={{
+                        width: '100%',
+                        padding: '14px',
+                        backgroundColor: colors.gold,
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: colors.background,
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        marginBottom: '10px'
+                      }}
+                    >
+                      🤖 Generate with RCA
+                    </button>
+                  )}
+
+                  {/* Regenerate if has answer */}
+                  {currentSection.answer && (
+                    <button
+                      onClick={() => generateAnswer(currentSectionIndex)}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        backgroundColor: 'transparent',
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '10px',
+                        color: colors.muted,
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔄 Regenerate this section
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            {currentSectionIndex > 0 && (
+              <button
+                onClick={() => setCurrentSectionIndex(currentSectionIndex - 1)}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '10px',
+                  color: colors.muted,
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                ← Previous
+              </button>
+            )}
+            
+            {currentSectionIndex < sections.length - 1 ? (
+              <button
+                onClick={() => setCurrentSectionIndex(currentSectionIndex + 1)}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: currentSection?.answer ? colors.primary : colors.card,
+                  border: 'none',
+                  borderRadius: '10px',
+                  color: currentSection?.answer ? colors.background : colors.muted,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Next Section →
+              </button>
+            ) : (
+              <button
+                onClick={() => setCurrentPhase(4)}
+                disabled={completedCount < sections.length}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: completedCount === sections.length ? colors.gold : colors.card,
+                  border: 'none',
+                  borderRadius: '10px',
+                  color: completedCount === sections.length ? colors.background : colors.muted,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: completedCount === sections.length ? 'pointer' : 'not-allowed'
+                }}
+              >
+                {completedCount === sections.length ? 'Continue to Review →' : `Complete all sections (${completedCount}/${sections.length})`}
+              </button>
+            )}
+          </div>
+
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================
+  // PHASE 4: REVIEW SCREEN (Placeholder)
+  // ==========================================
+  if (selectedSubmission && currentPhase === 4) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        backgroundColor: colors.background, 
+        padding: '40px 30px',
+        paddingBottom: '100px'
+      }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          
+          <p 
+            onClick={() => setCurrentPhase(3)}
+            style={{ color: colors.muted, fontSize: '16px', marginBottom: '20px', cursor: 'pointer' }}
+          >
+            ← Back to Answers
+          </p>
+
+          {/* Progress Bar */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '30px' }}>
+            {[1, 2, 3, 4, 5].map(phase => (
+              <div 
+                key={phase}
+                style={{
+                  flex: 1,
+                  height: '4px',
+                  backgroundColor: phase <= 4 ? colors.primary : colors.border,
+                  borderRadius: '2px'
+                }}
+              />
+            ))}
+          </div>
+
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '60px 30px',
+            textAlign: 'center',
+            border: `1px solid ${colors.border}`
+          }}>
+            <span style={{ fontSize: '48px', marginBottom: '20px', display: 'block' }}>📋</span>
+            <h2 style={{ color: colors.text, fontSize: '24px', marginBottom: '15px' }}>
+              Review Your Response
+            </h2>
+            <p style={{ color: colors.muted, fontSize: '14px', marginBottom: '30px', lineHeight: '1.6' }}>
+              You've completed {sections.filter(s => s.status === 'complete').length} sections.<br/>
+              Review & Download coming soon.
+            </p>
+            
+            {/* Show sections summary */}
+            <div style={{ textAlign: 'left', maxWidth: '500px', margin: '0 auto' }}>
+              {sections.map((section, i) => (
+                <div 
+                  key={section.id}
+                  style={{
+                    padding: '12px',
+                    borderBottom: i < sections.length - 1 ? `1px solid ${colors.border}` : 'none',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <span style={{ color: colors.text, fontSize: '14px' }}>{section.title}</span>
+                  <span style={{ color: section.status === 'complete' ? colors.primary : colors.muted, fontSize: '12px' }}>
+                    {section.status === 'complete' ? `✓ ${section.answer.length} chars` : 'Pending'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setCurrentPhase(3)}
+              style={{
+                marginTop: '30px',
+                padding: '14px 30px',
+                backgroundColor: colors.gold,
+                border: 'none',
+                borderRadius: '10px',
+                color: colors.background,
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              ← Edit Answers
+            </button>
+          </div>
 
         </div>
       </div>
