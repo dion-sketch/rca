@@ -17,6 +17,11 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   const [generatingStrategy, setGeneratingStrategy] = useState(false)
   const [generatedStrategy, setGeneratedStrategy] = useState(null)
 
+  // RFP Content state - THE DNA
+  const [rfpContent, setRfpContent] = useState(null)
+  const [loadingRfp, setLoadingRfp] = useState(false)
+  const [rfpError, setRfpError] = useState(null)
+
   // Colors
   const colors = {
     primary: '#00FF00',
@@ -110,7 +115,8 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
         body: JSON.stringify({
           opportunity: selectedSubmission,
           profile: profileData,
-          userAngle: quickPick || userAngle
+          userAngle: quickPick || userAngle,
+          rfpContent: rfpContent // Pass the loaded RFP content
         })
       })
       
@@ -127,6 +133,88 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
       })
     } finally {
       setGeneratingStrategy(false)
+    }
+  }
+
+  // ==========================================
+  // RFP CONTENT FUNCTIONS - THE DNA
+  // ==========================================
+  
+  // Handle PDF upload
+  const handlePdfUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+    
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setRfpError('Please upload a PDF file')
+      return
+    }
+
+    setLoadingRfp(true)
+    setRfpError(null)
+
+    try {
+      // Convert to base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      // Send to API
+      const response = await fetch('/api/read-rfp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdf_base64: base64 })
+      })
+
+      if (!response.ok) throw new Error('Failed to read PDF')
+
+      const data = await response.json()
+      setRfpContent({
+        source: 'upload',
+        fileName: file.name,
+        ...data
+      })
+    } catch (err) {
+      console.error('PDF upload error:', err)
+      setRfpError('Failed to read PDF. Please try again.')
+    } finally {
+      setLoadingRfp(false)
+    }
+  }
+
+  // Fetch RFP from source URL
+  const fetchRfpFromUrl = async (sourceUrl) => {
+    if (!sourceUrl) {
+      setRfpError('No source URL available')
+      return
+    }
+
+    setLoadingRfp(true)
+    setRfpError(null)
+
+    try {
+      const response = await fetch('/api/fetch-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_url: sourceUrl })
+      })
+
+      if (!response.ok) throw new Error('Failed to fetch listing')
+
+      const data = await response.json()
+      setRfpContent({
+        source: 'url',
+        sourceUrl,
+        ...data
+      })
+    } catch (err) {
+      console.error('Fetch listing error:', err)
+      setRfpError('Could not fetch listing. Try uploading the PDF directly.')
+    } finally {
+      setLoadingRfp(false)
     }
   }
 
@@ -608,6 +696,160 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             </div>
           </div>
 
+          {/* RFP CONTENT SECTION - THE DNA */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '25px',
+            border: `2px solid ${rfpContent ? colors.primary : colors.gold}`,
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+              <span style={{ fontSize: '24px' }}>{rfpContent ? '✅' : '📄'}</span>
+              <div>
+                <p style={{ color: colors.text, fontSize: '16px', fontWeight: '600', margin: 0 }}>
+                  {rfpContent ? 'RFP Content Loaded' : 'Load RFP Document'}
+                </p>
+                <p style={{ color: colors.muted, fontSize: '12px', margin: 0 }}>
+                  {rfpContent ? 'RCA can now generate accurate responses' : 'Upload the RFP/Grant document so RCA can read it'}
+                </p>
+              </div>
+            </div>
+
+            {/* Error message */}
+            {rfpError && (
+              <p style={{ color: colors.danger, fontSize: '13px', marginBottom: '15px' }}>
+                ⚠️ {rfpError}
+              </p>
+            )}
+
+            {/* Loading state */}
+            {loadingRfp && (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <p style={{ color: colors.gold, fontSize: '14px' }}>🔄 Reading document...</p>
+              </div>
+            )}
+
+            {/* Upload/Fetch buttons when no content */}
+            {!rfpContent && !loadingRfp && (
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {/* Auto-fetch from source if available */}
+                {selectedSubmission.source_url && (
+                  <button
+                    onClick={() => fetchRfpFromUrl(selectedSubmission.source_url)}
+                    style={{
+                      flex: 1,
+                      padding: '14px',
+                      backgroundColor: colors.primary,
+                      border: 'none',
+                      borderRadius: '10px',
+                      color: colors.background,
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      textAlign: 'center'
+                    }}
+                  >
+                    🔄 Fetch from {selectedSubmission.source === 'grants_gov' ? 'Grants.gov' : 'Source'}
+                  </button>
+                )}
+                <label style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: selectedSubmission.source_url ? 'transparent' : colors.gold,
+                  border: selectedSubmission.source_url ? `1px solid ${colors.border}` : 'none',
+                  borderRadius: '10px',
+                  color: selectedSubmission.source_url ? colors.text : colors.background,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}>
+                  📎 Upload PDF
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handlePdfUpload}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* Show extracted content */}
+            {rfpContent && !loadingRfp && (
+              <div style={{ marginTop: '15px' }}>
+                {/* Source indicator */}
+                <p style={{ color: colors.primary, fontSize: '13px', marginBottom: '10px' }}>
+                  {rfpContent.source === 'upload' 
+                    ? `📎 ${rfpContent.fileName}` 
+                    : `🔗 Fetched from source`}
+                </p>
+                
+                {rfpContent.description && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>DESCRIPTION</p>
+                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', maxHeight: '100px', overflow: 'auto' }}>
+                      {rfpContent.description.substring(0, 500)}...
+                    </p>
+                  </div>
+                )}
+
+                {rfpContent.scope && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>SCOPE OF WORK</p>
+                    <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6', maxHeight: '100px', overflow: 'auto' }}>
+                      {rfpContent.scope.substring(0, 500)}...
+                    </p>
+                  </div>
+                )}
+
+                {rfpContent.questions && rfpContent.questions.length > 0 && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>
+                      QUESTIONS FOUND ({rfpContent.questions.length})
+                    </p>
+                    <ul style={{ color: '#ccc', fontSize: '13px', paddingLeft: '20px', margin: 0 }}>
+                      {rfpContent.questions.slice(0, 3).map((q, i) => (
+                        <li key={i} style={{ marginBottom: '5px' }}>{q.substring(0, 100)}...</li>
+                      ))}
+                      {rfpContent.questions.length > 3 && (
+                        <li style={{ color: colors.muted }}>+{rfpContent.questions.length - 3} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                {rfpContent.pageLimit && (
+                  <p style={{ color: colors.gold, fontSize: '12px' }}>
+                    📏 Page limit: {rfpContent.pageLimit}
+                  </p>
+                )}
+
+                {/* Re-upload button */}
+                <label style={{
+                  display: 'inline-block',
+                  padding: '8px 16px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  color: colors.muted,
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  marginTop: '10px'
+                }}>
+                  Upload different PDF
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handlePdfUpload}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
           {/* Action Buttons */}
           <button
             onClick={() => {
@@ -617,7 +859,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             style={{
               width: '100%',
               padding: '18px',
-              backgroundColor: colors.gold,
+              backgroundColor: rfpContent ? colors.gold : `${colors.gold}80`,
               border: 'none',
               borderRadius: '12px',
               color: colors.background,
@@ -627,7 +869,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               marginBottom: '12px'
             }}
           >
-            📝 Start Draft
+            {rfpContent ? '📝 Start Draft' : '📝 Start Draft (Upload PDF for better results)'}
           </button>
 
           <button
