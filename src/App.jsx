@@ -27,10 +27,9 @@ function App() {
   const [profileCompletion, setProfileCompletion] = useState(0)
   const [profileData, setProfileData] = useState(null)
   const [cartCount, setCartCount] = useState(0)
-  const [submissions, setSubmissions] = useState(0)
+  const [submissionCount, setSubmissionCount] = useState(0)
 
   useEffect(() => {
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
@@ -40,7 +39,6 @@ function App() {
       }
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) {
@@ -68,14 +66,24 @@ function App() {
   }
 
   const fetchCartCount = async (userId) => {
-    const { data } = await supabase
+    const { data: cartItems } = await supabase
       .from('submissions')
       .select('id')
       .eq('user_id', userId)
-      .neq('status', 'archived')
+      .eq('status', 'considering')
     
-    if (data) {
-      setCartCount(data.length)
+    if (cartItems) {
+      setCartCount(cartItems.length)
+    }
+
+    const { data: submitted } = await supabase
+      .from('submissions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'submitted')
+    
+    if (submitted) {
+      setSubmissionCount(submitted.length)
     }
   }
 
@@ -95,7 +103,6 @@ function App() {
     if (error) {
       setAuthError(error.message)
     } else {
-      // Create user record in our users table
       await supabase.from('users').insert({
         id: data.user.id,
         email: email,
@@ -125,7 +132,6 @@ function App() {
     await supabase.auth.signOut()
   }
 
-  // Loading state
   if (loading) {
     return (
       <div style={{
@@ -140,7 +146,6 @@ function App() {
     )
   }
 
-  // Auth Screen (Login/Signup)
   if (!session) {
     return (
       <div style={{
@@ -161,7 +166,6 @@ function App() {
           border: `2px solid ${colors.primary}`,
           boxShadow: `0 0 30px rgba(0, 255, 0, 0.2)`
         }}>
-          {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: '30px' }}>
             <h1 style={{ 
               color: colors.primary, 
@@ -169,14 +173,13 @@ function App() {
               margin: 0,
               textShadow: `0 0 10px ${colors.primary}`
             }}>
-              RCA
+              CR-AI
             </h1>
             <p style={{ color: colors.gray, margin: '5px 0 0 0' }}>
-              Rambo Contract Assistant
+              Contract Ready Assistant
             </p>
           </div>
 
-          {/* Auth Form */}
           <form onSubmit={isSignUp ? handleSignUp : handleSignIn}>
             {isSignUp && (
               <div style={{ marginBottom: '20px' }}>
@@ -282,7 +285,6 @@ function App() {
             </button>
           </form>
 
-          {/* Toggle Auth Mode */}
           <div style={{ textAlign: 'center', marginTop: '20px' }}>
             <button
               onClick={() => {
@@ -305,14 +307,13 @@ function App() {
     )
   }
 
-  // Main Dashboard
   return (
     <div style={{
       minHeight: '100vh',
       backgroundColor: colors.background,
       fontFamily: 'Inter, system-ui, sans-serif'
     }}>
-      {/* Navigation */}
+      {/* Navigation - NEW CLEARER NAMES */}
       <nav style={{
         backgroundColor: colors.card,
         padding: '15px 30px',
@@ -321,20 +322,23 @@ function App() {
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <div>
+        <div 
+          onClick={() => setCurrentPage('dashboard')}
+          style={{ cursor: 'pointer' }}
+        >
           <h1 style={{ color: colors.primary, margin: 0, fontSize: '24px', letterSpacing: '1px' }}>
-            RCA
+            CR-AI
           </h1>
           <p style={{ color: colors.gray, margin: '2px 0 0 0', fontSize: '10px', letterSpacing: '0.5px' }}>
-            Rambo Contract Assistant
+            Contract Ready Assistant
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {[
-            { label: 'Dashboard', page: 'dashboard' },
-            { label: 'Shop Contracts', page: 'shop-contracts' },
-            { label: 'Business Builder', page: 'business-builder' },
-            { label: 'My Cart', page: 'my-cart' },
+            { label: '🏠 Dashboard', page: 'dashboard' },
+            { label: '🛍️ Go Shopping', page: 'go-shopping' },
+            { label: '🛒 My Cart', page: 'my-cart' },
+            { label: '📝 Response Room', page: 'response-room' },
             { label: '🪣 My BUCKET', page: 'my-bucket' }
           ].map((item) => (
             <button
@@ -345,10 +349,11 @@ function App() {
                 border: 'none',
                 color: currentPage === item.page ? colors.primary : colors.white,
                 cursor: 'pointer',
-                fontSize: '14px',
+                fontSize: '13px',
                 padding: '8px 12px',
                 borderRadius: '6px',
-                backgroundColor: currentPage === item.page ? `${colors.primary}20` : 'transparent'
+                backgroundColor: currentPage === item.page ? `${colors.primary}20` : 'transparent',
+                whiteSpace: 'nowrap'
               }}
             >
               {item.label}
@@ -361,9 +366,10 @@ function App() {
               border: `1px solid ${colors.gray}`,
               color: colors.gray,
               cursor: 'pointer',
-              fontSize: '14px',
+              fontSize: '13px',
               padding: '8px 16px',
-              borderRadius: '6px'
+              borderRadius: '6px',
+              marginLeft: '10px'
             }}
           >
             Sign Out
@@ -371,34 +377,39 @@ function App() {
         </div>
       </nav>
 
-      {/* Conditional Page Rendering */}
-      {currentPage === 'business-builder' ? (
+      {/* Page Router */}
+      {currentPage === 'go-shopping' ? (
+        <ShopContracts session={session} />
+      ) : currentPage === 'my-cart' ? (
+        <MyCart 
+          session={session} 
+          onBack={() => setCurrentPage('dashboard')}
+          onStartResponse={(item) => {
+            setCurrentPage('response-room')
+          }}
+          profileData={profileData}
+        />
+      ) : currentPage === 'response-room' ? (
+        <ResponseRoom 
+          session={session}
+          profileData={profileData}
+          onBack={() => setCurrentPage('my-cart')}
+        />
+      ) : currentPage === 'my-bucket' ? (
+        <MyBucketPage 
+          session={session} 
+          profileData={profileData}
+          profileCompletion={profileCompletion}
+          onBack={() => setCurrentPage('dashboard')}
+          onEditProfile={() => setCurrentPage('build-bucket')}
+        />
+      ) : currentPage === 'build-bucket' ? (
         <BusinessBuilder 
           session={session} 
           onBack={() => {
             setCurrentPage('dashboard')
             fetchProfileCompletion(session.user.id)
           }} 
-        />
-      ) : currentPage === 'my-cart' ? (
-        <MyCart 
-          session={session} 
-          onBack={() => {
-            setCurrentPage('dashboard')
-            fetchCartCount(session.user.id)
-          }}
-          profileData={profileData}
-        />
-      ) : currentPage === 'shop-contracts' ? (
-        <ShopContracts session={session} />
-      ) : currentPage === 'my-bucket' ? (
-        /* My BUCKET Page */
-        <MyBucketPage 
-          session={session} 
-          profileData={profileData}
-          profileCompletion={profileCompletion}
-          onBack={() => setCurrentPage('dashboard')}
-          onEditProfile={() => setCurrentPage('business-builder')}
         />
       ) : (
         <>
@@ -413,17 +424,15 @@ function App() {
             <div 
               onClick={() => setCurrentPage('my-bucket')}
               style={{ textAlign: 'center', cursor: 'pointer' }}
-              title="Click to view My BUCKET"
             >
               <div style={{ color: profileCompletion >= 80 ? colors.primary : colors.gold, fontSize: '32px', fontWeight: '700' }}>
                 🪣 {profileCompletion}%
               </div>
-              <div style={{ color: colors.gray, fontSize: '12px' }}>Bucket Built</div>
+              <div style={{ color: colors.gray, fontSize: '12px' }}>BUCKET Built</div>
             </div>
             <div 
               onClick={() => setCurrentPage('my-cart')}
               style={{ textAlign: 'center', cursor: 'pointer' }}
-              title="Click to view My Cart"
             >
               <div style={{ color: colors.gold, fontSize: '32px', fontWeight: '700' }}>
                 🛒 {cartCount}
@@ -432,7 +441,7 @@ function App() {
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ color: colors.white, fontSize: '32px', fontWeight: '700' }}>
-                🎯 {submissions}/2
+                🎯 {submissionCount}/2
               </div>
               <div style={{ color: colors.gray, fontSize: '12px' }}>Monthly Goal</div>
             </div>
@@ -440,88 +449,84 @@ function App() {
 
           {/* Main Content */}
           <div style={{ padding: '40px 30px', maxWidth: '1200px', margin: '0 auto' }}>
-            {/* Welcome Message */}
             <div style={{ marginBottom: '40px' }}>
               <h2 style={{ color: colors.white, margin: '0 0 10px 0' }}>
-                Welcome to RCA! 👋
+                Welcome! 👋
               </h2>
               <p style={{ color: colors.gray, margin: 0 }}>
-                Your <strong style={{ color: colors.primary }}>Rambo Contract Assistant</strong>. Let's get you contract ready.
+                Your <strong style={{ color: colors.primary }}>Contract Ready AI Assistant</strong>. Let's win some contracts.
               </p>
             </div>
 
-            {/* Three Main Cards */}
+            {/* THE FLOW - 4 Steps */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '25px'
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '20px'
             }}>
-              {/* Shop Contracts Card */}
-              <div style={{
-                backgroundColor: colors.card,
-                borderRadius: '16px',
-                padding: '30px',
-                border: `2px solid ${colors.primary}30`,
-                cursor: 'pointer',
-                transition: 'all 0.3s ease'
-              }}
-              onClick={() => setCurrentPage('shop-contracts')}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
-              >
-                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🛍️</div>
-                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Shop Contracts</h3>
-                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                  Find contracts & grants matched to your profile
-                </p>
-              </div>
-
-              {/* Business Builder Card */}
-              <div style={{
-                backgroundColor: colors.card,
-                borderRadius: '16px',
-                padding: '30px',
-                border: `2px solid ${colors.primary}`,
-                cursor: 'pointer',
-                boxShadow: `0 0 20px ${colors.primary}40`,
-                position: 'relative'
-              }}
-              onClick={() => setCurrentPage('business-builder')}
+              {/* Step 1: Go Shopping */}
+              <div 
+                onClick={() => setCurrentPage('go-shopping')}
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: '16px',
+                  padding: '25px',
+                  border: `2px solid ${colors.primary}30`,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
               >
                 <div style={{
                   position: 'absolute',
                   top: '-10px',
-                  right: '20px',
+                  left: '20px',
                   backgroundColor: colors.primary,
                   color: colors.background,
-                  padding: '4px 12px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  fontWeight: '600'
+                  padding: '2px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: '700'
                 }}>
-                  {profileCompletion > 0 ? `${profileCompletion}% BUILT` : 'START HERE'}
+                  STEP 1
                 </div>
-                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🪣</div>
-                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>Build Your BUCKET</h3>
-                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                  Your business profile — CR-AI pulls from here
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🛍️</div>
+                <h3 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '18px' }}>Go Shopping</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
+                  Search 7,000+ contracts & grants matched to your BUCKET
                 </p>
               </div>
 
-              {/* My Cart Card */}
-              <div style={{
-                backgroundColor: colors.card,
-                borderRadius: '16px',
-                padding: '30px',
-                border: `2px solid ${colors.primary}30`,
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                position: 'relative'
-              }}
-              onClick={() => setCurrentPage('my-cart')}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
+              {/* Step 2: My Cart */}
+              <div 
+                onClick={() => setCurrentPage('my-cart')}
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: '16px',
+                  padding: '25px',
+                  border: `2px solid ${colors.primary}30`,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
               >
+                <div style={{
+                  position: 'absolute',
+                  top: '-10px',
+                  left: '20px',
+                  backgroundColor: colors.gold,
+                  color: colors.background,
+                  padding: '2px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: '700'
+                }}>
+                  STEP 2
+                </div>
                 {cartCount > 0 && (
                   <div style={{
                     position: 'absolute',
@@ -529,33 +534,114 @@ function App() {
                     right: '20px',
                     backgroundColor: colors.gold,
                     color: colors.background,
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '600'
+                    padding: '2px 10px',
+                    borderRadius: '10px',
+                    fontSize: '11px',
+                    fontWeight: '700'
                   }}>
-                    {cartCount} IN CART
+                    {cartCount} SAVED
                   </div>
                 )}
-                <div style={{ fontSize: '40px', marginBottom: '15px' }}>🛒</div>
-                <h3 style={{ color: colors.white, margin: '0 0 10px 0' }}>My Cart</h3>
-                <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-                  Opportunities you're bidding on (not submitted yet)
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🛒</div>
+                <h3 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '18px' }}>My Cart</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
+                  Review saved opportunities, then start a response
+                </p>
+              </div>
+
+              {/* Step 3: Response Room */}
+              <div 
+                onClick={() => setCurrentPage('response-room')}
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: '16px',
+                  padding: '25px',
+                  border: `2px solid ${colors.primary}`,
+                  cursor: 'pointer',
+                  boxShadow: `0 0 20px ${colors.primary}30`,
+                  position: 'relative'
+                }}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: '-10px',
+                  left: '20px',
+                  backgroundColor: colors.primary,
+                  color: colors.background,
+                  padding: '2px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: '700'
+                }}>
+                  STEP 3
+                </div>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>📝</div>
+                <h3 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '18px' }}>Response Room</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
+                  CR-AI helps you write winning responses
+                </p>
+              </div>
+
+              {/* Step 4: My BUCKET */}
+              <div 
+                onClick={() => setCurrentPage('my-bucket')}
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: '16px',
+                  padding: '25px',
+                  border: `2px solid ${colors.primary}30`,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = colors.primary}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = `${colors.primary}30`}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: '-10px',
+                  left: '20px',
+                  backgroundColor: colors.gray,
+                  color: colors.background,
+                  padding: '2px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: '700'
+                }}>
+                  GROWS
+                </div>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🪣</div>
+                <h3 style={{ color: colors.white, margin: '0 0 8px 0', fontSize: '18px' }}>My BUCKET</h3>
+                <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
+                  Your profile + saved answers. Grows with each submission.
                 </p>
               </div>
             </div>
 
-            {/* Tip Box */}
-            <div style={{
-              marginTop: '40px',
-              backgroundColor: `${colors.primary}10`,
-              borderRadius: '12px',
-              padding: '20px',
-              border: `1px solid ${colors.primary}30`
-            }}>
-              <p style={{ color: colors.primary, margin: 0, fontSize: '14px' }}>
-                💡 <strong>Tip:</strong> Build your BUCKET in Business Builder, then go shopping for contracts! Add opportunities to your cart and let CR-AI help you respond.
-              </p>
+            {/* Quick Access: Build BUCKET */}
+            <div 
+              onClick={() => setCurrentPage('build-bucket')}
+              style={{
+                marginTop: '30px',
+                backgroundColor: `${colors.primary}10`,
+                borderRadius: '12px',
+                padding: '20px',
+                border: `1px solid ${colors.primary}30`,
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <div>
+                <p style={{ color: colors.primary, margin: 0, fontSize: '14px', fontWeight: '600' }}>
+                  🪣 Build Your BUCKET ({profileCompletion}% complete)
+                </p>
+                <p style={{ color: colors.gray, margin: '5px 0 0 0', fontSize: '13px' }}>
+                  Add your company info, services, NAICS codes, team, and past performance
+                </p>
+              </div>
+              <div style={{ color: colors.primary, fontSize: '20px' }}>→</div>
             </div>
           </div>
         </>
@@ -581,13 +667,65 @@ function App() {
 }
 
 // ==========================================
-// MY BUCKET PAGE COMPONENT
-// Shows everything in the user's BUCKET
+// RESPONSE ROOM - Placeholder
+// ==========================================
+function ResponseRoom({ session, profileData, onBack }) {
+  return (
+    <div style={{ padding: '40px 30px', maxWidth: '900px', margin: '0 auto', paddingBottom: '100px' }}>
+      <button 
+        onClick={onBack} 
+        style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '16px', marginBottom: '20px' }}
+      >
+        ← Back to My Cart
+      </button>
+
+      <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+        <div style={{ fontSize: '60px', marginBottom: '15px' }}>📝</div>
+        <h1 style={{ color: '#fff', margin: '0 0 10px 0' }}>Response Room</h1>
+        <p style={{ color: '#888', margin: 0 }}>Where CR-AI helps you write winning responses</p>
+      </div>
+
+      <div style={{
+        backgroundColor: '#1a1a1a',
+        borderRadius: '16px',
+        padding: '40px',
+        border: '2px solid #00FF00',
+        textAlign: 'center'
+      }}>
+        <h2 style={{ color: '#00FF00', margin: '0 0 20px 0' }}>The 5 Phases</h2>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          gap: '15px', 
+          flexWrap: 'wrap',
+          marginBottom: '20px'
+        }}>
+          {['Overview', 'Strategy', 'Answers', 'Review', 'Submit'].map((phase, i) => (
+            <div key={phase} style={{
+              backgroundColor: '#000',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: '1px solid #333'
+            }}>
+              <span style={{ color: '#00FF00', fontWeight: '700' }}>{i + 1}.</span>
+              <span style={{ color: '#fff', marginLeft: '8px' }}>{phase}</span>
+            </div>
+          ))}
+        </div>
+        <p style={{ color: '#FFD700', margin: 0, fontSize: '14px' }}>
+          Select an opportunity from My Cart to start
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ==========================================
+// MY BUCKET PAGE
 // ==========================================
 function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditProfile }) {
   const [savedAnswers, setSavedAnswers] = useState([])
   const [submissions, setSubmissions] = useState([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchBucketData()
@@ -595,38 +733,24 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
 
   const fetchBucketData = async () => {
     try {
-      // Fetch saved answers (may not exist yet - that's OK)
-      try {
-        const { data: answers } = await supabase
-          .from('saved_answers')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .order('created_at', { ascending: false })
+      const { data: answers } = await supabase
+        .from('saved_answers')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+      if (answers) setSavedAnswers(answers)
+    } catch (e) {}
 
-        if (answers) setSavedAnswers(answers)
-      } catch (e) {
-        // Table might not exist yet - that's fine
-        console.log('saved_answers table not ready yet')
-      }
-
-      // Fetch completed submissions
+    try {
       const { data: subs } = await supabase
         .from('submissions')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('status', 'submitted')
-        .order('submitted_at', { ascending: false })
-
       if (subs) setSubmissions(subs)
-    } catch (err) {
-      console.error('Error fetching bucket data:', err)
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) {}
   }
 
-  const submissionCount = profileData?.submission_count || submissions.length || 0
-  // Use the same percentage as Dashboard (passed in as prop)
   const bucketScore = profileCompletion || 0
 
   return (
@@ -638,24 +762,22 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
         ← Back to Dashboard
       </button>
 
-      {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
         <div style={{ fontSize: '60px', marginBottom: '15px' }}>🪣</div>
         <h1 style={{ color: colors.white, margin: '0 0 10px 0' }}>My BUCKET</h1>
         <p style={{ color: colors.gray, margin: 0 }}>Everything CR-AI knows about your business</p>
       </div>
 
-      {/* Score Card */}
       <div style={{
         backgroundColor: colors.card,
         borderRadius: '16px',
         padding: '25px',
-        border: `2px solid ${bucketScore >= 100 ? colors.primary : colors.gold}`,
+        border: `2px solid ${bucketScore >= 80 ? colors.primary : colors.gold}`,
         textAlign: 'center',
         marginBottom: '25px'
       }}>
         <div style={{ 
-          color: bucketScore >= 100 ? colors.primary : colors.gold, 
+          color: bucketScore >= 80 ? colors.primary : colors.gold, 
           fontSize: '48px', 
           fontWeight: '700',
           marginBottom: '10px'
@@ -663,21 +785,13 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
           {bucketScore}%
         </div>
         <p style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '16px', fontWeight: '600' }}>
-          {bucketScore >= 100 
-            ? 'Expert BUCKET — You have a lot to work with!' 
-            : bucketScore >= 80 
-              ? 'Strong BUCKET — CR-AI can help you win'
-              : bucketScore >= 50
-                ? 'Growing BUCKET — Keep submitting!'
-                : 'Building your foundation'
-          }
+          {bucketScore >= 80 ? 'Strong BUCKET!' : bucketScore >= 50 ? 'Growing!' : 'Getting started'}
         </p>
         <p style={{ color: colors.gray, margin: 0, fontSize: '13px' }}>
-          {submissionCount} submission{submissionCount !== 1 ? 's' : ''} • {savedAnswers.length} saved answer{savedAnswers.length !== 1 ? 's' : ''}
+          {submissions.length} submissions • {savedAnswers.length} saved answers
         </p>
       </div>
 
-      {/* Company Info */}
       <div style={{
         backgroundColor: colors.card,
         borderRadius: '12px',
@@ -691,142 +805,17 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
             onClick={onEditProfile}
             style={{ background: 'none', border: 'none', color: colors.primary, cursor: 'pointer', fontSize: '13px' }}
           >
-            Edit in Business Builder →
+            Edit BUCKET →
           </button>
         </div>
         <p style={{ color: colors.white, margin: '0 0 5px 0', fontSize: '18px', fontWeight: '600' }}>
           {profileData?.company_name || 'Your Company Name'}
         </p>
         <p style={{ color: colors.gray, margin: 0, fontSize: '14px' }}>
-          {profileData?.city && profileData?.state 
-            ? `${profileData.city}, ${profileData.state}` 
-            : 'Location not set'
-          }
-          {profileData?.year_established && ` • ${new Date().getFullYear() - parseInt(profileData.year_established)}+ years`}
+          {profileData?.city && profileData?.state ? `${profileData.city}, ${profileData.state}` : 'Location not set'}
         </p>
-        {profileData?.sam_registered && (
-          <p style={{ color: colors.primary, margin: '8px 0 0 0', fontSize: '12px' }}>✓ SAM.gov Registered</p>
-        )}
       </div>
 
-      {/* Experience / Submissions */}
-      <div style={{
-        backgroundColor: colors.card,
-        borderRadius: '12px',
-        padding: '20px',
-        border: `1px solid ${colors.gray}30`,
-        marginBottom: '20px'
-      }}>
-        <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
-          EXPERIENCE ({submissionCount} submission{submissionCount !== 1 ? 's' : ''})
-        </p>
-        
-        {submissions.length > 0 ? (
-          <div style={{ display: 'grid', gap: '10px' }}>
-            {submissions.slice(0, 5).map((sub, i) => (
-              <div key={sub.id} style={{ 
-                backgroundColor: colors.background, 
-                borderRadius: '8px', 
-                padding: '12px',
-                border: `1px solid ${colors.gray}20`
-              }}>
-                <p style={{ color: colors.white, margin: '0 0 4px 0', fontSize: '14px', fontWeight: '500' }}>
-                  {sub.title}
-                </p>
-                <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>
-                  {sub.agency || 'No agency'} • {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : 'Submitted'}
-                </p>
-              </div>
-            ))}
-            {submissions.length > 5 && (
-              <p style={{ color: colors.gold, margin: '10px 0 0 0', fontSize: '13px' }}>
-                +{submissions.length - 5} more submissions
-              </p>
-            )}
-          </div>
-        ) : (
-          <p style={{ color: colors.gray, margin: 0, fontSize: '14px', fontStyle: 'italic' }}>
-            No submissions yet. Complete your first submission to grow your BUCKET!
-          </p>
-        )}
-      </div>
-
-      {/* Saved Answers */}
-      <div style={{
-        backgroundColor: colors.card,
-        borderRadius: '12px',
-        padding: '20px',
-        border: `1px solid ${colors.gray}30`,
-        marginBottom: '20px'
-      }}>
-        <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
-          SAVED ANSWERS ({savedAnswers.length})
-        </p>
-        
-        {savedAnswers.length > 0 ? (
-          <div style={{ display: 'grid', gap: '10px' }}>
-            {savedAnswers.slice(0, 5).map((ans, i) => (
-              <div key={ans.id || i} style={{ 
-                backgroundColor: colors.background, 
-                borderRadius: '8px', 
-                padding: '12px',
-                border: `1px solid ${colors.gray}20`
-              }}>
-                <p style={{ color: colors.white, margin: '0 0 4px 0', fontSize: '13px', fontWeight: '500' }}>
-                  {ans.question_text?.substring(0, 60)}...
-                </p>
-                <p style={{ color: colors.gray, margin: 0, fontSize: '11px' }}>
-                  From: {ans.source_contract_title || 'Unknown'} • {ans.answer_text?.length || 0} chars
-                </p>
-              </div>
-            ))}
-            {savedAnswers.length > 5 && (
-              <p style={{ color: colors.gold, margin: '10px 0 0 0', fontSize: '13px' }}>
-                +{savedAnswers.length - 5} more saved answers
-              </p>
-            )}
-          </div>
-        ) : (
-          <p style={{ color: colors.gray, margin: 0, fontSize: '14px', fontStyle: 'italic' }}>
-            Answers you save get stored here for reuse. Submit a contract and choose "Put into my BUCKET" to start building your library.
-          </p>
-        )}
-      </div>
-
-      {/* Services */}
-      {profileData?.services?.length > 0 && (
-        <div style={{
-          backgroundColor: colors.card,
-          borderRadius: '12px',
-          padding: '20px',
-          border: `1px solid ${colors.gray}30`,
-          marginBottom: '20px'
-        }}>
-          <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
-            SERVICES ({profileData.services.length})
-          </p>
-          <div style={{ display: 'grid', gap: '10px' }}>
-            {profileData.services.map((service, i) => (
-              <div key={i} style={{
-                backgroundColor: colors.background,
-                borderRadius: '8px',
-                padding: '12px',
-                border: `1px solid ${colors.gray}20`
-              }}>
-                <p style={{ color: colors.primary, margin: '0 0 4px 0', fontSize: '13px', fontWeight: '600' }}>
-                  {service.category || 'Service'}
-                </p>
-                <p style={{ color: colors.gray, margin: 0, fontSize: '12px' }}>
-                  {service.description?.substring(0, 100) || 'No description'}
-                  {service.description?.length > 100 ? '...' : ''}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* NAICS Codes */}
       {profileData?.naics_codes?.length > 0 && (
         <div style={{
           backgroundColor: colors.card,
@@ -841,21 +830,19 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {profileData.naics_codes.map((naics, i) => (
               <span key={i} style={{
-                backgroundColor: naics.isPrimary ? `${colors.primary}20` : `${colors.gray}20`,
-                color: naics.isPrimary ? colors.primary : colors.white,
+                backgroundColor: `${colors.primary}20`,
+                color: colors.primary,
                 padding: '6px 12px',
                 borderRadius: '20px',
-                fontSize: '12px',
-                border: naics.isPrimary ? `1px solid ${colors.primary}` : 'none'
+                fontSize: '12px'
               }}>
-                {naics.isPrimary && '⭐ '}{naics.code} - {naics.description}
+                {naics.code}
               </span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Certifications */}
       {profileData?.certifications?.length > 0 && (
         <div style={{
           backgroundColor: colors.card,
@@ -874,8 +861,7 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
                 color: colors.gold,
                 padding: '6px 12px',
                 borderRadius: '20px',
-                fontSize: '12px',
-                border: `1px solid ${colors.gold}50`
+                fontSize: '12px'
               }}>
                 ✓ {cert.name || cert}
               </span>
@@ -884,43 +870,16 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
         </div>
       )}
 
-      {/* Team */}
-      {profileData?.team_members?.length > 0 && (
-        <div style={{
-          backgroundColor: colors.card,
-          borderRadius: '12px',
-          padding: '20px',
-          border: `1px solid ${colors.gray}30`,
-          marginBottom: '20px'
-        }}>
-          <p style={{ color: colors.gray, margin: '0 0 15px 0', fontSize: '12px', fontWeight: '600' }}>
-            TEAM ({profileData.team_members.length})
-          </p>
-          <div style={{ display: 'grid', gap: '8px' }}>
-            {profileData.team_members.slice(0, 5).map((member, i) => (
-              <p key={i} style={{ color: colors.white, margin: 0, fontSize: '14px' }}>
-                {member.name || 'Team Member'} {member.title && `— ${member.title}`}
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Empty State - if nothing in profile */}
-      {!profileData?.company_name && !profileData?.services?.length && (
+      {!profileData?.company_name && (
         <div style={{
           backgroundColor: colors.card,
           borderRadius: '12px',
           padding: '40px',
           border: `2px dashed ${colors.gold}`,
-          textAlign: 'center',
-          marginBottom: '20px'
+          textAlign: 'center'
         }}>
           <p style={{ color: colors.white, margin: '0 0 15px 0', fontSize: '18px', fontWeight: '600' }}>
             Your BUCKET is empty!
-          </p>
-          <p style={{ color: colors.gray, margin: '0 0 20px 0', fontSize: '14px' }}>
-            Start filling your BUCKET in the Business Builder so CR-AI can help you win contracts.
           </p>
           <button
             onClick={onEditProfile}
@@ -935,22 +894,10 @@ function MyBucketPage({ session, profileData, profileCompletion, onBack, onEditP
               cursor: 'pointer'
             }}
           >
-            Start Building →
+            Build BUCKET →
           </button>
         </div>
       )}
-
-      {/* Tip */}
-      <div style={{
-        backgroundColor: `${colors.gold}15`,
-        borderRadius: '10px',
-        padding: '15px',
-        border: `1px solid ${colors.gold}30`
-      }}>
-        <p style={{ color: colors.white, margin: 0, fontSize: '13px', lineHeight: '1.5' }}>
-          💡 <strong>Your BUCKET grows with every submission.</strong> The more you submit, the smarter CR-AI gets about your business. Keep going!
-        </p>
-      </div>
     </div>
   )
 }
