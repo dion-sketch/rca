@@ -236,7 +236,10 @@ export default function ShopContracts({ session, onNavigate }) {
       const term = searchTerm.toLowerCase()
       filtered = filtered.filter(opp => 
         (opp.title || '').toLowerCase().includes(term) ||
-        (opp.commodity_description || '').toLowerCase().includes(term)
+        (opp.commodity_description || '').toLowerCase().includes(term) ||
+        (opp.description || '').toLowerCase().includes(term) ||
+        (opp.bid_type || '').toLowerCase().includes(term) ||
+        (opp.agency || '').toLowerCase().includes(term)
       )
     }
 
