@@ -370,7 +370,7 @@ export default function ShopContracts({ session, onNavigate }) {
       await supabase.from('submissions').insert({
         user_id: session.user.id,
         title: opportunity.title || opportunity.commodity_description || 'Untitled',
-        agency: opportunity.contact_name || opportunity.agency || '',
+        agency: opportunity.agency || opportunity.department || '',
         due_date: opportunity.close_date,
         status: 'in_progress',
         description: opportunity.description || opportunity.commodity_description || '',
