@@ -391,9 +391,27 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   const [lastSaved, setLastSaved] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  // Initialize sections from RFP questions or use defaults
-  // Pre-fill Team and References from BUCKET (profileData)
+  // Initialize sections - LOAD SAVED PROGRESS FIRST, then fallback to defaults
+  // Pre-fill Team and References from BUCKET (profileData) only if creating new
   const initializeSections = () => {
+    // FIRST: Check if we have saved progress
+    if (selectedSubmission?.draft_sections) {
+      try {
+        const savedSections = JSON.parse(selectedSubmission.draft_sections)
+        if (savedSections && savedSections.length > 0) {
+          console.log('Loading saved sections:', savedSections.length)
+          setSections(savedSections)
+          // Don't reset to section 0 - stay where they were or go to first incomplete
+          const firstIncomplete = savedSections.findIndex(s => s.status !== 'complete')
+          setCurrentSectionIndex(firstIncomplete >= 0 ? firstIncomplete : 0)
+          return // Use saved data, don't create new
+        }
+      } catch (e) {
+        console.error('Error parsing saved sections:', e)
+      }
+    }
+    
+    // NO SAVED DATA - Create new sections
     let sectionsToUse = [...defaultSections]
     
     if (rfpContent?.questions && rfpContent.questions.length > 0) {
@@ -901,16 +919,26 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     
     setIsSaving(true)
     try {
+      const draftData = {
+        draft_sections: JSON.stringify(sections),
+        draft_strategy: JSON.stringify(generatedStrategy),
+        draft_compliance: JSON.stringify(complianceItems),
+        updated_at: new Date().toISOString()
+      }
+      
       // Save sections progress to database
       await supabase
         .from('submissions')
-        .update({ 
-          draft_sections: JSON.stringify(sections),
-          draft_strategy: JSON.stringify(generatedStrategy),
-          draft_compliance: JSON.stringify(complianceItems),
-          updated_at: new Date().toISOString()
-        })
+        .update(draftData)
         .eq('id', selectedSubmission.id)
+      
+      // Also update local state so initializeSections can read it
+      setSelectedSubmission(prev => ({
+        ...prev,
+        draft_sections: draftData.draft_sections,
+        draft_strategy: draftData.draft_strategy,
+        draft_compliance: draftData.draft_compliance
+      }))
       
       setLastSaved(new Date())
     } catch (err) {
@@ -1357,7 +1385,10 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           
           {/* Header */}
           <p 
-            onClick={() => setCurrentPhase(2)}
+            onClick={() => {
+              saveProgress() // Save immediately before leaving
+              setCurrentPhase(2)
+            }}
             style={{ color: colors.muted, fontSize: '16px', marginBottom: '20px', cursor: 'pointer' }}
           >
             ← Back to Strategy
