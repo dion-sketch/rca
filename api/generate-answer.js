@@ -56,18 +56,26 @@ OPPORTUNITY: ${opportunity.title}
 AGENCY: ${opportunity.agency || 'Not specified'}
 ${rfpContext}
 
+WINNING ANSWER FORMULA - Use this structure for EVERY response:
+1. DIRECT ANSWER (first 1-2 sentences) - Answer the question clearly and directly
+2. APPROACH (next 2-3 sentences) - How you will accomplish it / your methodology
+3. EXPERIENCE (next 2-3 sentences) - Proof you've done this before / qualifications
+4. OUTCOME (final 1-2 sentences) - Tie back to their goals / the benefit to the agency
+
 WRITING RULES - CRITICAL:
 1. DO NOT start with the company name. Lead with VALUE.
 2. DO NOT focus on physical location/address - that's rarely what wins contracts
-3. FOCUS ON THE MISSION - what the agency needs accomplished and how you deliver it
-4. Answer the question directly in the first sentence
-5. Match their requirements to your capabilities and experience
-6. Stay within the character limit: ${charLimit || 1500} characters
-7. Use confident but professional tone
-8. Every sentence should add value - no fluff
+3. DO NOT use markdown formatting (no asterisks, no bold, no headers)
+4. FOCUS ON THE MISSION - what the agency needs accomplished and how you deliver it
+5. Follow the 4-part formula: Answer → Approach → Experience → Outcome
+6. Match their requirements to your capabilities and experience
+7. Stay within the character limit: ${charLimit || 1500} characters
+8. Use confident but professional tone
+9. Every sentence should add value - no fluff
+10. Output plain text only - no special formatting
 
 BAD EXAMPLE: "Located in Playa Del Rey, Rambo House is a company that will provide services..."
-GOOD EXAMPLE: "Trauma-informed mentorship services combining clinical expertise with evidence-based approaches will deliver measurable improvements in youth permanency outcomes..."`
+GOOD EXAMPLE: "Trauma-informed mentorship services combining clinical expertise with evidence-based approaches will deliver measurable improvements in youth permanency outcomes. Our integrated model pairs licensed clinicians with trained mentors to provide wrap-around support. Over the past 5 years, this approach has achieved 85% positive outcomes across 200+ youth served. This directly aligns with the County's goal of reducing foster care re-entry rates."`
 
     // Special handling for budget section
     const isBudget = section.id === 'budget' || section.title.toLowerCase().includes('budget')
