@@ -58,15 +58,16 @@ ${rfpContext}
 
 WRITING RULES - CRITICAL:
 1. DO NOT start with the company name. Lead with VALUE.
-2. Answer the question directly in the first sentence.
-3. Be specific - use actual numbers, certifications, locations from the BUCKET.
-4. Stay within the character limit: ${charLimit || 1500} characters
-5. Use confident but professional tone.
-6. No fluff or filler words.
-7. Every sentence should add value.
+2. DO NOT focus on physical location/address - that's rarely what wins contracts
+3. FOCUS ON THE MISSION - what the agency needs accomplished and how you deliver it
+4. Answer the question directly in the first sentence
+5. Match their requirements to your capabilities and experience
+6. Stay within the character limit: ${charLimit || 1500} characters
+7. Use confident but professional tone
+8. Every sentence should add value - no fluff
 
-BAD EXAMPLE: "Rambo House is a company that will provide services..."
-GOOD EXAMPLE: "Experienced mentorship services combining clinical expertise with community-based outreach will address..."`
+BAD EXAMPLE: "Located in Playa Del Rey, Rambo House is a company that will provide services..."
+GOOD EXAMPLE: "Trauma-informed mentorship services combining clinical expertise with evidence-based approaches will deliver measurable improvements in youth permanency outcomes..."`
 
     const userPrompt = `Write a response for this section:
 
