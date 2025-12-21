@@ -96,6 +96,56 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     })
   }
 
+  // Strip HTML tags from text
+  const stripHtml = (html) => {
+    if (!html) return ''
+    return html
+      .replace(/<[^>]*>/g, ' ')  // Remove HTML tags
+      .replace(/&amp;/g, '&')     // Decode &amp;
+      .replace(/&lt;/g, '<')      // Decode &lt;
+      .replace(/&gt;/g, '>')      // Decode &gt;
+      .replace(/&nbsp;/g, ' ')    // Decode &nbsp;
+      .replace(/&quot;/g, '"')    // Decode &quot;
+      .replace(/&#39;/g, "'")     // Decode &#39;
+      .replace(/\s+/g, ' ')       // Collapse whitespace
+      .trim()
+  }
+
+  // Format currency from number or string
+  const formatCurrency = (value) => {
+    if (!value) return 'Not specified'
+    // Extract number from string like "$500,000" or "7500000.0"
+    const num = typeof value === 'string' 
+      ? parseFloat(value.replace(/[^0-9.]/g, ''))
+      : value
+    if (isNaN(num)) return 'Not specified'
+    return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  }
+
+  // Parse agency name (handle emails like "IBHModel@cms.hhs.gov")
+  const parseAgencyName = (agency) => {
+    if (!agency) return 'Not specified'
+    // If it's an email, extract domain parts
+    if (agency.includes('@')) {
+      const domain = agency.split('@')[1] // cms.hhs.gov
+      if (domain) {
+        // Extract meaningful part (cms.hhs.gov -> CMS / HHS)
+        const parts = domain.split('.')
+        if (parts.length >= 2) {
+          return parts.slice(0, -1).map(p => p.toUpperCase()).join(' / ')
+        }
+      }
+      return agency // Return as-is if can't parse
+    }
+    return agency
+  }
+
+  // Safe number parsing (returns 0 instead of NaN)
+  const safeNumber = (value, defaultVal = 0) => {
+    const num = parseFloat(value)
+    return isNaN(num) ? defaultVal : num
+  }
+
   // Calculate potential score with RCA help (consistent based on submission ID)
   const getPotentialScore = (submission) => {
     const currentScore = submission?.cr_match_score || 50
@@ -243,52 +293,52 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     { 
       id: 'understanding', 
       title: 'Understanding of Need', 
-      prompt: 'Show you understand their problem. What is the agency trying to solve? Why is this important? What are the key challenges?',
+      prompt: 'This section shows evaluators you understand their problem. RCA will analyze the opportunity and create this section for you.',
       charLimit: 1000,
       answer: '',
       status: 'pending',
       weight: 15,
-      tip: 'Evaluators want to see you READ and UNDERSTOOD the RFP before proposing a solution.',
+      tip: 'Click "Generate with RCA" to create this section based on the opportunity description.',
       type: 'text'
     },
     { 
       id: 'narrative', 
       title: 'Technical Approach', 
-      prompt: 'How will you deliver this project? Include your methodology, key activities, and how you will meet their goals.',
+      prompt: 'This section explains HOW you will deliver the project. RCA will create a methodology based on your BUCKET and the opportunity.',
       charLimit: 2000,
       answer: '',
       status: 'pending',
       weight: 35,
-      tip: 'This is usually the highest weighted section. Be specific about HOW you will do the work.',
+      tip: 'This is usually the highest weighted section. Click "Generate with RCA" to create your approach.',
       type: 'text'
     },
     { 
       id: 'qualifications', 
       title: 'Past Performance & Experience', 
-      prompt: 'Prove you\'ve done this before. Include specific contracts/grants (name, value, dates), measurable outcomes (percentages, numbers), and client references.',
+      prompt: 'This section proves you\'ve done this before. RCA will pull from your BUCKET\'s past performance.',
       charLimit: 1500,
       answer: '',
       status: 'pending',
       weight: 25,
-      tip: 'Use real numbers: "Served 500+ youth" beats "Served many youth"',
+      tip: 'RCA will use your BUCKET info. Add specifics like contract values and outcomes to make it stronger.',
       type: 'text'
     },
     { 
       id: 'references', 
       title: 'References', 
-      prompt: 'Provide 2-3 references from past similar work.',
+      prompt: 'Add 2-3 references from past similar work. These should be contacts who can verify your experience.',
       charLimit: 1000,
       answer: '',
       status: 'pending',
       weight: 5,
-      tip: 'Contact your references BEFORE listing them to get permission.',
+      tip: 'Get permission from references before listing them.',
       type: 'references',
       references: []
     },
     { 
       id: 'team', 
       title: 'Key Personnel', 
-      prompt: 'Who will do the work? Add team roles below - names can be added later or listed as "TBD".',
+      prompt: 'Add your team members below. Names can be "TBD" if not confirmed yet.',
       charLimit: 1500,
       answer: '',
       status: 'pending',
@@ -300,23 +350,23 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     { 
       id: 'timeline', 
       title: 'Management & Timeline', 
-      prompt: 'How will you manage the project and stay on schedule? Include milestones, deliverables with dates, and how you will communicate progress.',
+      prompt: 'This section shows your project plan. RCA will create milestones and deliverables based on the opportunity.',
       charLimit: 800,
       answer: '',
       status: 'pending',
       weight: 5,
-      tip: 'Show you have a realistic plan with clear milestones.',
+      tip: 'Click "Generate with RCA" to create a realistic project timeline.',
       type: 'text'
     },
     { 
       id: 'budget', 
       title: 'Budget & Cost', 
-      prompt: 'Budget will auto-calculate from your team. Add other costs below.',
+      prompt: 'Budget auto-calculates from your team. Add travel, equipment, and other costs below.',
       charLimit: 1500,
       answer: '',
       status: 'pending',
       weight: 5,
-      tip: 'Personnel is usually 60-70% of total budget. Make sure your total is under the funding ceiling.',
+      tip: 'Personnel is usually 60-70% of total budget. Stay under the funding ceiling.',
       type: 'budget',
       fringeRate: 30,
       indirectRate: 10,
@@ -358,26 +408,36 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
       }))
     }
     
-    // Pre-fill Team Members from BUCKET
+    // Pre-fill Team Members from BUCKET - with default values
     const teamSectionIdx = sectionsToUse.findIndex(s => s.id === 'team')
     if (teamSectionIdx >= 0 && profileData?.team_members?.length > 0) {
       sectionsToUse[teamSectionIdx] = {
         ...sectionsToUse[teamSectionIdx],
         teamMembers: profileData.team_members.map(m => ({
-          ...m,
-          id: m.id || Date.now() + Math.random() // Ensure unique ID
+          id: m.id || Date.now() + Math.random(),
+          role: m.role || 'Team Member',
+          name: m.name || 'TBD',
+          hoursPerWeek: safeNumber(m.hoursPerWeek, 40),
+          hourlyRate: safeNumber(m.hourlyRate, 50),
+          description: m.description || ''
         }))
       }
     }
     
-    // Pre-fill References from BUCKET
+    // Pre-fill References from BUCKET - with default values
     const refSectionIdx = sectionsToUse.findIndex(s => s.id === 'references')
     if (refSectionIdx >= 0 && profileData?.references?.length > 0) {
       sectionsToUse[refSectionIdx] = {
         ...sectionsToUse[refSectionIdx],
         references: profileData.references.map(r => ({
-          ...r,
-          id: r.id || Date.now() + Math.random() // Ensure unique ID
+          id: r.id || Date.now() + Math.random(),
+          company: r.company || '',
+          contactName: r.contactName || '',
+          contactPhone: r.contactPhone || '',
+          contactEmail: r.contactEmail || '',
+          contractValue: r.contractValue || '',
+          dates: r.dates || '',
+          description: r.description || ''
         }))
       }
     }
@@ -615,7 +675,9 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     
     // Calculate annual cost: hours/week × rate × 52 weeks
     return teamSection.teamMembers.reduce((total, m) => {
-      return total + (m.hoursPerWeek * m.hourlyRate * 52)
+      const hours = safeNumber(m.hoursPerWeek, 40)
+      const rate = safeNumber(m.hourlyRate, 0)
+      return total + (hours * rate * 52)
     }, 0)
   }
 
@@ -660,11 +722,16 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
 
   const calculateTotalBudget = () => {
     const budgetSection = sections.find(s => s.id === 'budget')
-    const personnel = calculatePersonnelCost()
-    const otherCosts = (budgetSection?.otherCosts || []).reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0)
+    const personnel = safeNumber(calculatePersonnelCost(), 0)
+    const otherCosts = (budgetSection?.otherCosts || []).reduce((sum, c) => sum + safeNumber(c.amount, 0), 0)
     const subtotal = personnel + otherCosts
-    const indirect = subtotal * 0.15 // 15% indirect
-    return { personnel, otherCosts, indirect, total: subtotal + indirect }
+    const indirect = Math.round(subtotal * 0.15) // 15% indirect
+    return { 
+      personnel: safeNumber(personnel, 0), 
+      otherCosts: safeNumber(otherCosts, 0), 
+      indirect: safeNumber(indirect, 0), 
+      total: safeNumber(subtotal + indirect, 0) 
+    }
   }
 
   // Parse budget ceiling from string like "$500,000" or "500000"
@@ -728,19 +795,41 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
 
   // Calculate full budget with all categories
   const calculateFullBudget = (budgetSection) => {
-    const personnel = calculatePersonnelCost()
-    const fringe = Math.round(personnel * ((budgetSection?.fringeRate || 30) / 100))
-    const travel = (budgetSection?.travelItems || []).reduce((sum, t) => sum + ((t.trips || 0) * (t.costPerTrip || 0)), 0)
-    const equipment = (budgetSection?.equipmentItems || []).reduce((sum, e) => sum + ((e.quantity || 0) * (e.unitCost || 0)), 0)
-    const supplies = (budgetSection?.supplyItems || []).reduce((sum, s) => sum + (s.amount || 0), 0)
-    const contractual = (budgetSection?.contractualItems || []).reduce((sum, c) => sum + ((c.hours || 0) * (c.rate || 0)), 0)
-    const other = (budgetSection?.otherItems || []).reduce((sum, o) => sum + (o.amount || 0), 0)
+    const personnel = safeNumber(calculatePersonnelCost(), 0)
+    const fringeRate = safeNumber(budgetSection?.fringeRate, 30)
+    const fringe = Math.round(personnel * (fringeRate / 100))
+    
+    const travel = (budgetSection?.travelItems || []).reduce((sum, t) => 
+      sum + (safeNumber(t.trips, 0) * safeNumber(t.costPerTrip, 0)), 0)
+    
+    const equipment = (budgetSection?.equipmentItems || []).reduce((sum, e) => 
+      sum + (safeNumber(e.quantity, 0) * safeNumber(e.unitCost, 0)), 0)
+    
+    const supplies = (budgetSection?.supplyItems || []).reduce((sum, s) => 
+      sum + safeNumber(s.amount, 0), 0)
+    
+    const contractual = (budgetSection?.contractualItems || []).reduce((sum, c) => 
+      sum + (safeNumber(c.hours, 0) * safeNumber(c.rate, 0)), 0)
+    
+    const other = (budgetSection?.otherItems || []).reduce((sum, o) => 
+      sum + safeNumber(o.amount, 0), 0)
     
     const directTotal = personnel + fringe + travel + equipment + supplies + contractual + other
-    const indirect = Math.round(directTotal * ((budgetSection?.indirectRate || 10) / 100))
+    const indirectRate = safeNumber(budgetSection?.indirectRate, 10)
+    const indirect = Math.round(directTotal * (indirectRate / 100))
     const total = directTotal + indirect
     
-    return { personnel, fringe, travel, equipment, supplies, contractual, other, indirect, total }
+    return { 
+      personnel: safeNumber(personnel, 0), 
+      fringe: safeNumber(fringe, 0), 
+      travel: safeNumber(travel, 0), 
+      equipment: safeNumber(equipment, 0), 
+      supplies: safeNumber(supplies, 0), 
+      contractual: safeNumber(contractual, 0), 
+      other: safeNumber(other, 0), 
+      indirect: safeNumber(indirect, 0), 
+      total: safeNumber(total, 0) 
+    }
   }
 
   // Generate budget narrative from calculated values
@@ -749,39 +838,49 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     
     lines.push('BUDGET JUSTIFICATION\n')
     
-    if (budget.personnel > 0) {
-      lines.push(`Personnel: $${budget.personnel.toLocaleString()} - Salaries for project staff including project manager, program staff, and support personnel.`)
+    const p = safeNumber(budget.personnel, 0)
+    const f = safeNumber(budget.fringe, 0)
+    const tr = safeNumber(budget.travel, 0)
+    const eq = safeNumber(budget.equipment, 0)
+    const su = safeNumber(budget.supplies, 0)
+    const co = safeNumber(budget.contractual, 0)
+    const ot = safeNumber(budget.other, 0)
+    const ind = safeNumber(budget.indirect, 0)
+    const tot = safeNumber(budget.total, 0)
+    
+    if (p > 0) {
+      lines.push(`Personnel: $${p.toLocaleString()} - Salaries for project staff including project manager, program staff, and support personnel.`)
     }
     
-    if (budget.fringe > 0) {
-      lines.push(`Fringe Benefits: $${budget.fringe.toLocaleString()} - Employee benefits including health insurance, retirement, and payroll taxes.`)
+    if (f > 0) {
+      lines.push(`Fringe Benefits: $${f.toLocaleString()} - Employee benefits including health insurance, retirement, and payroll taxes.`)
     }
     
-    if (budget.travel > 0) {
-      lines.push(`Travel: $${budget.travel.toLocaleString()} - Local and out-of-area travel for project activities, site visits, and meetings.`)
+    if (tr > 0) {
+      lines.push(`Travel: $${tr.toLocaleString()} - Local and out-of-area travel for project activities, site visits, and meetings.`)
     }
     
-    if (budget.equipment > 0) {
-      lines.push(`Equipment: $${budget.equipment.toLocaleString()} - Major equipment purchases required for project implementation.`)
+    if (eq > 0) {
+      lines.push(`Equipment: $${eq.toLocaleString()} - Major equipment purchases required for project implementation.`)
     }
     
-    if (budget.supplies > 0) {
-      lines.push(`Supplies: $${budget.supplies.toLocaleString()} - Office supplies, program materials, and consumable items.`)
+    if (su > 0) {
+      lines.push(`Supplies: $${su.toLocaleString()} - Office supplies, program materials, and consumable items.`)
     }
     
-    if (budget.contractual > 0) {
-      lines.push(`Contractual: $${budget.contractual.toLocaleString()} - Consultant fees and subcontractor costs for specialized services.`)
+    if (co > 0) {
+      lines.push(`Contractual: $${co.toLocaleString()} - Consultant fees and subcontractor costs for specialized services.`)
     }
     
-    if (budget.other > 0) {
-      lines.push(`Other Direct Costs: $${budget.other.toLocaleString()} - Facility costs, insurance, communications, and other operational expenses.`)
+    if (ot > 0) {
+      lines.push(`Other Direct Costs: $${ot.toLocaleString()} - Facility costs, insurance, communications, and other operational expenses.`)
     }
     
-    if (budget.indirect > 0) {
-      lines.push(`Indirect Costs: $${budget.indirect.toLocaleString()} - Administrative overhead and facilities costs.`)
+    if (ind > 0) {
+      lines.push(`Indirect Costs: $${ind.toLocaleString()} - Administrative overhead and facilities costs.`)
     }
     
-    lines.push(`\nTOTAL PROJECT COST: $${budget.total.toLocaleString()}`)
+    lines.push(`\nTOTAL PROJECT COST: $${tot.toLocaleString()}`)
     
     return lines.join('\n\n')
   }
@@ -1519,7 +1618,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                       </div>
                       
                       <p style={{ color: colors.gold, fontSize: '12px', margin: '10px 0 0 0' }}>
-                        Annual cost: ${(member.hoursPerWeek * member.hourlyRate * 52).toLocaleString()}
+                        Est. annual cost: ${(safeNumber(member.hoursPerWeek, 40) * safeNumber(member.hourlyRate, 0) * 52).toLocaleString()}
                       </p>
                     </div>
                   ))}
@@ -1863,7 +1962,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                     <div>
                       <p style={{ color: colors.gold, fontSize: '12px', margin: '0 0 4px 0', textTransform: 'uppercase' }}>Funding Available</p>
                       <p style={{ color: colors.text, fontSize: '20px', fontWeight: '700', margin: 0 }}>
-                        {selectedSubmission.estimated_value || 'Not specified'}
+                        {formatCurrency(selectedSubmission.estimated_value)}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -1874,7 +1973,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                         fontWeight: '700', 
                         margin: 0 
                       }}>
-                        ${Math.round(calculateTotalBudget().total).toLocaleString()}
+                        {formatCurrency(calculateTotalBudget().total)}
                       </p>
                     </div>
                   </div>
@@ -1934,10 +2033,10 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                           {members.map(m => (
                             <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '12px 15px', borderBottom: `1px solid ${colors.border}` }}>
                               <span style={{ color: colors.text, fontSize: '13px' }}>{m.role || 'Unnamed'}</span>
-                              <span style={{ color: colors.text, fontSize: '13px', textAlign: 'right' }}>{m.hoursPerWeek}</span>
-                              <span style={{ color: colors.text, fontSize: '13px', textAlign: 'right' }}>${m.hourlyRate}</span>
+                              <span style={{ color: colors.text, fontSize: '13px', textAlign: 'right' }}>{safeNumber(m.hoursPerWeek, 40)}</span>
+                              <span style={{ color: colors.text, fontSize: '13px', textAlign: 'right' }}>${safeNumber(m.hourlyRate, 0)}</span>
                               <span style={{ color: colors.gold, fontSize: '13px', textAlign: 'right', fontWeight: '600' }}>
-                                ${(m.hoursPerWeek * m.hourlyRate * 52).toLocaleString()}
+                                ${(safeNumber(m.hoursPerWeek, 40) * safeNumber(m.hourlyRate, 0) * 52).toLocaleString()}
                               </span>
                             </div>
                           ))}
@@ -2395,109 +2494,126 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 </div>
 
               ) : (
-                /* DEFAULT TEXT SECTION */
+                /* DEFAULT TEXT SECTION - RCA GENERATES, USER EDITS */
                 <>
-                  <textarea
-                    value={currentSection.answer}
-                    onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
-                    placeholder="Type your rough ideas here... don't worry about grammar or spelling. RCA will clean it up when you click 'Polish My Draft'"
-                    style={{
-                      width: '100%',
-                      backgroundColor: '#1a1a1a',
+                  {/* If no content yet, show the "Generate First" UI */}
+                  {!currentSection.answer ? (
+                    <div style={{
+                      backgroundColor: colors.card,
+                      borderRadius: '12px',
+                      padding: '30px',
                       border: `1px solid ${colors.border}`,
-                      borderRadius: '8px',
-                      padding: '15px',
-                      color: colors.text,
-                      fontSize: '14px',
-                      lineHeight: '1.7',
-                      resize: 'vertical',
-                      minHeight: '200px',
-                      marginBottom: '15px'
-                    }}
-                  />
-
-                  {/* Character Count */}
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    marginBottom: '20px'
-                  }}>
-                    <span style={{ 
-                      color: currentSection.answer.length > currentSection.charLimit ? colors.danger : colors.muted,
-                      fontSize: '12px'
+                      textAlign: 'center'
                     }}>
-                      {currentSection.answer.length} / {currentSection.charLimit} characters
-                    </span>
-                    {currentSection.answer.length > currentSection.charLimit && (
-                      <span style={{ color: colors.danger, fontSize: '12px' }}>
-                        ⚠️ Over limit
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Action Options - Always show both */}
-                  <div style={{ 
-                    backgroundColor: colors.card, 
-                    borderRadius: '12px', 
-                    padding: '20px',
-                    border: `1px solid ${colors.border}`
-                  }}>
-                    <div style={{ display: 'grid', gap: '12px' }}>
-                      {/* Generate from scratch */}
+                      <div style={{ marginBottom: '20px' }}>
+                        <span style={{ fontSize: '40px' }}>🤖</span>
+                      </div>
+                      <h3 style={{ color: colors.text, fontSize: '18px', margin: '0 0 10px 0' }}>
+                        Let RCA Write This Section
+                      </h3>
+                      <p style={{ color: colors.muted, fontSize: '14px', margin: '0 0 25px 0', lineHeight: '1.6' }}>
+                        Based on the opportunity and your BUCKET, RCA will generate a professional response for this section. You can edit it afterward.
+                      </p>
                       <button
                         onClick={() => generateAnswer(currentSectionIndex)}
+                        disabled={currentSection.status === 'generating'}
                         style={{
-                          width: '100%',
-                          padding: '14px',
-                          backgroundColor: !currentSection.answer ? colors.gold : 'transparent',
-                          border: !currentSection.answer ? 'none' : `1px solid ${colors.border}`,
+                          padding: '16px 40px',
+                          backgroundColor: colors.gold,
+                          border: 'none',
                           borderRadius: '10px',
-                          color: !currentSection.answer ? colors.background : colors.muted,
-                          fontSize: '14px',
+                          color: colors.background,
+                          fontSize: '16px',
                           fontWeight: '600',
-                          cursor: 'pointer'
+                          cursor: currentSection.status === 'generating' ? 'wait' : 'pointer',
+                          opacity: currentSection.status === 'generating' ? 0.7 : 1
                         }}
                       >
-                        🤖 {currentSection.answer ? 'Regenerate from scratch' : 'Generate with RCA'}
+                        {currentSection.status === 'generating' ? '⏳ Generating...' : '🤖 Generate This Section'}
                       </button>
-                      
-                      {/* Divider with OR */}
-                      {currentSection.answer && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
-                          <span style={{ color: colors.muted, fontSize: '12px' }}>OR</span>
-                          <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
-                        </div>
-                      )}
-                      
-                      {/* Polish option - only show when there's content */}
-                      {currentSection.answer && currentSection.answer.length >= 20 && (
+                    </div>
+                  ) : (
+                    /* Content exists - show editable textarea with regenerate/polish options */
+                    <>
+                      <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '8px' }}>
+                        ✏️ Review and edit as needed:
+                      </p>
+                      <textarea
+                        value={currentSection.answer}
+                        onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#1a1a1a',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '8px',
+                          padding: '15px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          lineHeight: '1.7',
+                          resize: 'vertical',
+                          minHeight: '200px',
+                          marginBottom: '15px'
+                        }}
+                      />
+
+                      {/* Character Count */}
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        marginBottom: '20px'
+                      }}>
+                        <span style={{ 
+                          color: currentSection.answer.length > currentSection.charLimit ? colors.danger : colors.muted,
+                          fontSize: '12px'
+                        }}>
+                          {currentSection.answer.length} / {currentSection.charLimit} characters
+                        </span>
+                        {currentSection.answer.length > currentSection.charLimit && (
+                          <span style={{ color: colors.danger, fontSize: '12px' }}>
+                            ⚠️ Over limit
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <button
+                          onClick={() => generateAnswer(currentSectionIndex)}
+                          disabled={currentSection.status === 'generating'}
+                          style={{
+                            flex: 1,
+                            padding: '12px',
+                            backgroundColor: 'transparent',
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '8px',
+                            color: colors.muted,
+                            fontSize: '13px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🔄 Regenerate
+                        </button>
                         <button
                           onClick={() => polishAnswer(currentSectionIndex)}
+                          disabled={currentSection.status === 'generating'}
                           style={{
-                            width: '100%',
-                            padding: '14px',
+                            flex: 1,
+                            padding: '12px',
                             backgroundColor: colors.gold,
                             border: 'none',
-                            borderRadius: '10px',
+                            borderRadius: '8px',
                             color: colors.background,
-                            fontSize: '14px',
+                            fontSize: '13px',
                             fontWeight: '600',
                             cursor: 'pointer'
                           }}
                         >
-                          ✨ Polish My Draft
+                          ✨ Polish & Improve
                         </button>
-                      )}
-                      
-                      <p style={{ color: colors.muted, fontSize: '11px', textAlign: 'center', margin: 0, lineHeight: '1.5' }}>
-                        {currentSection.answer 
-                          ? 'Polish cleans up grammar and makes it professional' 
-                          : 'Type your rough ideas above, or let RCA generate a draft'}
-                      </p>
-                    </div>
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -2544,23 +2660,33 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               </button>
             ) : (
               <button
-                onClick={() => setCurrentPhase(4)}
-                disabled={completedCount < sections.length}
+                onClick={() => {
+                  if (completedCount === sections.length) {
+                    // All complete - go to review
+                    setCurrentPhase(4)
+                  } else {
+                    // Find next incomplete section and go there
+                    const nextIncomplete = sections.findIndex(s => s.status !== 'complete')
+                    if (nextIncomplete >= 0) {
+                      setCurrentSectionIndex(nextIncomplete)
+                    }
+                  }
+                }}
                 style={{
                   flex: 1,
                   padding: '16px',
-                  backgroundColor: completedCount === sections.length ? colors.gold : colors.card,
-                  border: completedCount === sections.length ? 'none' : `2px solid ${colors.gold}`,
+                  backgroundColor: completedCount === sections.length ? colors.gold : colors.primary,
+                  border: 'none',
                   borderRadius: '10px',
-                  color: completedCount === sections.length ? colors.background : colors.gold,
+                  color: colors.background,
                   fontSize: '16px',
                   fontWeight: '700',
-                  cursor: completedCount === sections.length ? 'pointer' : 'not-allowed',
+                  cursor: 'pointer',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}
               >
-                {completedCount === sections.length ? '✓ REVIEW & SUBMIT' : `${sections.length - completedCount} SECTIONS LEFT`}
+                {completedCount === sections.length ? '✓ REVIEW & SUBMIT' : `COMPLETE ${sections.length - completedCount} MORE →`}
               </button>
             )}
           </div>
@@ -3230,7 +3356,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 paddingBottom: '20px',
                 borderBottom: `1px solid ${colors.border}`
               }}>
-                {selectedSubmission.description}
+                {stripHtml(selectedSubmission.description)}
               </p>
             )}
 
@@ -3244,7 +3370,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                   borderRadius: '12px',
                   fontSize: '12px'
                 }}>
-                  {selectedSubmission.description}
+                  {stripHtml(selectedSubmission.description)}
                 </span>
               </div>
             )}
@@ -3255,7 +3381,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 <div>
                   <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '4px' }}>Funding</p>
                   <p style={{ color: colors.primary, fontSize: '14px', fontWeight: '600', margin: 0 }}>
-                    {selectedSubmission.estimated_value}
+                    {formatCurrency(selectedSubmission.estimated_value)}
                   </p>
                 </div>
               )}
@@ -3268,7 +3394,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               <div>
                 <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '4px' }}>Agency</p>
                 <p style={{ color: colors.text, fontSize: '14px', margin: 0 }}>
-                  {selectedSubmission.agency || 'Not specified'}
+                  {parseAgencyName(selectedSubmission.agency)}
                 </p>
               </div>
             </div>
