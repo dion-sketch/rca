@@ -228,7 +228,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
       })
     } catch (err) {
       console.error('Fetch listing error:', err)
-      setRfpError('Could not fetch listing. Try uploading the PDF directly.')
+      setRfpError('Could not fetch listing details.')
     } finally {
       setLoadingRfp(false)
     }
@@ -269,6 +269,14 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
       title: 'Timeline & Deliverables', 
       prompt: 'Provide a timeline and key deliverables for the project.',
       charLimit: 800,
+      answer: '',
+      status: 'pending'
+    },
+    { 
+      id: 'budget', 
+      title: 'Budget & Cost Breakdown', 
+      prompt: 'Provide a budget breakdown including personnel, supplies, travel, indirect costs, and total project cost.',
+      charLimit: 1500,
       answer: '',
       status: 'pending'
     }
@@ -646,7 +654,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           ) : (
             // INPUT FORM
             <>
-              {/* WHAT THIS CONTRACT/GRANT IS ABOUT - Show first! */}
+              {/* WHAT THIS CONTRACT/GRANT IS ABOUT */}
               <div style={{
                 backgroundColor: colors.card,
                 borderRadius: '16px',
@@ -658,9 +666,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                   📋 What They're Looking For
                 </p>
                 <p style={{ color: colors.text, fontSize: '14px', lineHeight: '1.7', marginBottom: '15px' }}>
-                  {selectedSubmission.description && selectedSubmission.description.length > 50 
-                    ? selectedSubmission.description 
-                    : `This ${selectedSubmission.title?.toLowerCase().includes('grant') ? 'grant' : 'contract'} is seeking qualified providers. Review the full RFP for specific requirements.`}
+                  {selectedSubmission.description}
                 </p>
                 {selectedSubmission.agency && (
                   <p style={{ color: colors.muted, fontSize: '12px' }}>
@@ -1093,23 +1099,263 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               ))}
             </div>
 
-            <button
-              onClick={() => setCurrentPhase(3)}
-              style={{
-                marginTop: '30px',
-                padding: '14px 30px',
-                backgroundColor: colors.gold,
-                border: 'none',
-                borderRadius: '10px',
-                color: colors.background,
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              ← Edit Answers
-            </button>
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
+              <button
+                onClick={() => setCurrentPhase(3)}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '10px',
+                  color: colors.muted,
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                ← Edit Answers
+              </button>
+              <button
+                onClick={() => setCurrentPhase(5)}
+                disabled={sections.filter(s => s.status === 'complete').length < sections.length}
+                style={{
+                  flex: 1,
+                  padding: '14px',
+                  backgroundColor: sections.filter(s => s.status === 'complete').length === sections.length ? colors.gold : colors.card,
+                  border: 'none',
+                  borderRadius: '10px',
+                  color: sections.filter(s => s.status === 'complete').length === sections.length ? colors.background : colors.muted,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: sections.filter(s => s.status === 'complete').length === sections.length ? 'pointer' : 'not-allowed'
+                }}
+              >
+                Continue to Submit →
+              </button>
+            </div>
           </div>
+
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================
+  // PHASE 5: SUBMIT / EXPORT
+  // ==========================================
+  if (selectedSubmission && currentPhase === 5) {
+    const allComplete = sections.filter(s => s.status === 'complete').length === sections.length
+
+    const handleSaveToBucket = async () => {
+      try {
+        // Save each answer to saved_answers table for reuse
+        for (const section of sections) {
+          if (section.answer) {
+            await supabase.from('saved_answers').insert({
+              user_id: session.user.id,
+              submission_id: selectedSubmission.id,
+              section_type: section.id,
+              section_title: section.title,
+              answer_text: section.answer,
+              created_at: new Date().toISOString()
+            })
+          }
+        }
+        
+        // Update submission status
+        await supabase
+          .from('submissions')
+          .update({ status: 'submitted' })
+          .eq('id', selectedSubmission.id)
+        
+        alert('Saved to BUCKET! Your answers can be reused for similar opportunities.')
+      } catch (err) {
+        console.error('Save error:', err)
+        alert('Error saving. Please try again.')
+      }
+    }
+
+    const handleDownload = (format) => {
+      // Build document content
+      let content = `${selectedSubmission.title}\n`
+      content += `Agency: ${selectedSubmission.agency || 'Not specified'}\n`
+      content += `Due: ${selectedSubmission.due_date || 'Not specified'}\n`
+      content += `\n${'='.repeat(50)}\n\n`
+      
+      if (generatedStrategy) {
+        content += `PROGRAM TITLE: ${generatedStrategy.suggestedTitle}\n\n`
+      }
+      
+      sections.forEach(section => {
+        content += `${section.title.toUpperCase()}\n`
+        content += `${'-'.repeat(30)}\n`
+        content += `${section.answer || 'Not completed'}\n\n`
+      })
+
+      // Download as text file (Word/PDF generation would need backend)
+      const blob = new Blob([content], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${selectedSubmission.title.substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_response.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        backgroundColor: colors.background, 
+        padding: '40px 30px',
+        paddingBottom: '100px'
+      }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          
+          <p 
+            onClick={() => setCurrentPhase(4)}
+            style={{ color: colors.muted, fontSize: '16px', marginBottom: '20px', cursor: 'pointer' }}
+          >
+            ← Back to Review
+          </p>
+
+          {/* Progress Bar - All complete */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '30px' }}>
+            {[1, 2, 3, 4, 5].map(phase => (
+              <div 
+                key={phase}
+                style={{
+                  flex: 1,
+                  height: '4px',
+                  backgroundColor: colors.primary,
+                  borderRadius: '2px'
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', fontSize: '12px', color: colors.muted }}>
+            <span>1. Overview</span>
+            <span>2. Strategy</span>
+            <span>3. Answers</span>
+            <span>4. Review</span>
+            <span style={{ color: colors.primary, fontWeight: '600' }}>5. Submit</span>
+          </div>
+
+          {/* Success Card */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '40px 30px',
+            textAlign: 'center',
+            border: `1px solid ${colors.primary}40`,
+            marginBottom: '25px'
+          }}>
+            <span style={{ fontSize: '48px', marginBottom: '15px', display: 'block' }}>🎉</span>
+            <h2 style={{ color: colors.primary, fontSize: '24px', marginBottom: '10px' }}>
+              Response Complete!
+            </h2>
+            <p style={{ color: colors.muted, fontSize: '14px', marginBottom: '0' }}>
+              {sections.length} sections ready • {sections.reduce((sum, s) => sum + (s.answer?.length || 0), 0)} total characters
+            </p>
+          </div>
+
+          {/* Export Options */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '25px',
+            border: `1px solid ${colors.border}`,
+            marginBottom: '25px'
+          }}>
+            <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '15px', textTransform: 'uppercase' }}>
+              Export Your Response
+            </p>
+            
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <button
+                onClick={() => handleDownload('txt')}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  backgroundColor: colors.gold,
+                  border: 'none',
+                  borderRadius: '10px',
+                  color: colors.background,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                📄 Download Response
+              </button>
+              
+              <button
+                onClick={handleSaveToBucket}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.primary}`,
+                  borderRadius: '10px',
+                  color: colors.primary,
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                🪣 Save to BUCKET (reuse for future)
+              </button>
+            </div>
+          </div>
+
+          {/* What happens next */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '25px',
+            border: `1px solid ${colors.border}`
+          }}>
+            <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '15px', textTransform: 'uppercase' }}>
+              Next Steps
+            </p>
+            <ol style={{ color: colors.text, fontSize: '14px', margin: 0, paddingLeft: '20px', lineHeight: '2' }}>
+              <li>Download your response document</li>
+              <li>Review and make any final edits</li>
+              <li>Submit through the agency's portal</li>
+              <li>Save to BUCKET for future similar opportunities</li>
+            </ol>
+          </div>
+
+          {/* Back to Dashboard */}
+          <button
+            onClick={() => {
+              setSelectedSubmission(null)
+              setCurrentPhase(1)
+              setSections([])
+              setGeneratedStrategy(null)
+            }}
+            style={{
+              width: '100%',
+              marginTop: '25px',
+              padding: '14px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${colors.border}`,
+              borderRadius: '10px',
+              color: colors.muted,
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Response Room
+          </button>
 
         </div>
       </div>
@@ -1289,66 +1535,18 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             </div>
 
             {/* Show the description we have */}
-            {selectedSubmission.description && selectedSubmission.description.length > 30 ? (
-              <div style={{ marginBottom: '15px' }}>
-                <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>DESCRIPTION</p>
-                <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>
-                  {selectedSubmission.description}
-                </p>
-              </div>
-            ) : (
-              <p style={{ color: colors.muted, fontSize: '13px', fontStyle: 'italic' }}>
-                Limited details available. RCA will use the title and your BUCKET to generate strategy.
+            {/* Description - we always have this now */}
+            <div style={{ marginBottom: '15px' }}>
+              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>DESCRIPTION</p>
+              <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>
+                {selectedSubmission.description}
               </p>
-            )}
-
-            {/* Optional: Let advanced users upload if they want better results */}
-            {!rfpContent && (
-              <details style={{ marginTop: '15px' }}>
-                <summary style={{ color: colors.muted, fontSize: '12px', cursor: 'pointer' }}>
-                  Have the RFP PDF? Upload for better results (optional)
-                </summary>
-                <div style={{ marginTop: '10px' }}>
-                  <label style={{
-                    display: 'inline-block',
-                    padding: '10px 16px',
-                    backgroundColor: 'transparent',
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '8px',
-                    color: colors.muted,
-                    fontSize: '12px',
-                    cursor: 'pointer'
-                  }}>
-                    📎 Upload PDF
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={handlePdfUpload}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-                </div>
-              </details>
-            )}
-
-            {/* Show if PDF was uploaded */}
-            {rfpContent && (
-              <div style={{ 
-                marginTop: '15px', 
-                padding: '10px', 
-                backgroundColor: `${colors.primary}10`, 
-                borderRadius: '8px' 
-              }}>
-                <p style={{ color: colors.primary, fontSize: '13px', margin: 0 }}>
-                  ✅ {rfpContent.fileName ? `Uploaded: ${rfpContent.fileName}` : 'Additional details loaded'}
-                </p>
-              </div>
-            )}
+            </div>
 
             {/* Loading state */}
             {loadingRfp && (
               <div style={{ textAlign: 'center', padding: '15px' }}>
-                <p style={{ color: colors.gold, fontSize: '14px' }}>🔄 Reading document...</p>
+                <p style={{ color: colors.gold, fontSize: '14px' }}>🔄 Loading...</p>
               </div>
             )}
 
