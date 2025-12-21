@@ -329,8 +329,18 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
 
       const data = await response.json()
       
+      // Strip markdown formatting (asterisks, etc.)
+      const cleanAnswer = data.answer
+        .replace(/\*\*/g, '')  // Remove bold **
+        .replace(/\*/g, '')    // Remove italic *
+        .replace(/\_\_/g, '')  // Remove __
+        .replace(/\_/g, '')    // Remove _
+        .replace(/\#\#\#/g, '') // Remove headers
+        .replace(/\#\#/g, '')
+        .replace(/\#/g, '')
+      
       setSections(prev => prev.map((s, i) => 
-        i === sectionIndex ? { ...s, answer: data.answer, status: 'complete' } : s
+        i === sectionIndex ? { ...s, answer: cleanAnswer, status: 'complete' } : s
       ))
     } catch (err) {
       console.error('Answer generation error:', err)
@@ -341,6 +351,59 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           answer: 'Unable to generate. Please write your response manually.',
           status: 'complete' 
         } : s
+      ))
+    }
+  }
+
+  // Polish/clean up user's rough draft
+  const polishAnswer = async (sectionIndex) => {
+    const section = sections[sectionIndex]
+    
+    if (!section.answer || section.answer.trim().length < 20) {
+      alert('Please write at least a few sentences first, then click Polish.')
+      return
+    }
+    
+    // Update status to generating
+    setSections(prev => prev.map((s, i) => 
+      i === sectionIndex ? { ...s, status: 'generating' } : s
+    ))
+
+    try {
+      const response = await fetch('/api/polish-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          section: section,
+          opportunity: selectedSubmission,
+          profile: profileData,
+          roughDraft: section.answer,
+          charLimit: section.charLimit
+        })
+      })
+
+      if (!response.ok) throw new Error('Failed to polish')
+
+      const data = await response.json()
+      
+      // Strip markdown formatting
+      const cleanAnswer = data.answer
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '')
+        .replace(/\_\_/g, '')
+        .replace(/\_/g, '')
+        .replace(/\#\#\#/g, '')
+        .replace(/\#\#/g, '')
+        .replace(/\#/g, '')
+      
+      setSections(prev => prev.map((s, i) => 
+        i === sectionIndex ? { ...s, answer: cleanAnswer, status: 'complete' } : s
+      ))
+    } catch (err) {
+      console.error('Polish error:', err)
+      alert('Could not polish. Please try again.')
+      setSections(prev => prev.map((s, i) => 
+        i === sectionIndex ? { ...s, status: 'complete' } : s
       ))
     }
   }
@@ -540,11 +603,11 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 </div>
               )}
               
-              {/* From Bucket - What to use */}
+              {/* Capabilities to Highlight */}
               {generatedStrategy.fromBucket && generatedStrategy.fromBucket.length > 0 && (
                 <div style={{ marginBottom: '20px' }}>
                   <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '10px' }}>
-                    🪣 FROM YOUR BUCKET - HIGHLIGHT THESE
+                    💪 CAPABILITIES TO HIGHLIGHT
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     {generatedStrategy.fromBucket.map((item, i) => (
@@ -920,45 +983,80 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                     )}
                   </div>
 
-                  {/* Generate Button */}
-                  {!currentSection.answer && (
-                    <button
-                      onClick={() => generateAnswer(currentSectionIndex)}
-                      style={{
-                        width: '100%',
-                        padding: '14px',
-                        backgroundColor: colors.gold,
-                        border: 'none',
-                        borderRadius: '10px',
-                        color: colors.background,
-                        fontSize: '15px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        marginBottom: '10px'
-                      }}
-                    >
-                      🤖 Generate with RCA
-                    </button>
-                  )}
-
-                  {/* Regenerate if has answer */}
-                  {currentSection.answer && (
-                    <button
-                      onClick={() => generateAnswer(currentSectionIndex)}
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        backgroundColor: 'transparent',
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: '10px',
-                        color: colors.muted,
-                        fontSize: '13px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🔄 Regenerate this section
-                    </button>
-                  )}
+                  {/* Action Options */}
+                  <div style={{ 
+                    backgroundColor: colors.card, 
+                    borderRadius: '12px', 
+                    padding: '20px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    {!currentSection.answer ? (
+                      <>
+                        {/* No answer yet - show generate option */}
+                        <button
+                          onClick={() => generateAnswer(currentSectionIndex)}
+                          style={{
+                            width: '100%',
+                            padding: '14px',
+                            backgroundColor: colors.gold,
+                            border: 'none',
+                            borderRadius: '10px',
+                            color: colors.background,
+                            fontSize: '15px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            marginBottom: '12px'
+                          }}
+                        >
+                          🤖 Generate with RCA
+                        </button>
+                        <p style={{ color: colors.muted, fontSize: '12px', textAlign: 'center', margin: 0 }}>
+                          Or type your own answer above, then click "Polish My Draft"
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        {/* Has answer - show polish and regenerate options */}
+                        <div style={{ display: 'grid', gap: '10px' }}>
+                          <button
+                            onClick={() => polishAnswer(currentSectionIndex)}
+                            style={{
+                              width: '100%',
+                              padding: '14px',
+                              backgroundColor: colors.gold,
+                              border: 'none',
+                              borderRadius: '10px',
+                              color: colors.background,
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✨ Polish My Draft
+                          </button>
+                          <p style={{ color: colors.muted, fontSize: '11px', textAlign: 'center', margin: '0 0 5px 0' }}>
+                            Cleans up grammar, spelling, and makes it professional
+                          </p>
+                          
+                          <button
+                            onClick={() => generateAnswer(currentSectionIndex)}
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              backgroundColor: 'transparent',
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '10px',
+                              color: colors.muted,
+                              fontSize: '13px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🔄 Regenerate from scratch
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </>
               )}
             </div>
