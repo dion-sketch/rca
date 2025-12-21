@@ -1432,17 +1432,18 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               }}
               disabled={isSaving}
               style={{
-                padding: '10px 20px',
-                backgroundColor: colors.gold,
+                padding: '12px 25px',
+                backgroundColor: '#FF0000',
                 border: 'none',
                 borderRadius: '8px',
-                color: colors.background,
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: isSaving ? 'wait' : 'pointer'
+                color: '#FFFFFF',
+                fontSize: '16px',
+                fontWeight: '700',
+                cursor: isSaving ? 'wait' : 'pointer',
+                boxShadow: '0 0 10px #FF0000'
               }}
             >
-              {isSaving ? '💾 Saving...' : '💾 SAVE'}
+              {isSaving ? '💾 SAVING...' : '💾 SAVE NOW'}
             </button>
           </div>
           <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '20px' }}>
@@ -1462,18 +1463,17 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               onClick={() => setCurrentSectionIndex(Math.max(0, currentSectionIndex - 1))}
               disabled={currentSectionIndex === 0}
               style={{
-                padding: '10px 15px',
-                backgroundColor: currentSectionIndex === 0 ? colors.card : colors.primary,
-                border: 'none',
-                borderRadius: '8px',
-                color: currentSectionIndex === 0 ? colors.muted : colors.background,
-                fontSize: '18px',
-                fontWeight: '700',
-                cursor: currentSectionIndex === 0 ? 'not-allowed' : 'pointer',
-                opacity: currentSectionIndex === 0 ? 0.5 : 1
+                padding: '15px 20px',
+                backgroundColor: currentSectionIndex === 0 ? '#333' : '#00FF00',
+                border: '3px solid #00FF00',
+                borderRadius: '10px',
+                color: currentSectionIndex === 0 ? '#666' : '#000000',
+                fontSize: '24px',
+                fontWeight: '900',
+                cursor: currentSectionIndex === 0 ? 'not-allowed' : 'pointer'
               }}
             >
-              ←
+              ◀
             </button>
             
             {/* Section tabs */}
@@ -1512,18 +1512,17 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               onClick={() => setCurrentSectionIndex(Math.min(sections.length - 1, currentSectionIndex + 1))}
               disabled={currentSectionIndex === sections.length - 1}
               style={{
-                padding: '10px 15px',
-                backgroundColor: currentSectionIndex === sections.length - 1 ? colors.card : colors.primary,
-                border: 'none',
-                borderRadius: '8px',
-                color: currentSectionIndex === sections.length - 1 ? colors.muted : colors.background,
-                fontSize: '18px',
-                fontWeight: '700',
-                cursor: currentSectionIndex === sections.length - 1 ? 'not-allowed' : 'pointer',
-                opacity: currentSectionIndex === sections.length - 1 ? 0.5 : 1
+                padding: '15px 20px',
+                backgroundColor: currentSectionIndex === sections.length - 1 ? '#333' : '#00FF00',
+                border: '3px solid #00FF00',
+                borderRadius: '10px',
+                color: currentSectionIndex === sections.length - 1 ? '#666' : '#000000',
+                fontSize: '24px',
+                fontWeight: '900',
+                cursor: currentSectionIndex === sections.length - 1 ? 'not-allowed' : 'pointer'
               }}
             >
-              →
+              ▶
             </button>
           </div>
 
