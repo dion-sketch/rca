@@ -316,10 +316,15 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
       answer: '',
       status: 'pending',
       weight: 5,
-      tip: 'Personnel is usually 60-70% of total budget.',
+      tip: 'Personnel is usually 60-70% of total budget. Make sure your total is under the funding ceiling.',
       type: 'budget',
-      budgetItems: [],
-      otherCosts: []
+      fringeRate: 30,
+      indirectRate: 10,
+      travelItems: [],
+      equipmentItems: [],
+      supplyItems: [],
+      contractualItems: [],
+      otherItems: []
     }
   ]
 
@@ -638,6 +643,125 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     const subtotal = personnel + otherCosts
     const indirect = subtotal * 0.15 // 15% indirect
     return { personnel, otherCosts, indirect, total: subtotal + indirect }
+  }
+
+  // Parse budget ceiling from string like "$500,000" or "500000"
+  const parseBudgetCeiling = (value) => {
+    if (!value) return null
+    const cleaned = value.toString().replace(/[$,\s]/g, '')
+    const num = parseFloat(cleaned)
+    return isNaN(num) ? null : num
+  }
+
+  // Add item to a budget category
+  const addBudgetItem = (sectionIndex, category, defaultItem) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const newItem = { id: Date.now(), ...defaultItem }
+        const items = s[category] || []
+        return { ...s, [category]: [...items, newItem], status: 'complete' }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  // Update item in a budget category
+  const updateBudgetItem = (sectionIndex, category, itemId, field, value) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const updated = (s[category] || []).map(item => 
+          item.id === itemId ? { ...item, [field]: value } : item
+        )
+        return { ...s, [category]: updated, status: 'complete' }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  // Remove item from a budget category
+  const removeBudgetItem = (sectionIndex, category, itemId) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        return { ...s, [category]: (s[category] || []).filter(item => item.id !== itemId) }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  // Calculate direct costs (everything except indirect)
+  const calculateDirectCosts = (budgetSection) => {
+    const personnel = calculatePersonnelCost()
+    const fringe = personnel * ((budgetSection?.fringeRate || 30) / 100)
+    const travel = (budgetSection?.travelItems || []).reduce((sum, t) => sum + ((t.trips || 0) * (t.costPerTrip || 0)), 0)
+    const equipment = (budgetSection?.equipmentItems || []).reduce((sum, e) => sum + ((e.quantity || 0) * (e.unitCost || 0)), 0)
+    const supplies = (budgetSection?.supplyItems || []).reduce((sum, s) => sum + (s.amount || 0), 0)
+    const contractual = (budgetSection?.contractualItems || []).reduce((sum, c) => sum + ((c.hours || 0) * (c.rate || 0)), 0)
+    const other = (budgetSection?.otherItems || []).reduce((sum, o) => sum + (o.amount || 0), 0)
+    
+    return personnel + fringe + travel + equipment + supplies + contractual + other
+  }
+
+  // Calculate full budget with all categories
+  const calculateFullBudget = (budgetSection) => {
+    const personnel = calculatePersonnelCost()
+    const fringe = Math.round(personnel * ((budgetSection?.fringeRate || 30) / 100))
+    const travel = (budgetSection?.travelItems || []).reduce((sum, t) => sum + ((t.trips || 0) * (t.costPerTrip || 0)), 0)
+    const equipment = (budgetSection?.equipmentItems || []).reduce((sum, e) => sum + ((e.quantity || 0) * (e.unitCost || 0)), 0)
+    const supplies = (budgetSection?.supplyItems || []).reduce((sum, s) => sum + (s.amount || 0), 0)
+    const contractual = (budgetSection?.contractualItems || []).reduce((sum, c) => sum + ((c.hours || 0) * (c.rate || 0)), 0)
+    const other = (budgetSection?.otherItems || []).reduce((sum, o) => sum + (o.amount || 0), 0)
+    
+    const directTotal = personnel + fringe + travel + equipment + supplies + contractual + other
+    const indirect = Math.round(directTotal * ((budgetSection?.indirectRate || 10) / 100))
+    const total = directTotal + indirect
+    
+    return { personnel, fringe, travel, equipment, supplies, contractual, other, indirect, total }
+  }
+
+  // Generate budget narrative from calculated values
+  const generateBudgetNarrative = (budget) => {
+    const lines = []
+    
+    lines.push('BUDGET JUSTIFICATION\n')
+    
+    if (budget.personnel > 0) {
+      lines.push(`Personnel: $${budget.personnel.toLocaleString()} - Salaries for project staff including project manager, program staff, and support personnel.`)
+    }
+    
+    if (budget.fringe > 0) {
+      lines.push(`Fringe Benefits: $${budget.fringe.toLocaleString()} - Employee benefits including health insurance, retirement, and payroll taxes.`)
+    }
+    
+    if (budget.travel > 0) {
+      lines.push(`Travel: $${budget.travel.toLocaleString()} - Local and out-of-area travel for project activities, site visits, and meetings.`)
+    }
+    
+    if (budget.equipment > 0) {
+      lines.push(`Equipment: $${budget.equipment.toLocaleString()} - Major equipment purchases required for project implementation.`)
+    }
+    
+    if (budget.supplies > 0) {
+      lines.push(`Supplies: $${budget.supplies.toLocaleString()} - Office supplies, program materials, and consumable items.`)
+    }
+    
+    if (budget.contractual > 0) {
+      lines.push(`Contractual: $${budget.contractual.toLocaleString()} - Consultant fees and subcontractor costs for specialized services.`)
+    }
+    
+    if (budget.other > 0) {
+      lines.push(`Other Direct Costs: $${budget.other.toLocaleString()} - Facility costs, insurance, communications, and other operational expenses.`)
+    }
+    
+    if (budget.indirect > 0) {
+      lines.push(`Indirect Costs: $${budget.indirect.toLocaleString()} - Administrative overhead and facilities costs.`)
+    }
+    
+    lines.push(`\nTOTAL PROJECT COST: $${budget.total.toLocaleString()}`)
+    
+    return lines.join('\n\n')
   }
 
   // ==========================================
@@ -1574,24 +1698,157 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 </div>
 
               ) : currentSection.type === 'budget' ? (
-                /* BUDGET SECTION - Auto-calculated */
+                /* BUDGET BUILDER - Real form like grant applications */
                 <div>
-                  {/* Budget Ceiling */}
-                  {selectedSubmission.estimated_value && (
-                    <div style={{
-                      backgroundColor: `${colors.gold}15`,
-                      padding: '15px',
-                      borderRadius: '10px',
-                      marginBottom: '20px',
-                      border: `1px solid ${colors.gold}30`
-                    }}>
-                      <p style={{ color: colors.gold, fontSize: '14px', margin: 0 }}>
-                        📊 Funding Ceiling: <strong>{selectedSubmission.estimated_value}</strong>
+                  {/* Budget Ceiling Warning */}
+                  <div style={{
+                    backgroundColor: `${colors.gold}15`,
+                    padding: '15px 20px',
+                    borderRadius: '10px',
+                    marginBottom: '20px',
+                    border: `1px solid ${colors.gold}30`,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <p style={{ color: colors.gold, fontSize: '12px', margin: '0 0 4px 0', textTransform: 'uppercase' }}>Funding Available</p>
+                      <p style={{ color: colors.text, fontSize: '20px', fontWeight: '700', margin: 0 }}>
+                        {selectedSubmission.estimated_value || 'Not specified'}
                       </p>
                     </div>
-                  )}
-                  
-                  {/* Personnel Costs - Auto from Team */}
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ color: colors.muted, fontSize: '12px', margin: '0 0 4px 0' }}>Your Total</p>
+                      <p style={{ 
+                        color: calculateTotalBudget().total > parseBudgetCeiling(selectedSubmission.estimated_value) ? colors.danger : colors.primary, 
+                        fontSize: '20px', 
+                        fontWeight: '700', 
+                        margin: 0 
+                      }}>
+                        ${Math.round(calculateTotalBudget().total).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* CATEGORY 1: PERSONNEL */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h4 style={{ color: colors.text, fontSize: '14px', margin: 0 }}>
+                        👥 PERSONNEL & SALARIES
+                      </h4>
+                      <span style={{ color: colors.muted, fontSize: '11px' }}>Usually 60-70% of budget</span>
+                    </div>
+                    
+                    {(() => {
+                      const teamSection = sections.find(s => s.id === 'team')
+                      const members = teamSection?.teamMembers || []
+                      if (members.length === 0) {
+                        return (
+                          <div style={{ padding: '20px', textAlign: 'center', backgroundColor: colors.background, borderRadius: '8px' }}>
+                            <p style={{ color: colors.muted, fontSize: '13px', margin: '0 0 10px 0' }}>
+                              No team members added yet
+                            </p>
+                            <button
+                              onClick={() => {
+                                const teamIdx = sections.findIndex(s => s.id === 'team')
+                                if (teamIdx >= 0) setCurrentSectionIndex(teamIdx)
+                              }}
+                              style={{
+                                padding: '10px 20px',
+                                backgroundColor: colors.primary,
+                                border: 'none',
+                                borderRadius: '6px',
+                                color: colors.background,
+                                fontSize: '13px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              → Go to Team Section
+                            </button>
+                          </div>
+                        )
+                      }
+                      return (
+                        <div style={{ backgroundColor: colors.background, borderRadius: '8px', overflow: 'hidden' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '10px 15px', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '11px', textTransform: 'uppercase' }}>Position</span>
+                            <span style={{ color: colors.muted, fontSize: '11px', textTransform: 'uppercase', textAlign: 'right' }}>Hours/Wk</span>
+                            <span style={{ color: colors.muted, fontSize: '11px', textTransform: 'uppercase', textAlign: 'right' }}>Rate</span>
+                            <span style={{ color: colors.muted, fontSize: '11px', textTransform: 'uppercase', textAlign: 'right' }}>Annual</span>
+                          </div>
+                          {members.map(m => (
+                            <div key={m.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '12px 15px', borderBottom: `1px solid ${colors.border}` }}>
+                              <span style={{ color: colors.text, fontSize: '13px' }}>{m.role || 'Unnamed'}</span>
+                              <span style={{ color: colors.text, fontSize: '13px', textAlign: 'right' }}>{m.hoursPerWeek}</span>
+                              <span style={{ color: colors.text, fontSize: '13px', textAlign: 'right' }}>${m.hourlyRate}</span>
+                              <span style={{ color: colors.gold, fontSize: '13px', textAlign: 'right', fontWeight: '600' }}>
+                                ${(m.hoursPerWeek * m.hourlyRate * 52).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '12px 15px', backgroundColor: `${colors.gold}10` }}>
+                            <span style={{ color: colors.text, fontSize: '13px', fontWeight: '600' }}>Personnel Subtotal</span>
+                            <span></span>
+                            <span></span>
+                            <span style={{ color: colors.gold, fontSize: '14px', textAlign: 'right', fontWeight: '700' }}>
+                              ${calculatePersonnelCost().toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+
+                  {/* CATEGORY 2: FRINGE BENEFITS */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h4 style={{ color: colors.text, fontSize: '14px', margin: 0 }}>
+                        🏥 FRINGE BENEFITS
+                      </h4>
+                      <span style={{ color: colors.muted, fontSize: '11px' }}>Usually 25-35% of personnel</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <span style={{ color: colors.muted, fontSize: '13px' }}>Rate:</span>
+                      <input
+                        type="number"
+                        value={currentSection.fringeRate || 30}
+                        onChange={(e) => {
+                          setSections(prev => prev.map((s, i) => 
+                            i === currentSectionIndex ? { ...s, fringeRate: parseInt(e.target.value) || 0, status: 'complete' } : s
+                          ))
+                          triggerAutoSave()
+                        }}
+                        style={{
+                          width: '70px',
+                          padding: '8px',
+                          backgroundColor: colors.background,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '6px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                      />
+                      <span style={{ color: colors.muted, fontSize: '13px' }}>%</span>
+                      <span style={{ marginLeft: 'auto', color: colors.gold, fontSize: '14px', fontWeight: '600' }}>
+                        ${Math.round(calculatePersonnelCost() * ((currentSection.fringeRate || 30) / 100)).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* CATEGORY 3: TRAVEL */}
                   <div style={{
                     backgroundColor: '#1a1a1a',
                     borderRadius: '12px',
@@ -1600,172 +1857,346 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                     border: `1px solid ${colors.border}`
                   }}>
                     <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>
-                      👥 Personnel (from Team section)
+                      ✈️ TRAVEL
                     </h4>
+                    {(currentSection.travelItems || []).map((item, idx) => (
+                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                        <input
+                          value={item.description}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'travelItems', item.id, 'description', e.target.value)}
+                          placeholder="e.g., Site visits, conferences"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.trips}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'travelItems', item.id, 'trips', parseInt(e.target.value) || 0)}
+                          placeholder="# trips"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.costPerTrip}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'travelItems', item.id, 'costPerTrip', parseInt(e.target.value) || 0)}
+                          placeholder="$/trip"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <span style={{ color: colors.gold, fontSize: '13px', textAlign: 'right' }}>
+                          ${((item.trips || 0) * (item.costPerTrip || 0)).toLocaleString()}
+                        </span>
+                        <button onClick={() => removeBudgetItem(currentSectionIndex, 'travelItems', item.id)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer' }}>×</button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addBudgetItem(currentSectionIndex, 'travelItems', { description: '', trips: 1, costPerTrip: 0 })}
+                      style={{ padding: '8px 16px', backgroundColor: 'transparent', border: `1px dashed ${colors.border}`, borderRadius: '6px', color: colors.muted, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      + Add Travel
+                    </button>
+                  </div>
+
+                  {/* CATEGORY 4: EQUIPMENT */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h4 style={{ color: colors.text, fontSize: '14px', margin: 0 }}>
+                        🖥️ EQUIPMENT
+                      </h4>
+                      <span style={{ color: colors.muted, fontSize: '11px' }}>Items over $5,000</span>
+                    </div>
+                    {(currentSection.equipmentItems || []).map((item, idx) => (
+                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                        <input
+                          value={item.description}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'equipmentItems', item.id, 'description', e.target.value)}
+                          placeholder="e.g., Computer, Vehicle"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'equipmentItems', item.id, 'quantity', parseInt(e.target.value) || 0)}
+                          placeholder="Qty"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.unitCost}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'equipmentItems', item.id, 'unitCost', parseInt(e.target.value) || 0)}
+                          placeholder="Unit $"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <button onClick={() => removeBudgetItem(currentSectionIndex, 'equipmentItems', item.id)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer' }}>×</button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addBudgetItem(currentSectionIndex, 'equipmentItems', { description: '', quantity: 1, unitCost: 0 })}
+                      style={{ padding: '8px 16px', backgroundColor: 'transparent', border: `1px dashed ${colors.border}`, borderRadius: '6px', color: colors.muted, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      + Add Equipment
+                    </button>
+                  </div>
+
+                  {/* CATEGORY 5: SUPPLIES */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h4 style={{ color: colors.text, fontSize: '14px', margin: 0 }}>
+                        📦 SUPPLIES
+                      </h4>
+                      <span style={{ color: colors.muted, fontSize: '11px' }}>Items under $5,000</span>
+                    </div>
+                    {(currentSection.supplyItems || []).map((item, idx) => (
+                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                        <input
+                          value={item.description}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'supplyItems', item.id, 'description', e.target.value)}
+                          placeholder="e.g., Office supplies, Program materials"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.amount}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'supplyItems', item.id, 'amount', parseInt(e.target.value) || 0)}
+                          placeholder="$0"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <button onClick={() => removeBudgetItem(currentSectionIndex, 'supplyItems', item.id)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer' }}>×</button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addBudgetItem(currentSectionIndex, 'supplyItems', { description: '', amount: 0 })}
+                      style={{ padding: '8px 16px', backgroundColor: 'transparent', border: `1px dashed ${colors.border}`, borderRadius: '6px', color: colors.muted, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      + Add Supply
+                    </button>
+                  </div>
+
+                  {/* CATEGORY 6: CONTRACTUAL */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>
+                      🤝 CONTRACTUAL / CONSULTANTS
+                    </h4>
+                    {(currentSection.contractualItems || []).map((item, idx) => (
+                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                        <input
+                          value={item.description}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'contractualItems', item.id, 'description', e.target.value)}
+                          placeholder="e.g., IT Support, Evaluator"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.hours}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'contractualItems', item.id, 'hours', parseInt(e.target.value) || 0)}
+                          placeholder="Hours"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.rate}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'contractualItems', item.id, 'rate', parseInt(e.target.value) || 0)}
+                          placeholder="$/hr"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <span style={{ color: colors.gold, fontSize: '13px', textAlign: 'right' }}>
+                          ${((item.hours || 0) * (item.rate || 0)).toLocaleString()}
+                        </span>
+                        <button onClick={() => removeBudgetItem(currentSectionIndex, 'contractualItems', item.id)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer' }}>×</button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addBudgetItem(currentSectionIndex, 'contractualItems', { description: '', hours: 0, rate: 0 })}
+                      style={{ padding: '8px 16px', backgroundColor: 'transparent', border: `1px dashed ${colors.border}`, borderRadius: '6px', color: colors.muted, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      + Add Consultant/Contractor
+                    </button>
+                  </div>
+
+                  {/* CATEGORY 7: OTHER DIRECT COSTS */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>
+                      📋 OTHER DIRECT COSTS
+                    </h4>
+                    {(currentSection.otherItems || []).map((item, idx) => (
+                      <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                        <input
+                          value={item.description}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'otherItems', item.id, 'description', e.target.value)}
+                          placeholder="e.g., Rent, Insurance, Printing"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px' }}
+                        />
+                        <input
+                          type="number"
+                          value={item.amount}
+                          onChange={(e) => updateBudgetItem(currentSectionIndex, 'otherItems', item.id, 'amount', parseInt(e.target.value) || 0)}
+                          placeholder="$0"
+                          style={{ padding: '8px', backgroundColor: colors.background, border: `1px solid ${colors.border}`, borderRadius: '6px', color: colors.text, fontSize: '13px', textAlign: 'center' }}
+                        />
+                        <button onClick={() => removeBudgetItem(currentSectionIndex, 'otherItems', item.id)} style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer' }}>×</button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => addBudgetItem(currentSectionIndex, 'otherItems', { description: '', amount: 0 })}
+                      style={{ padding: '8px 16px', backgroundColor: 'transparent', border: `1px dashed ${colors.border}`, borderRadius: '6px', color: colors.muted, fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      + Add Other Cost
+                    </button>
+                  </div>
+
+                  {/* CATEGORY 8: INDIRECT COSTS */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '20px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h4 style={{ color: colors.text, fontSize: '14px', margin: 0 }}>
+                        🏢 INDIRECT COSTS
+                      </h4>
+                      <span style={{ color: colors.muted, fontSize: '11px' }}>Usually 10-15% (or your negotiated rate)</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <span style={{ color: colors.muted, fontSize: '13px' }}>Rate:</span>
+                      <input
+                        type="number"
+                        value={currentSection.indirectRate || 10}
+                        onChange={(e) => {
+                          setSections(prev => prev.map((s, i) => 
+                            i === currentSectionIndex ? { ...s, indirectRate: parseInt(e.target.value) || 0, status: 'complete' } : s
+                          ))
+                          triggerAutoSave()
+                        }}
+                        style={{
+                          width: '70px',
+                          padding: '8px',
+                          backgroundColor: colors.background,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '6px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          textAlign: 'center'
+                        }}
+                      />
+                      <span style={{ color: colors.muted, fontSize: '13px' }}>%</span>
+                      <span style={{ marginLeft: 'auto', color: colors.gold, fontSize: '14px', fontWeight: '600' }}>
+                        ${Math.round(calculateDirectCosts(currentSection) * ((currentSection.indirectRate || 10) / 100)).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* BUDGET TOTAL SUMMARY */}
+                  <div style={{
+                    backgroundColor: `${colors.primary}15`,
+                    borderRadius: '12px',
+                    padding: '25px',
+                    border: `2px solid ${colors.primary}40`
+                  }}>
+                    <h4 style={{ color: colors.text, fontSize: '16px', margin: '0 0 20px 0', textAlign: 'center' }}>
+                      💰 BUDGET SUMMARY
+                    </h4>
+                    
                     {(() => {
-                      const teamSection = sections.find(s => s.id === 'team')
-                      const members = teamSection?.teamMembers || []
-                      if (members.length === 0) {
-                        return <p style={{ color: colors.muted, fontSize: '13px' }}>Add team members in the "Key Personnel" section first</p>
-                      }
+                      const budget = calculateFullBudget(currentSection)
+                      const ceiling = parseBudgetCeiling(selectedSubmission.estimated_value)
+                      const isOverBudget = ceiling && budget.total > ceiling
+                      
                       return (
                         <>
-                          {members.map(m => (
-                            <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <span style={{ color: colors.text, fontSize: '13px' }}>
-                                {m.role || 'Unnamed'} {m.name && m.name !== 'TBD' ? `(${m.name})` : ''} - {m.hoursPerWeek}hrs/wk × ${m.hourlyRate}/hr
-                              </span>
-                              <span style={{ color: colors.gold, fontSize: '13px' }}>
-                                ${(m.hoursPerWeek * m.hourlyRate * 52).toLocaleString()}
-                              </span>
-                            </div>
-                          ))}
-                          <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: colors.text, fontSize: '14px', fontWeight: '600' }}>Personnel Subtotal</span>
-                            <span style={{ color: colors.gold, fontSize: '14px', fontWeight: '600' }}>${calculatePersonnelCost().toLocaleString()}</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Personnel</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.personnel.toLocaleString()}</span>
                           </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Fringe Benefits</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.fringe.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Travel</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.travel.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Equipment</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.equipment.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Supplies</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.supplies.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Contractual</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.contractual.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Other Direct Costs</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.other.toLocaleString()}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '8px 0', borderBottom: `1px solid ${colors.border}` }}>
+                            <span style={{ color: colors.muted, fontSize: '14px' }}>Indirect Costs</span>
+                            <span style={{ color: colors.text, fontSize: '14px' }}>${budget.indirect.toLocaleString()}</span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', padding: '15px', backgroundColor: isOverBudget ? `${colors.danger}20` : `${colors.primary}20`, borderRadius: '8px' }}>
+                            <span style={{ color: isOverBudget ? colors.danger : colors.primary, fontSize: '18px', fontWeight: '700' }}>TOTAL PROJECT COST</span>
+                            <span style={{ color: isOverBudget ? colors.danger : colors.primary, fontSize: '18px', fontWeight: '700' }}>${Math.round(budget.total).toLocaleString()}</span>
+                          </div>
+                          
+                          {isOverBudget && (
+                            <p style={{ color: colors.danger, fontSize: '13px', marginTop: '15px', textAlign: 'center', padding: '10px', backgroundColor: `${colors.danger}10`, borderRadius: '6px' }}>
+                              ⚠️ Over budget by ${(budget.total - ceiling).toLocaleString()}. Reduce costs or adjust team hours.
+                            </p>
+                          )}
                         </>
                       )
                     })()}
                   </div>
                   
-                  {/* Other Costs */}
-                  <div style={{
-                    backgroundColor: '#1a1a1a',
-                    borderRadius: '12px',
-                    padding: '20px',
-                    marginBottom: '15px',
-                    border: `1px solid ${colors.border}`
-                  }}>
-                    <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>
-                      📦 Other Direct Costs
-                    </h4>
-                    
-                    {(currentSection.otherCosts || []).map((cost, idx) => (
-                      <div key={cost.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
-                        <input
-                          value={cost.category}
-                          onChange={(e) => updateOtherCost(currentSectionIndex, cost.id, 'category', e.target.value)}
-                          placeholder="e.g., Supplies, Travel, Equipment"
-                          style={{
-                            padding: '10px',
-                            backgroundColor: colors.background,
-                            border: `1px solid ${colors.border}`,
-                            borderRadius: '6px',
-                            color: colors.text,
-                            fontSize: '14px'
-                          }}
-                        />
-                        <input
-                          type="number"
-                          value={cost.amount}
-                          onChange={(e) => updateOtherCost(currentSectionIndex, cost.id, 'amount', e.target.value)}
-                          placeholder="$0"
-                          style={{
-                            padding: '10px',
-                            backgroundColor: colors.background,
-                            border: `1px solid ${colors.border}`,
-                            borderRadius: '6px',
-                            color: colors.text,
-                            fontSize: '14px'
-                          }}
-                        />
-                        <button 
-                          onClick={() => removeOtherCost(currentSectionIndex, cost.id)}
-                          style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '16px' }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    
-                    <button
-                      onClick={() => addOtherCost(currentSectionIndex)}
-                      style={{
-                        padding: '10px',
-                        backgroundColor: 'transparent',
-                        border: `1px dashed ${colors.border}`,
-                        borderRadius: '6px',
-                        color: colors.muted,
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        width: '100%'
-                      }}
-                    >
-                      + Add Cost Item
-                    </button>
-                  </div>
-                  
-                  {/* Budget Summary */}
-                  {(() => {
-                    const budget = calculateTotalBudget()
-                    return (
-                      <div style={{
-                        backgroundColor: `${colors.primary}15`,
-                        borderRadius: '12px',
-                        padding: '20px',
-                        border: `1px solid ${colors.primary}30`
-                      }}>
-                        <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>💰 Budget Summary</h4>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span style={{ color: colors.muted, fontSize: '13px' }}>Personnel</span>
-                          <span style={{ color: colors.text, fontSize: '13px' }}>${budget.personnel.toLocaleString()}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span style={{ color: colors.muted, fontSize: '13px' }}>Other Direct Costs</span>
-                          <span style={{ color: colors.text, fontSize: '13px' }}>${budget.otherCosts.toLocaleString()}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span style={{ color: colors.muted, fontSize: '13px' }}>Indirect Costs (15%)</span>
-                          <span style={{ color: colors.text, fontSize: '13px' }}>${Math.round(budget.indirect).toLocaleString()}</span>
-                        </div>
-                        <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: colors.primary, fontSize: '16px', fontWeight: '700' }}>TOTAL</span>
-                          <span style={{ color: colors.primary, fontSize: '16px', fontWeight: '700' }}>${Math.round(budget.total).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                  
+                  {/* Mark as Complete */}
                   <button
-                    onClick={() => generateAnswer(currentSectionIndex)}
+                    onClick={() => {
+                      const budget = calculateFullBudget(currentSection)
+                      const narrative = generateBudgetNarrative(budget)
+                      updateAnswer(currentSectionIndex, narrative)
+                    }}
                     style={{
                       width: '100%',
-                      padding: '14px',
+                      padding: '16px',
                       backgroundColor: colors.gold,
                       border: 'none',
                       borderRadius: '10px',
                       color: colors.background,
-                      fontSize: '14px',
+                      fontSize: '15px',
                       fontWeight: '600',
                       cursor: 'pointer',
                       marginTop: '20px'
                     }}
                   >
-                    🤖 Generate Budget Narrative
+                    ✓ Save Budget & Generate Narrative
                   </button>
-                  
-                  {currentSection.answer && (
-                    <div style={{ marginTop: '20px' }}>
-                      <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '8px' }}>Generated Narrative (editable)</label>
-                      <textarea
-                        value={currentSection.answer}
-                        onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
-                        style={{
-                          width: '100%',
-                          backgroundColor: '#1a1a1a',
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: '8px',
-                          padding: '15px',
-                          color: colors.text,
-                          fontSize: '14px',
-                          lineHeight: '1.7',
-                          resize: 'vertical',
-                          minHeight: '150px'
-                        }}
-                      />
-                    </div>
-                  )}
                 </div>
 
               ) : (
@@ -1899,10 +2330,10 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 style={{
                   flex: 1,
                   padding: '16px',
-                  backgroundColor: currentSection?.answer ? colors.primary : colors.card,
-                  border: currentSection?.answer ? 'none' : `1px solid ${colors.border}`,
+                  backgroundColor: colors.primary,
+                  border: 'none',
                   borderRadius: '10px',
-                  color: currentSection?.answer ? colors.background : colors.muted,
+                  color: colors.background,
                   fontSize: '16px',
                   fontWeight: '700',
                   cursor: 'pointer',
@@ -1910,7 +2341,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                   letterSpacing: '0.5px'
                 }}
               >
-                Next →
+                NEXT SECTION →
               </button>
             ) : (
               <button
@@ -1920,9 +2351,9 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                   flex: 1,
                   padding: '16px',
                   backgroundColor: completedCount === sections.length ? colors.gold : colors.card,
-                  border: 'none',
+                  border: completedCount === sections.length ? 'none' : `2px solid ${colors.gold}`,
                   borderRadius: '10px',
-                  color: completedCount === sections.length ? colors.background : colors.muted,
+                  color: completedCount === sections.length ? colors.background : colors.gold,
                   fontSize: '16px',
                   fontWeight: '700',
                   cursor: completedCount === sections.length ? 'pointer' : 'not-allowed',
@@ -1930,10 +2361,15 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                   letterSpacing: '0.5px'
                 }}
               >
-                {completedCount === sections.length ? 'REVIEW →' : `Complete all (${completedCount}/${sections.length})`}
+                {completedCount === sections.length ? '✓ REVIEW & SUBMIT' : `${sections.length - completedCount} SECTIONS LEFT`}
               </button>
             )}
           </div>
+          
+          {/* Progress indicator */}
+          <p style={{ color: colors.muted, fontSize: '12px', textAlign: 'center', marginTop: '15px' }}>
+            {completedCount}/{sections.length} sections complete • {isSaving ? 'Saving...' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Auto-save enabled'}
+          </p>
 
         </div>
       </div>
