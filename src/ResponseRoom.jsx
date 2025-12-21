@@ -238,49 +238,106 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   // PHASE 3: ANSWERS FUNCTIONS
   // ==========================================
 
-  // Default sections for grant/contract responses
+  // Default sections for grant/contract responses - ordered by importance
   const defaultSections = [
     { 
+      id: 'understanding', 
+      title: 'Understanding of Need', 
+      prompt: 'Show you understand their problem. What is the agency trying to solve? Why is this important? What are the key challenges?',
+      charLimit: 1000,
+      answer: '',
+      status: 'pending',
+      weight: 15,
+      tip: 'Evaluators want to see you READ and UNDERSTOOD the RFP before proposing a solution.',
+      type: 'text'
+    },
+    { 
       id: 'narrative', 
-      title: 'Project Narrative / Approach', 
-      prompt: 'Describe your approach to delivering this project or service.',
+      title: 'Technical Approach', 
+      prompt: 'How will you deliver this project? Include your methodology, key activities, and how you will meet their goals.',
       charLimit: 2000,
       answer: '',
-      status: 'pending' // pending, generating, complete
+      status: 'pending',
+      weight: 35,
+      tip: 'This is usually the highest weighted section. Be specific about HOW you will do the work.',
+      type: 'text'
     },
     { 
       id: 'qualifications', 
-      title: 'Qualifications & Experience', 
-      prompt: 'Describe your relevant qualifications and past experience.',
+      title: 'Past Performance & Experience', 
+      prompt: 'Prove you\'ve done this before. Include specific contracts/grants (name, value, dates), measurable outcomes (percentages, numbers), and client references.',
       charLimit: 1500,
       answer: '',
-      status: 'pending'
+      status: 'pending',
+      weight: 25,
+      tip: 'Use real numbers: "Served 500+ youth" beats "Served many youth"',
+      type: 'text'
+    },
+    { 
+      id: 'references', 
+      title: 'References', 
+      prompt: 'Provide 2-3 references from past similar work.',
+      charLimit: 1000,
+      answer: '',
+      status: 'pending',
+      weight: 5,
+      tip: 'Contact your references BEFORE listing them to get permission.',
+      type: 'references',
+      references: []
     },
     { 
       id: 'team', 
-      title: 'Team & Capacity', 
-      prompt: 'Describe your team and organizational capacity to perform this work.',
-      charLimit: 1000,
+      title: 'Key Personnel', 
+      prompt: 'Who will do the work? Add team roles below - names can be added later or listed as "TBD".',
+      charLimit: 1500,
       answer: '',
-      status: 'pending'
+      status: 'pending',
+      weight: 10,
+      tip: 'You can use Title/Role only (e.g., "Project Manager - TBD") if names aren\'t confirmed yet.',
+      type: 'team',
+      teamMembers: []
     },
     { 
       id: 'timeline', 
-      title: 'Timeline & Deliverables', 
-      prompt: 'Provide a timeline and key deliverables for the project.',
+      title: 'Management & Timeline', 
+      prompt: 'How will you manage the project and stay on schedule? Include milestones, deliverables with dates, and how you will communicate progress.',
       charLimit: 800,
       answer: '',
-      status: 'pending'
+      status: 'pending',
+      weight: 5,
+      tip: 'Show you have a realistic plan with clear milestones.',
+      type: 'text'
     },
     { 
       id: 'budget', 
-      title: 'Budget & Cost Breakdown', 
-      prompt: 'Provide a budget breakdown including personnel, supplies, travel, indirect costs, and total project cost.',
+      title: 'Budget & Cost', 
+      prompt: 'Budget will auto-calculate from your team. Add other costs below.',
       charLimit: 1500,
       answer: '',
-      status: 'pending'
+      status: 'pending',
+      weight: 5,
+      tip: 'Personnel is usually 60-70% of total budget.',
+      type: 'budget',
+      budgetItems: [],
+      otherCosts: []
     }
   ]
+
+  // Compliance checklist items
+  const [complianceItems, setComplianceItems] = useState([
+    { id: 'insurance_liability', label: 'General Liability Insurance', required: true, have: null },
+    { id: 'insurance_workers', label: 'Workers Compensation Insurance', required: true, have: null },
+    { id: 'insurance_professional', label: 'Professional Liability Insurance', required: false, have: null },
+    { id: 'cert_business', label: 'Business License', required: true, have: null },
+    { id: 'cert_minority', label: 'Minority/Women-Owned Certification', required: false, have: null },
+    { id: 'cert_small', label: 'Small Business Certification', required: false, have: null },
+    { id: 'w9', label: 'W-9 Form', required: true, have: null },
+    { id: 'sam', label: 'SAM.gov Registration', required: false, have: null }
+  ])
+
+  // Auto-save state
+  const [lastSaved, setLastSaved] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Initialize sections from RFP questions or use defaults
   const initializeSections = () => {
@@ -413,6 +470,215 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     setSections(prev => prev.map((s, i) => 
       i === sectionIndex ? { ...s, answer: newAnswer, status: 'complete' } : s
     ))
+    triggerAutoSave()
+  }
+
+  // ==========================================
+  // TEAM MEMBER FUNCTIONS
+  // ==========================================
+  const addTeamMember = (sectionIndex) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const newMember = {
+          id: Date.now(),
+          role: '',
+          name: 'TBD',
+          hoursPerWeek: 40,
+          hourlyRate: 50,
+          description: ''
+        }
+        return { ...s, teamMembers: [...(s.teamMembers || []), newMember] }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  const updateTeamMember = (sectionIndex, memberId, field, value) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const updated = (s.teamMembers || []).map(m => 
+          m.id === memberId ? { ...m, [field]: value } : m
+        )
+        return { ...s, teamMembers: updated, status: 'complete' }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  const removeTeamMember = (sectionIndex, memberId) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        return { ...s, teamMembers: (s.teamMembers || []).filter(m => m.id !== memberId) }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  // Generate team narrative from members
+  const generateTeamNarrative = (sectionIndex) => {
+    const section = sections[sectionIndex]
+    const members = section.teamMembers || []
+    if (members.length === 0) {
+      alert('Add at least one team member first')
+      return
+    }
+    
+    const narrative = members.map(m => 
+      `${m.role}${m.name && m.name !== 'TBD' ? ` (${m.name})` : ''}: ${m.description || 'Key team member'} - ${m.hoursPerWeek} hours/week`
+    ).join('\n\n')
+    
+    updateAnswer(sectionIndex, narrative)
+  }
+
+  // ==========================================
+  // REFERENCE FUNCTIONS
+  // ==========================================
+  const addReference = (sectionIndex) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const newRef = {
+          id: Date.now(),
+          company: '',
+          contactName: '',
+          contactPhone: '',
+          contactEmail: '',
+          contractValue: '',
+          dates: '',
+          description: ''
+        }
+        return { ...s, references: [...(s.references || []), newRef] }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  const updateReference = (sectionIndex, refId, field, value) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const updated = (s.references || []).map(r => 
+          r.id === refId ? { ...r, [field]: value } : r
+        )
+        return { ...s, references: updated, status: 'complete' }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  const removeReference = (sectionIndex, refId) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        return { ...s, references: (s.references || []).filter(r => r.id !== refId) }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  // ==========================================
+  // BUDGET FUNCTIONS
+  // ==========================================
+  const calculatePersonnelCost = () => {
+    const teamSection = sections.find(s => s.id === 'team')
+    if (!teamSection || !teamSection.teamMembers) return 0
+    
+    // Calculate annual cost: hours/week × rate × 52 weeks
+    return teamSection.teamMembers.reduce((total, m) => {
+      return total + (m.hoursPerWeek * m.hourlyRate * 52)
+    }, 0)
+  }
+
+  const addOtherCost = (sectionIndex) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const newCost = {
+          id: Date.now(),
+          category: '',
+          description: '',
+          amount: 0
+        }
+        return { ...s, otherCosts: [...(s.otherCosts || []), newCost] }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  const updateOtherCost = (sectionIndex, costId, field, value) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        const updated = (s.otherCosts || []).map(c => 
+          c.id === costId ? { ...c, [field]: value } : c
+        )
+        return { ...s, otherCosts: updated, status: 'complete' }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  const removeOtherCost = (sectionIndex, costId) => {
+    setSections(prev => prev.map((s, i) => {
+      if (i === sectionIndex) {
+        return { ...s, otherCosts: (s.otherCosts || []).filter(c => c.id !== costId) }
+      }
+      return s
+    }))
+    triggerAutoSave()
+  }
+
+  const calculateTotalBudget = () => {
+    const budgetSection = sections.find(s => s.id === 'budget')
+    const personnel = calculatePersonnelCost()
+    const otherCosts = (budgetSection?.otherCosts || []).reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0)
+    const subtotal = personnel + otherCosts
+    const indirect = subtotal * 0.15 // 15% indirect
+    return { personnel, otherCosts, indirect, total: subtotal + indirect }
+  }
+
+  // ==========================================
+  // AUTO-SAVE FUNCTIONS
+  // ==========================================
+  const triggerAutoSave = () => {
+    // Debounced auto-save
+    if (window.autoSaveTimeout) clearTimeout(window.autoSaveTimeout)
+    window.autoSaveTimeout = setTimeout(() => {
+      saveProgress()
+    }, 2000) // Save 2 seconds after last change
+  }
+
+  const saveProgress = async () => {
+    if (!selectedSubmission || !session?.user?.id) return
+    
+    setIsSaving(true)
+    try {
+      // Save sections progress to database
+      await supabase
+        .from('submissions')
+        .update({ 
+          draft_sections: JSON.stringify(sections),
+          draft_strategy: JSON.stringify(generatedStrategy),
+          draft_compliance: JSON.stringify(complianceItems),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedSubmission.id)
+      
+      setLastSaved(new Date())
+    } catch (err) {
+      console.error('Auto-save error:', err)
+    }
+    setIsSaving(false)
+  }
+
+  // Calculate % complete
+  const getCompletionPercent = () => {
+    if (sections.length === 0) return 0
+    const completed = sections.filter(s => s.status === 'complete').length
+    return Math.round((completed / sections.length) * 100)
   }
 
   // ==========================================
@@ -878,12 +1144,17 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             <span>5. Submit</span>
           </div>
 
-          {/* Title */}
-          <h2 style={{ color: colors.text, fontSize: '20px', marginBottom: '5px' }}>
-            {selectedSubmission.title}
-          </h2>
+          {/* Title and Auto-save */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
+            <h2 style={{ color: colors.text, fontSize: '20px', margin: 0 }}>
+              {selectedSubmission.title}
+            </h2>
+            <span style={{ color: colors.muted, fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              {isSaving ? '💾 Saving...' : lastSaved ? `✓ Saved ${lastSaved.toLocaleTimeString()}` : ''}
+            </span>
+          </div>
           <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '30px' }}>
-            {completedCount} of {sections.length} sections complete
+            {completedCount} of {sections.length} sections complete ({getCompletionPercent()}%)
           </p>
 
           {/* Section Navigation */}
@@ -926,28 +1197,584 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               border: `1px solid ${colors.border}`,
               marginBottom: '20px'
             }}>
-              {/* Section Header */}
+              {/* Section Header with Weight */}
               <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ color: colors.text, fontSize: '18px', margin: '0 0 8px 0' }}>
-                  {currentSection.title}
-                </h3>
-                <p style={{ color: colors.muted, fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <h3 style={{ color: colors.text, fontSize: '18px', margin: 0 }}>
+                    {currentSection.title}
+                  </h3>
+                  {currentSection.weight && (
+                    <span style={{ 
+                      backgroundColor: `${colors.gold}20`, 
+                      color: colors.gold, 
+                      padding: '4px 10px', 
+                      borderRadius: '12px', 
+                      fontSize: '12px',
+                      fontWeight: '600'
+                    }}>
+                      {currentSection.weight}% of score
+                    </span>
+                  )}
+                </div>
+                <p style={{ color: colors.muted, fontSize: '13px', margin: '0 0 10px 0', lineHeight: '1.5' }}>
                   {currentSection.prompt}
                 </p>
+                {currentSection.tip && (
+                  <p style={{ 
+                    color: colors.primary, 
+                    fontSize: '12px', 
+                    margin: 0, 
+                    padding: '8px 12px',
+                    backgroundColor: `${colors.primary}10`,
+                    borderRadius: '6px',
+                    borderLeft: `3px solid ${colors.primary}`
+                  }}>
+                    💡 {currentSection.tip}
+                  </p>
+                )}
               </div>
 
-              {/* Answer Area */}
+              {/* Answer Area - Conditional by type */}
               {currentSection.status === 'generating' ? (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
                   <p style={{ color: colors.gold, fontSize: '16px' }}>🤖 RCA is writing...</p>
                   <p style={{ color: colors.muted, fontSize: '13px' }}>Crafting your response based on the strategy</p>
                 </div>
+              ) : currentSection.type === 'team' ? (
+                /* TEAM SECTION - Structured Input */
+                <div>
+                  {/* Team Members List */}
+                  {(currentSection.teamMembers || []).map((member, idx) => (
+                    <div key={member.id} style={{
+                      backgroundColor: '#1a1a1a',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      marginBottom: '15px',
+                      border: `1px solid ${colors.border}`
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                        <span style={{ color: colors.muted, fontSize: '12px' }}>Team Member {idx + 1}</span>
+                        <button 
+                          onClick={() => removeTeamMember(currentSectionIndex, member.id)}
+                          style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Role/Title *</label>
+                          <input
+                            value={member.role}
+                            onChange={(e) => updateTeamMember(currentSectionIndex, member.id, 'role', e.target.value)}
+                            placeholder="e.g., Project Manager"
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Name (or TBD)</label>
+                          <input
+                            value={member.name}
+                            onChange={(e) => updateTeamMember(currentSectionIndex, member.id, 'name', e.target.value)}
+                            placeholder="John Smith or TBD"
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Hours/Week</label>
+                          <input
+                            type="number"
+                            value={member.hoursPerWeek}
+                            onChange={(e) => updateTeamMember(currentSectionIndex, member.id, 'hoursPerWeek', parseInt(e.target.value) || 0)}
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Hourly Rate ($)</label>
+                          <input
+                            type="number"
+                            value={member.hourlyRate}
+                            onChange={(e) => updateTeamMember(currentSectionIndex, member.id, 'hourlyRate', parseInt(e.target.value) || 0)}
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Role Description</label>
+                        <input
+                          value={member.description}
+                          onChange={(e) => updateTeamMember(currentSectionIndex, member.id, 'description', e.target.value)}
+                          placeholder="Brief description of responsibilities"
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '6px',
+                            color: colors.text,
+                            fontSize: '14px'
+                          }}
+                        />
+                      </div>
+                      
+                      <p style={{ color: colors.gold, fontSize: '12px', margin: '10px 0 0 0' }}>
+                        Annual cost: ${(member.hoursPerWeek * member.hourlyRate * 52).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                  
+                  <button
+                    onClick={() => addTeamMember(currentSectionIndex)}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      backgroundColor: 'transparent',
+                      border: `2px dashed ${colors.border}`,
+                      borderRadius: '10px',
+                      color: colors.muted,
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      marginBottom: '20px'
+                    }}
+                  >
+                    + Add Team Member
+                  </button>
+                  
+                  {(currentSection.teamMembers || []).length > 0 && (
+                    <button
+                      onClick={() => generateTeamNarrative(currentSectionIndex)}
+                      style={{
+                        width: '100%',
+                        padding: '14px',
+                        backgroundColor: colors.gold,
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: colors.background,
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🤖 Generate Team Narrative
+                    </button>
+                  )}
+                  
+                  {currentSection.answer && (
+                    <div style={{ marginTop: '20px' }}>
+                      <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '8px' }}>Generated Narrative (editable)</label>
+                      <textarea
+                        value={currentSection.answer}
+                        onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#1a1a1a',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '8px',
+                          padding: '15px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          lineHeight: '1.7',
+                          resize: 'vertical',
+                          minHeight: '150px'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+              ) : currentSection.type === 'references' ? (
+                /* REFERENCES SECTION */
+                <div>
+                  {(currentSection.references || []).map((ref, idx) => (
+                    <div key={ref.id} style={{
+                      backgroundColor: '#1a1a1a',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      marginBottom: '15px',
+                      border: `1px solid ${colors.border}`
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                        <span style={{ color: colors.muted, fontSize: '12px' }}>Reference {idx + 1}</span>
+                        <button 
+                          onClick={() => removeReference(currentSectionIndex, ref.id)}
+                          style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Company/Organization *</label>
+                          <input
+                            value={ref.company}
+                            onChange={(e) => updateReference(currentSectionIndex, ref.id, 'company', e.target.value)}
+                            placeholder="e.g., LA County DCFS"
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Contract Value</label>
+                          <input
+                            value={ref.contractValue}
+                            onChange={(e) => updateReference(currentSectionIndex, ref.id, 'contractValue', e.target.value)}
+                            placeholder="e.g., $250,000"
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Contact Name *</label>
+                          <input
+                            value={ref.contactName}
+                            onChange={(e) => updateReference(currentSectionIndex, ref.id, 'contactName', e.target.value)}
+                            placeholder="e.g., Jane Smith"
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Phone</label>
+                          <input
+                            value={ref.contactPhone}
+                            onChange={(e) => updateReference(currentSectionIndex, ref.id, 'contactPhone', e.target.value)}
+                            placeholder="(555) 123-4567"
+                            style={{
+                              width: '100%',
+                              padding: '10px',
+                              backgroundColor: colors.background,
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: '6px',
+                              color: colors.text,
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div style={{ marginBottom: '12px' }}>
+                        <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Email</label>
+                        <input
+                          value={ref.contactEmail}
+                          onChange={(e) => updateReference(currentSectionIndex, ref.id, 'contactEmail', e.target.value)}
+                          placeholder="jane.smith@agency.gov"
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '6px',
+                            color: colors.text,
+                            fontSize: '14px'
+                          }}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '4px' }}>Brief Description of Work</label>
+                        <input
+                          value={ref.description}
+                          onChange={(e) => updateReference(currentSectionIndex, ref.id, 'description', e.target.value)}
+                          placeholder="e.g., Mental health services for foster youth"
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '6px',
+                            color: colors.text,
+                            fontSize: '14px'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button
+                    onClick={() => addReference(currentSectionIndex)}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      backgroundColor: 'transparent',
+                      border: `2px dashed ${colors.border}`,
+                      borderRadius: '10px',
+                      color: colors.muted,
+                      fontSize: '14px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + Add Reference
+                  </button>
+                  
+                  <p style={{ color: colors.muted, fontSize: '12px', marginTop: '15px', textAlign: 'center' }}>
+                    ⚠️ Contact your references BEFORE submitting to get their permission
+                  </p>
+                </div>
+
+              ) : currentSection.type === 'budget' ? (
+                /* BUDGET SECTION - Auto-calculated */
+                <div>
+                  {/* Budget Ceiling */}
+                  {selectedSubmission.estimated_value && (
+                    <div style={{
+                      backgroundColor: `${colors.gold}15`,
+                      padding: '15px',
+                      borderRadius: '10px',
+                      marginBottom: '20px',
+                      border: `1px solid ${colors.gold}30`
+                    }}>
+                      <p style={{ color: colors.gold, fontSize: '14px', margin: 0 }}>
+                        📊 Funding Ceiling: <strong>{selectedSubmission.estimated_value}</strong>
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Personnel Costs - Auto from Team */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>
+                      👥 Personnel (from Team section)
+                    </h4>
+                    {(() => {
+                      const teamSection = sections.find(s => s.id === 'team')
+                      const members = teamSection?.teamMembers || []
+                      if (members.length === 0) {
+                        return <p style={{ color: colors.muted, fontSize: '13px' }}>Add team members in the "Key Personnel" section first</p>
+                      }
+                      return (
+                        <>
+                          {members.map(m => (
+                            <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <span style={{ color: colors.text, fontSize: '13px' }}>
+                                {m.role || 'Unnamed'} {m.name && m.name !== 'TBD' ? `(${m.name})` : ''} - {m.hoursPerWeek}hrs/wk × ${m.hourlyRate}/hr
+                              </span>
+                              <span style={{ color: colors.gold, fontSize: '13px' }}>
+                                ${(m.hoursPerWeek * m.hourlyRate * 52).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                          <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: colors.text, fontSize: '14px', fontWeight: '600' }}>Personnel Subtotal</span>
+                            <span style={{ color: colors.gold, fontSize: '14px', fontWeight: '600' }}>${calculatePersonnelCost().toLocaleString()}</span>
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+                  
+                  {/* Other Costs */}
+                  <div style={{
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '15px',
+                    border: `1px solid ${colors.border}`
+                  }}>
+                    <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>
+                      📦 Other Direct Costs
+                    </h4>
+                    
+                    {(currentSection.otherCosts || []).map((cost, idx) => (
+                      <div key={cost.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
+                        <input
+                          value={cost.category}
+                          onChange={(e) => updateOtherCost(currentSectionIndex, cost.id, 'category', e.target.value)}
+                          placeholder="e.g., Supplies, Travel, Equipment"
+                          style={{
+                            padding: '10px',
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '6px',
+                            color: colors.text,
+                            fontSize: '14px'
+                          }}
+                        />
+                        <input
+                          type="number"
+                          value={cost.amount}
+                          onChange={(e) => updateOtherCost(currentSectionIndex, cost.id, 'amount', e.target.value)}
+                          placeholder="$0"
+                          style={{
+                            padding: '10px',
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '6px',
+                            color: colors.text,
+                            fontSize: '14px'
+                          }}
+                        />
+                        <button 
+                          onClick={() => removeOtherCost(currentSectionIndex, cost.id)}
+                          style={{ background: 'none', border: 'none', color: colors.danger, cursor: 'pointer', fontSize: '16px' }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    
+                    <button
+                      onClick={() => addOtherCost(currentSectionIndex)}
+                      style={{
+                        padding: '10px',
+                        backgroundColor: 'transparent',
+                        border: `1px dashed ${colors.border}`,
+                        borderRadius: '6px',
+                        color: colors.muted,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      + Add Cost Item
+                    </button>
+                  </div>
+                  
+                  {/* Budget Summary */}
+                  {(() => {
+                    const budget = calculateTotalBudget()
+                    return (
+                      <div style={{
+                        backgroundColor: `${colors.primary}15`,
+                        borderRadius: '12px',
+                        padding: '20px',
+                        border: `1px solid ${colors.primary}30`
+                      }}>
+                        <h4 style={{ color: colors.text, fontSize: '14px', margin: '0 0 15px 0' }}>💰 Budget Summary</h4>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ color: colors.muted, fontSize: '13px' }}>Personnel</span>
+                          <span style={{ color: colors.text, fontSize: '13px' }}>${budget.personnel.toLocaleString()}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ color: colors.muted, fontSize: '13px' }}>Other Direct Costs</span>
+                          <span style={{ color: colors.text, fontSize: '13px' }}>${budget.otherCosts.toLocaleString()}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ color: colors.muted, fontSize: '13px' }}>Indirect Costs (15%)</span>
+                          <span style={{ color: colors.text, fontSize: '13px' }}>${Math.round(budget.indirect).toLocaleString()}</span>
+                        </div>
+                        <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: '10px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: colors.primary, fontSize: '16px', fontWeight: '700' }}>TOTAL</span>
+                          <span style={{ color: colors.primary, fontSize: '16px', fontWeight: '700' }}>${Math.round(budget.total).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                  
+                  <button
+                    onClick={() => generateAnswer(currentSectionIndex)}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      backgroundColor: colors.gold,
+                      border: 'none',
+                      borderRadius: '10px',
+                      color: colors.background,
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      marginTop: '20px'
+                    }}
+                  >
+                    🤖 Generate Budget Narrative
+                  </button>
+                  
+                  {currentSection.answer && (
+                    <div style={{ marginTop: '20px' }}>
+                      <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '8px' }}>Generated Narrative (editable)</label>
+                      <textarea
+                        value={currentSection.answer}
+                        onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#1a1a1a',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '8px',
+                          padding: '15px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          lineHeight: '1.7',
+                          resize: 'vertical',
+                          minHeight: '150px'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
               ) : (
+                /* DEFAULT TEXT SECTION */
                 <>
                   <textarea
                     value={currentSection.answer}
                     onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
-                    placeholder="Click 'Generate with RCA' or write your response here..."
+                    placeholder="Type your rough ideas here... don't worry about grammar or spelling. RCA will clean it up when you click 'Polish My Draft'"
                     style={{
                       width: '100%',
                       backgroundColor: '#1a1a1a',
@@ -983,79 +1810,63 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                     )}
                   </div>
 
-                  {/* Action Options */}
+                  {/* Action Options - Always show both */}
                   <div style={{ 
                     backgroundColor: colors.card, 
                     borderRadius: '12px', 
                     padding: '20px',
                     border: `1px solid ${colors.border}`
                   }}>
-                    {!currentSection.answer ? (
-                      <>
-                        {/* No answer yet - show generate option */}
-                        <button
-                          onClick={() => generateAnswer(currentSectionIndex)}
-                          style={{
-                            width: '100%',
-                            padding: '14px',
-                            backgroundColor: colors.gold,
-                            border: 'none',
-                            borderRadius: '10px',
-                            color: colors.background,
-                            fontSize: '15px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            marginBottom: '12px'
-                          }}
-                        >
-                          🤖 Generate with RCA
-                        </button>
-                        <p style={{ color: colors.muted, fontSize: '12px', textAlign: 'center', margin: 0 }}>
-                          Or type your own answer above, then click "Polish My Draft"
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        {/* Has answer - show polish and regenerate options */}
-                        <div style={{ display: 'grid', gap: '10px' }}>
-                          <button
-                            onClick={() => polishAnswer(currentSectionIndex)}
-                            style={{
-                              width: '100%',
-                              padding: '14px',
-                              backgroundColor: colors.gold,
-                              border: 'none',
-                              borderRadius: '10px',
-                              color: colors.background,
-                              fontSize: '14px',
-                              fontWeight: '600',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ✨ Polish My Draft
-                          </button>
-                          <p style={{ color: colors.muted, fontSize: '11px', textAlign: 'center', margin: '0 0 5px 0' }}>
-                            Cleans up grammar, spelling, and makes it professional
-                          </p>
-                          
-                          <button
-                            onClick={() => generateAnswer(currentSectionIndex)}
-                            style={{
-                              width: '100%',
-                              padding: '12px',
-                              backgroundColor: 'transparent',
-                              border: `1px solid ${colors.border}`,
-                              borderRadius: '10px',
-                              color: colors.muted,
-                              fontSize: '13px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            🔄 Regenerate from scratch
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {/* Generate from scratch */}
+                      <button
+                        onClick={() => generateAnswer(currentSectionIndex)}
+                        style={{
+                          width: '100%',
+                          padding: '14px',
+                          backgroundColor: !currentSection.answer ? colors.gold : 'transparent',
+                          border: !currentSection.answer ? 'none' : `1px solid ${colors.border}`,
+                          borderRadius: '10px',
+                          color: !currentSection.answer ? colors.background : colors.muted,
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🤖 {currentSection.answer ? 'Regenerate from scratch' : 'Generate with RCA'}
+                      </button>
+                      </button>
+                      
+                      {/* Divider with OR */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
+                        <span style={{ color: colors.muted, fontSize: '12px' }}>OR</span>
+                        <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
+                      </div>
+                      
+                      {/* Polish option */}
+                      <button
+                        onClick={() => polishAnswer(currentSectionIndex)}
+                        disabled={!currentSection.answer || currentSection.answer.length < 20}
+                        style={{
+                          width: '100%',
+                          padding: '14px',
+                          backgroundColor: currentSection.answer ? colors.gold : colors.card,
+                          border: 'none',
+                          borderRadius: '10px',
+                          color: currentSection.answer ? colors.background : colors.muted,
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          cursor: currentSection.answer ? 'pointer' : 'not-allowed',
+                          opacity: currentSection.answer ? 1 : 0.5
+                        }}
+                      >
+                        ✨ Polish My Draft
+                      </button>
+                      <p style={{ color: colors.muted, fontSize: '11px', textAlign: 'center', margin: 0, lineHeight: '1.5' }}>
+                        Type your rough ideas above → RCA will clean up grammar, spelling, and make it professional
+                      </p>
+                    </div>
                   </div>
                 </>
               )}
@@ -1087,17 +1898,19 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 onClick={() => setCurrentSectionIndex(currentSectionIndex + 1)}
                 style={{
                   flex: 1,
-                  padding: '14px',
+                  padding: '16px',
                   backgroundColor: currentSection?.answer ? colors.primary : colors.card,
-                  border: 'none',
+                  border: currentSection?.answer ? 'none' : `1px solid ${colors.border}`,
                   borderRadius: '10px',
                   color: currentSection?.answer ? colors.background : colors.muted,
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
                 }}
               >
-                Next Section →
+                Next →
               </button>
             ) : (
               <button
@@ -1105,17 +1918,19 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 disabled={completedCount < sections.length}
                 style={{
                   flex: 1,
-                  padding: '14px',
+                  padding: '16px',
                   backgroundColor: completedCount === sections.length ? colors.gold : colors.card,
                   border: 'none',
                   borderRadius: '10px',
                   color: completedCount === sections.length ? colors.background : colors.muted,
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: completedCount === sections.length ? 'pointer' : 'not-allowed'
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  cursor: completedCount === sections.length ? 'pointer' : 'not-allowed',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
                 }}
               >
-                {completedCount === sections.length ? 'Continue to Review →' : `Complete all sections (${completedCount}/${sections.length})`}
+                {completedCount === sections.length ? 'REVIEW →' : `Complete all (${completedCount}/${sections.length})`}
               </button>
             )}
           </div>
@@ -1126,9 +1941,48 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   }
 
   // ==========================================
-  // PHASE 4: REVIEW SCREEN (Placeholder)
+  // PHASE 4: REVIEW SCREEN with Compliance Checklist
   // ==========================================
   if (selectedSubmission && currentPhase === 4) {
+    const allComplete = sections.filter(s => s.status === 'complete').length === sections.length
+    const totalChars = sections.reduce((sum, s) => sum + (s.answer?.length || 0), 0)
+    
+    // Compliance checks
+    const complianceChecks = [
+      { 
+        label: 'All sections completed', 
+        passed: allComplete,
+        detail: `${sections.filter(s => s.status === 'complete').length}/${sections.length} sections`
+      },
+      { 
+        label: 'No sections over character limit', 
+        passed: !sections.some(s => s.answer?.length > s.charLimit),
+        detail: sections.find(s => s.answer?.length > s.charLimit)?.title || 'All within limits'
+      },
+      { 
+        label: 'Understanding of Need addressed', 
+        passed: sections.find(s => s.id === 'understanding')?.answer?.length > 100,
+        detail: 'Shows you read the RFP'
+      },
+      { 
+        label: 'Technical Approach is detailed', 
+        passed: sections.find(s => s.id === 'narrative')?.answer?.length > 500,
+        detail: '35% of evaluation score'
+      },
+      { 
+        label: 'Past Performance has specifics', 
+        passed: sections.find(s => s.id === 'qualifications')?.answer?.length > 300,
+        detail: 'Include numbers and outcomes'
+      },
+      { 
+        label: 'Budget breakdown included', 
+        passed: sections.find(s => s.id === 'budget')?.answer?.length > 200,
+        detail: 'Cost justification'
+      }
+    ]
+    
+    const passedChecks = complianceChecks.filter(c => c.passed).length
+
     return (
       <div style={{ 
         minHeight: '100vh', 
@@ -1146,7 +2000,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           </p>
 
           {/* Progress Bar */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '30px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
             {[1, 2, 3, 4, 5].map(phase => (
               <div 
                 key={phase}
@@ -1159,79 +2013,150 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               />
             ))}
           </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px', fontSize: '11px', color: colors.muted }}>
+            <span>Overview</span>
+            <span>Strategy</span>
+            <span>Answers</span>
+            <span style={{ color: colors.primary, fontWeight: '600' }}>Review</span>
+            <span>Submit</span>
+          </div>
 
+          {/* Compliance Checklist */}
           <div style={{
             backgroundColor: colors.card,
             borderRadius: '16px',
-            padding: '60px 30px',
-            textAlign: 'center',
-            border: `1px solid ${colors.border}`
+            padding: '25px',
+            border: `1px solid ${colors.border}`,
+            marginBottom: '20px'
           }}>
-            <span style={{ fontSize: '48px', marginBottom: '20px', display: 'block' }}>📋</span>
-            <h2 style={{ color: colors.text, fontSize: '24px', marginBottom: '15px' }}>
-              Review Your Response
-            </h2>
-            <p style={{ color: colors.muted, fontSize: '14px', marginBottom: '30px', lineHeight: '1.6' }}>
-              You've completed {sections.filter(s => s.status === 'complete').length} sections.<br/>
-              Review & Download coming soon.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ color: colors.text, fontSize: '18px', margin: 0 }}>
+                ✅ Compliance Checklist
+              </h3>
+              <span style={{ 
+                color: passedChecks === complianceChecks.length ? colors.primary : colors.gold,
+                fontSize: '14px',
+                fontWeight: '600'
+              }}>
+                {passedChecks}/{complianceChecks.length} passed
+              </span>
+            </div>
             
-            {/* Show sections summary */}
-            <div style={{ textAlign: 'left', maxWidth: '500px', margin: '0 auto' }}>
-              {sections.map((section, i) => (
-                <div 
-                  key={section.id}
-                  style={{
-                    padding: '12px',
-                    borderBottom: i < sections.length - 1 ? `1px solid ${colors.border}` : 'none',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                >
+            {complianceChecks.map((check, i) => (
+              <div 
+                key={i}
+                style={{
+                  padding: '12px 0',
+                  borderBottom: i < complianceChecks.length - 1 ? `1px solid ${colors.border}` : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}
+              >
+                <span style={{ 
+                  fontSize: '18px',
+                  color: check.passed ? colors.primary : colors.danger 
+                }}>
+                  {check.passed ? '✓' : '✗'}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: colors.text, fontSize: '14px', margin: 0 }}>{check.label}</p>
+                  <p style={{ color: colors.muted, fontSize: '11px', margin: '2px 0 0 0' }}>{check.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Sections Summary */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '25px',
+            border: `1px solid ${colors.border}`,
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ color: colors.text, fontSize: '18px', margin: '0 0 20px 0' }}>
+              📄 Response Summary
+            </h3>
+            
+            {sections.map((section, i) => (
+              <div 
+                key={section.id}
+                style={{
+                  padding: '12px 0',
+                  borderBottom: i < sections.length - 1 ? `1px solid ${colors.border}` : 'none',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <div>
                   <span style={{ color: colors.text, fontSize: '14px' }}>{section.title}</span>
-                  <span style={{ color: section.status === 'complete' ? colors.primary : colors.muted, fontSize: '12px' }}>
-                    {section.status === 'complete' ? `✓ ${section.answer.length} chars` : 'Pending'}
+                  {section.weight && (
+                    <span style={{ color: colors.muted, fontSize: '11px', marginLeft: '8px' }}>
+                      ({section.weight}%)
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ 
+                    color: section.answer?.length > section.charLimit ? colors.danger : colors.muted, 
+                    fontSize: '12px' 
+                  }}>
+                    {section.answer?.length || 0}/{section.charLimit}
+                  </span>
+                  <span style={{ 
+                    color: section.status === 'complete' ? colors.primary : colors.muted,
+                    fontSize: '16px'
+                  }}>
+                    {section.status === 'complete' ? '✓' : '○'}
                   </span>
                 </div>
-              ))}
+              </div>
+            ))}
+            
+            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: `1px solid ${colors.border}` }}>
+              <p style={{ color: colors.muted, fontSize: '13px', margin: 0 }}>
+                Total: <strong style={{ color: colors.text }}>{totalChars.toLocaleString()}</strong> characters across {sections.length} sections
+              </p>
             </div>
+          </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '12px', marginTop: '30px' }}>
-              <button
-                onClick={() => setCurrentPhase(3)}
-                style={{
-                  flex: 1,
-                  padding: '14px',
-                  backgroundColor: 'transparent',
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '10px',
-                  color: colors.muted,
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-              >
-                ← Edit Answers
-              </button>
-              <button
-                onClick={() => setCurrentPhase(5)}
-                disabled={sections.filter(s => s.status === 'complete').length < sections.length}
-                style={{
-                  flex: 1,
-                  padding: '14px',
-                  backgroundColor: sections.filter(s => s.status === 'complete').length === sections.length ? colors.gold : colors.card,
-                  border: 'none',
-                  borderRadius: '10px',
-                  color: sections.filter(s => s.status === 'complete').length === sections.length ? colors.background : colors.muted,
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: sections.filter(s => s.status === 'complete').length === sections.length ? 'pointer' : 'not-allowed'
-                }}
-              >
-                Continue to Submit →
-              </button>
-            </div>
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => setCurrentPhase(3)}
+              style={{
+                flex: 1,
+                padding: '16px',
+                backgroundColor: 'transparent',
+                border: `1px solid ${colors.border}`,
+                borderRadius: '10px',
+                color: colors.muted,
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              ← Edit Answers
+            </button>
+            <button
+              onClick={() => setCurrentPhase(5)}
+              disabled={!allComplete}
+              style={{
+                flex: 1,
+                padding: '16px',
+                backgroundColor: allComplete ? colors.gold : colors.card,
+                border: 'none',
+                borderRadius: '10px',
+                color: allComplete ? colors.background : colors.muted,
+                fontSize: '16px',
+                fontWeight: '700',
+                cursor: allComplete ? 'pointer' : 'not-allowed',
+                textTransform: 'uppercase'
+              }}
+            >
+              SUBMIT →
+            </button>
           </div>
 
         </div>
@@ -1419,17 +2344,61 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             backgroundColor: colors.card,
             borderRadius: '16px',
             padding: '25px',
-            border: `1px solid ${colors.border}`
+            border: `1px solid ${colors.border}`,
+            marginBottom: '20px'
           }}>
             <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '15px', textTransform: 'uppercase' }}>
               Next Steps
             </p>
-            <ol style={{ color: colors.text, fontSize: '14px', margin: 0, paddingLeft: '20px', lineHeight: '2' }}>
+            <ol style={{ color: colors.text, fontSize: '14px', margin: 0, paddingLeft: '20px', lineHeight: '2.2' }}>
               <li>Download your response document</li>
-              <li>Review and make any final edits</li>
+              <li>Review and make any final edits in Word</li>
               <li>Submit through the agency's portal</li>
               <li>Save to BUCKET for future similar opportunities</li>
             </ol>
+          </div>
+
+          {/* IMPORTANT: Required Documents Reminder */}
+          <div style={{
+            backgroundColor: '#FF980015',
+            borderRadius: '16px',
+            padding: '25px',
+            border: `1px solid #FF9800`,
+            marginBottom: '20px'
+          }}>
+            <p style={{ color: '#FF9800', fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>
+              ⚠️ Don't Forget: Required Documents
+            </p>
+            <p style={{ color: colors.text, fontSize: '13px', marginBottom: '15px', lineHeight: '1.6' }}>
+              Most contracts and grants require additional forms that must be downloaded, signed, and submitted with your response:
+            </p>
+            <ul style={{ color: colors.text, fontSize: '13px', margin: 0, paddingLeft: '20px', lineHeight: '2' }}>
+              <li>Signature pages & certifications</li>
+              <li>Insurance certificates</li>
+              <li>W-9 / Tax forms</li>
+              <li>Debarment certifications</li>
+              <li>Other agency-specific attachments</li>
+            </ul>
+            {selectedSubmission.source_url && (
+              <a 
+                href={selectedSubmission.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  marginTop: '15px',
+                  padding: '10px 20px',
+                  backgroundColor: '#FF9800',
+                  color: '#000',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontSize: '13px',
+                  fontWeight: '600'
+                }}
+              >
+                📎 Go to Agency Portal for Required Documents
+              </a>
+            )}
           </div>
 
           {/* Back to Dashboard */}
@@ -1442,7 +2411,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             }}
             style={{
               width: '100%',
-              marginTop: '25px',
+              marginTop: '10px',
               padding: '14px',
               backgroundColor: 'transparent',
               border: `1px solid ${colors.border}`,
