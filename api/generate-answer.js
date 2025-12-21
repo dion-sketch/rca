@@ -1,5 +1,6 @@
 // /api/generate-answer.js
 // Generates a response for a specific section based on strategy + BUCKET
+// CRITICAL: Only uses REAL data from BUCKET - NEVER makes up fake contracts/numbers
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -25,18 +26,18 @@ LOCATION: ${profile.city ? `${profile.city}, ${profile.state}` : 'Not specified'
 NAICS CODES: ${profile.naics_codes?.map(n => n.code || n).join(', ') || 'None listed'}
 CERTIFICATIONS: ${profile.certifications?.map(c => c.name || c).join(', ') || 'None listed'}
 SERVICES: ${profile.services?.join(', ') || profile.services_description || 'Not specified'}
-PAST PERFORMANCE: ${profile.past_performance || 'Not specified'}
+PAST PERFORMANCE (FROM BUCKET): ${profile.past_performance || 'No specific past performance listed in BUCKET'}
 MISSION: ${profile.mission_statement || 'Not specified'}
 
 TEAM MEMBERS IN BUCKET:
 ${profile.team_members?.length > 0 
   ? profile.team_members.map(m => `- ${m.role}: ${m.name || 'TBD'} (${m.hoursPerWeek}hrs/wk @ $${m.hourlyRate}/hr) - ${m.description || ''}`).join('\n')
-  : 'No team members saved yet'}
+  : 'No team members saved in BUCKET yet'}
 
 REFERENCES IN BUCKET:
 ${profile.references?.length > 0 
   ? profile.references.map(r => `- ${r.company}: ${r.contactName}, ${r.contractValue || ''} - ${r.description || ''}`).join('\n')
-  : 'No references saved yet'}
+  : 'No references saved in BUCKET yet'}
 ` : 'No company profile available.'
 
     // Build strategy context
@@ -66,26 +67,34 @@ OPPORTUNITY: ${opportunity.title}
 AGENCY: ${opportunity.agency || 'Not specified'}
 ${rfpContext}
 
-WINNING ANSWER FORMULA - Use this structure for EVERY response:
-1. DIRECT ANSWER (first 1-2 sentences) - Answer the question clearly and directly
-2. APPROACH (next 2-3 sentences) - How you will accomplish it / your methodology
-3. EXPERIENCE (next 2-3 sentences) - Proof you've done this before / qualifications
-4. OUTCOME (final 1-2 sentences) - Tie back to their goals / the benefit to the agency
+===========================================
+CRITICAL ANTI-HALLUCINATION RULES - YOU MUST FOLLOW:
+===========================================
+1. ONLY use information that is ACTUALLY in the BUCKET above
+2. NEVER make up specific contract names, dollar values, or dates
+3. NEVER invent statistics (percentages, numbers of clients served, etc.)
+4. If the BUCKET has no past performance data, write GENERALLY about capabilities - do NOT invent fake contracts
+5. If BUCKET says "No references saved" - do NOT create fake references
+6. When you don't have specific data, use phrases like:
+   - "Our team brings experience in..." (general)
+   - "We have successfully delivered..." (without fake specifics)
+   - "Our approach includes..." (methodology, not fake history)
+7. NEVER write things like "Through our $2.3M California contract..." if that's not in the BUCKET
+8. Honest answers win more than fabricated ones
 
-WRITING RULES - CRITICAL:
+WINNING ANSWER FORMULA - Use this structure:
+1. DIRECT ANSWER (first 1-2 sentences) - Answer the question clearly
+2. APPROACH (next 2-3 sentences) - How you will accomplish it
+3. EXPERIENCE (next 2-3 sentences) - ONLY what's actually in the BUCKET
+4. OUTCOME (final 1-2 sentences) - Tie back to their goals
+
+WRITING RULES:
 1. DO NOT start with the company name. Lead with VALUE.
-2. DO NOT focus on physical location/address - that's rarely what wins contracts
+2. DO NOT focus on physical location/address
 3. DO NOT use markdown formatting (no asterisks, no bold, no headers)
-4. FOCUS ON THE MISSION - what the agency needs accomplished and how you deliver it
-5. Follow the 4-part formula: Answer → Approach → Experience → Outcome
-6. Match their requirements to your capabilities and experience
-7. Stay within the character limit: ${charLimit || 1500} characters
-8. Use confident but professional tone
-9. Every sentence should add value - no fluff
-10. Output plain text only - no special formatting
-
-BAD EXAMPLE: "Located in Playa Del Rey, Rambo House is a company that will provide services..."
-GOOD EXAMPLE: "Trauma-informed mentorship services combining clinical expertise with evidence-based approaches will deliver measurable improvements in youth permanency outcomes. Our integrated model pairs licensed clinicians with trained mentors to provide wrap-around support. Over the past 5 years, this approach has achieved 85% positive outcomes across 200+ youth served. This directly aligns with the County's goal of reducing foster care re-entry rates."`
+4. FOCUS ON THE MISSION - what the agency needs and how you deliver it
+5. Stay within the character limit: ${charLimit || 1500} characters
+6. Output plain text only - no special formatting`
 
     // Determine section type
     const sectionType = section.type || 'text'
@@ -99,10 +108,15 @@ GOOD EXAMPLE: "Trauma-informed mentorship services combining clinical expertise 
     const isNarrative = sectionId === 'narrative' || sectionTitle.includes('technical') || sectionTitle.includes('approach')
     const isQualifications = sectionId === 'qualifications' || sectionTitle.includes('experience') || sectionTitle.includes('performance')
     
+    // Check what BUCKET data we actually have
+    const hasPastPerformance = profile?.past_performance && profile.past_performance.length > 20
+    const hasTeamMembers = profile?.team_members?.length > 0
+    const hasReferences = profile?.references?.length > 0
+    const hasServices = profile?.services?.length > 0 || profile?.services_description
+    
     let userPrompt
     
     if (isBudget) {
-      // Budget section - handled by UI, but generate narrative if called
       const budgetData = section.budgetData || {}
       userPrompt = `Create a budget justification narrative for this opportunity:
 
@@ -119,44 +133,55 @@ ${budgetData.total ? `BUDGET BREAKDOWN:
 - Other: $${budgetData.other?.toLocaleString() || 0}
 - Indirect: $${budgetData.indirect?.toLocaleString() || 0}
 - TOTAL: $${budgetData.total?.toLocaleString() || 0}
-` : 'Create a realistic budget breakdown.'}
+` : 'Create a realistic budget breakdown based on the opportunity.'}
 
-Write a professional budget justification explaining each cost category and why it's necessary for the project. No markdown formatting.`
+Write a professional budget justification. No markdown formatting.`
 
     } else if (isTeam) {
-      // Team/Personnel section
       const teamMembers = section.teamMembers || profile?.team_members || []
       userPrompt = `Write a Key Personnel section for this opportunity:
 
 OPPORTUNITY: ${opportunity.title}
 
-${teamMembers.length > 0 ? `TEAM MEMBERS:
-${teamMembers.map(m => `- ${m.role}: ${m.name || 'TBD'} - ${m.description || 'Key team member'} (${m.hoursPerWeek} hours/week)`).join('\n')}` 
-: 'Describe the key personnel who will work on this project based on what this opportunity needs.'}
+${teamMembers.length > 0 ? `ACTUAL TEAM MEMBERS FROM BUCKET:
+${teamMembers.map(m => `- ${m.role}: ${m.name || 'TBD'} - ${m.description || 'Key team member'} (${m.hoursPerWeek} hours/week)`).join('\n')}
 
-Write a compelling narrative about the team's qualifications and how they'll work together. Include roles, relevant experience, and why this team is qualified for THIS specific opportunity. Do not start with the company name. No markdown formatting.
+Write about THESE specific team members and their qualifications.` 
+: `No team members in BUCKET yet. Write GENERALLY about the types of roles needed for this project without making up specific names or fake credentials.`}
 
-CHARACTER LIMIT: ${charLimit || 1500}`
+REMEMBER: Only describe team members that are actually listed above. Do not invent credentials or experience not mentioned.
+
+CHARACTER LIMIT: ${charLimit || 1500}
+No markdown formatting.`
 
     } else if (isReferences) {
-      // References section
       const refs = section.references || profile?.references || []
       userPrompt = `Write a References/Past Performance section for this opportunity:
 
 OPPORTUNITY: ${opportunity.title}
 
-${refs.length > 0 ? `REFERENCES:
+${refs.length > 0 ? `ACTUAL REFERENCES FROM BUCKET:
 ${refs.map(r => `- ${r.company}: ${r.contactName} (${r.contactPhone || r.contactEmail || 'Contact info available'})
   Contract Value: ${r.contractValue || 'N/A'}
-  Work: ${r.description || 'Similar services'}`).join('\n\n')}`
-: 'Describe relevant past performance that demonstrates capability for this work.'}
+  Work: ${r.description || 'Similar services'}`).join('\n\n')}
 
-Write a professional narrative highlighting relevant past performance and references. Focus on outcomes and how the experience relates to THIS opportunity. No markdown formatting.
+Write about THESE specific references only.`
+: `No references saved in BUCKET yet. 
 
-CHARACTER LIMIT: ${charLimit || 1000}`
+IMPORTANT: Since there are no specific references, write about the TYPES of work the company does based on their services (${profile?.services_description || 'general consulting'}), but DO NOT make up:
+- Specific contract names
+- Dollar amounts
+- Client names
+- Dates
+- Statistics
+
+Instead, describe capabilities and approach in general terms.`}
+
+CHARACTER LIMIT: ${charLimit || 1000}
+No markdown formatting.`
 
     } else if (isUnderstanding) {
-      userPrompt = `Write an "Understanding of Need" section that shows we clearly understand what the agency needs.
+      userPrompt = `Write an "Understanding of Need" section that shows we understand what the agency needs.
 
 OPPORTUNITY: ${opportunity.title}
 DESCRIPTION: ${opportunity.description || 'Not provided'}
@@ -168,9 +193,10 @@ Structure:
 3. Identify key challenges they face (2-3 sentences)
 4. Briefly connect to how we're positioned to help (1 sentence)
 
-CHARACTER LIMIT: ${charLimit || 1000}
+This section is about understanding THEIR problem - not about our experience.
 
-Write in a way that shows we READ and UNDERSTOOD their RFP. Do not start with the company name. No markdown formatting.`
+CHARACTER LIMIT: ${charLimit || 1000}
+No markdown formatting.`
 
     } else if (isNarrative) {
       userPrompt = `Write the Technical Approach / Project Narrative section:
@@ -187,36 +213,51 @@ Write a detailed technical approach that includes:
 4. What makes your approach effective
 5. Quality control and performance measures
 
-Be specific about HOW you will do the work. Do not start with the company name. No markdown formatting.
+Focus on HOW you will do the work. You can reference the company's services: ${profile?.services_description || 'consulting and professional services'}
 
-CHARACTER LIMIT: ${charLimit || 2000}`
+REMEMBER: Do NOT make up specific past contract names, dollar values, or statistics. Describe the APPROACH, not fake history.
+
+CHARACTER LIMIT: ${charLimit || 2000}
+No markdown formatting.`
 
     } else if (isQualifications) {
       userPrompt = `Write the Past Performance / Qualifications section:
 
 OPPORTUNITY: ${opportunity.title}
 
-This section is about 20-30% of evaluation score.
+${hasPastPerformance ? `ACTUAL PAST PERFORMANCE FROM BUCKET:
+${profile.past_performance}
 
-Include:
-1. Relevant contracts/grants (names, values, dates)
-2. Measurable outcomes (percentages, numbers)
-3. How past experience relates to THIS opportunity
-4. Why your experience makes you the right choice
+Use THIS information to write the section.` : `
+LIMITED BUCKET DATA - The BUCKET does not contain specific past performance history.
 
-Use specific numbers and results. Do not start with the company name. No markdown formatting.
+COMPANY SERVICES: ${profile?.services_description || 'Professional services'}
+MISSION: ${profile?.mission_statement || 'Not specified'}
 
-CHARACTER LIMIT: ${charLimit || 1500}`
+IMPORTANT: Since there's no specific past performance data, write about:
+- The company's relevant CAPABILITIES and EXPERTISE
+- Their APPROACH to similar work
+- WHY they're qualified based on their mission and services
+
+DO NOT make up:
+- Specific contract names or dollar values
+- Fake statistics (percentages, numbers served)
+- Invented client names
+- Made-up dates
+
+Write honestly about what the company CAN do, not fabricated history.`}
+
+CHARACTER LIMIT: ${charLimit || 1500}
+No markdown formatting.`
 
     } else {
-      // Default text section
       userPrompt = `Write a response for this section:
 
 SECTION: ${section.title}
 QUESTION/PROMPT: ${section.prompt}
 CHARACTER LIMIT: ${charLimit || 1500}
 
-Write a direct, compelling response following the Winning Answer Formula. Start with the answer, not the company name. No markdown formatting.`
+Write a direct, compelling response. Use ONLY information from the BUCKET above - do NOT invent specific contracts, statistics, or credentials. No markdown formatting.`
     }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -228,14 +269,14 @@ Write a direct, compelling response following the Winning Answer Formula. Start 
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 2048,
+        max_tokens: 2000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }]
       })
     })
 
     if (!response.ok) {
-      const errorData = await response.json()
+      const errorData = await response.text()
       console.error('Anthropic API error:', errorData)
       return res.status(500).json({ error: 'Failed to generate answer' })
     }
@@ -247,30 +288,14 @@ Write a direct, compelling response following the Winning Answer Formula. Start 
     answer = answer
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
-      .replace(/\_\_/g, '')
-      .replace(/\_/g, '')
-      .replace(/\#\#\#/g, '')
-      .replace(/\#\#/g, '')
-      .replace(/\#/g, '')
+      .replace(/^#+\s/gm, '')
+      .replace(/^-\s/gm, '• ')
+      .trim()
 
-    // Trim to character limit if needed
-    if (answer.length > (charLimit || 1500)) {
-      const trimmed = answer.substring(0, charLimit || 1500)
-      const lastPeriod = trimmed.lastIndexOf('.')
-      if (lastPeriod > (charLimit * 0.7)) {
-        answer = trimmed.substring(0, lastPeriod + 1)
-      } else {
-        answer = trimmed + '...'
-      }
-    }
-
-    return res.status(200).json({ 
-      success: true,
-      answer: answer.trim()
-    })
+    return res.status(200).json({ answer })
 
   } catch (error) {
-    console.error('Answer generation error:', error)
+    console.error('Generate answer error:', error)
     return res.status(500).json({ error: 'Failed to generate answer' })
   }
 }
