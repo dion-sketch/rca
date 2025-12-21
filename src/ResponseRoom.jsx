@@ -328,16 +328,13 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
     }
   ]
 
-  // Compliance checklist items
+  // Common compliance items - not always required, depends on RFP
   const [complianceItems, setComplianceItems] = useState([
-    { id: 'insurance_liability', label: 'General Liability Insurance', required: true, have: null },
-    { id: 'insurance_workers', label: 'Workers Compensation Insurance', required: true, have: null },
-    { id: 'insurance_professional', label: 'Professional Liability Insurance', required: false, have: null },
-    { id: 'cert_business', label: 'Business License', required: true, have: null },
-    { id: 'cert_minority', label: 'Minority/Women-Owned Certification', required: false, have: null },
-    { id: 'cert_small', label: 'Small Business Certification', required: false, have: null },
-    { id: 'w9', label: 'W-9 Form', required: true, have: null },
-    { id: 'sam', label: 'SAM.gov Registration', required: false, have: null }
+    { id: 'insurance_liability', label: 'General Liability Insurance', common: true, have: null, note: 'Usually required for contracts over $100K' },
+    { id: 'insurance_workers', label: 'Workers Compensation Insurance', common: true, have: null, note: 'Required if you have employees' },
+    { id: 'w9', label: 'W-9 / Tax ID Form', common: true, have: null, note: 'Almost always required' },
+    { id: 'sam', label: 'SAM.gov Registration', common: false, have: null, note: 'Required for federal contracts/grants' },
+    { id: 'cert_business', label: 'Business License', common: true, have: null, note: 'Check your local requirements' }
   ])
 
   // Auto-save state
@@ -345,10 +342,13 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
   const [isSaving, setIsSaving] = useState(false)
 
   // Initialize sections from RFP questions or use defaults
+  // Pre-fill Team and References from BUCKET (profileData)
   const initializeSections = () => {
+    let sectionsToUse = [...defaultSections]
+    
     if (rfpContent?.questions && rfpContent.questions.length > 0) {
       // Use extracted RFP questions
-      const rfpSections = rfpContent.questions.map((q, i) => ({
+      sectionsToUse = rfpContent.questions.map((q, i) => ({
         id: `q${i}`,
         title: `Question ${i + 1}`,
         prompt: q,
@@ -356,11 +356,33 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
         answer: '',
         status: 'pending'
       }))
-      setSections(rfpSections)
-    } else {
-      // Use default sections
-      setSections(defaultSections)
     }
+    
+    // Pre-fill Team Members from BUCKET
+    const teamSectionIdx = sectionsToUse.findIndex(s => s.id === 'team')
+    if (teamSectionIdx >= 0 && profileData?.team_members?.length > 0) {
+      sectionsToUse[teamSectionIdx] = {
+        ...sectionsToUse[teamSectionIdx],
+        teamMembers: profileData.team_members.map(m => ({
+          ...m,
+          id: m.id || Date.now() + Math.random() // Ensure unique ID
+        }))
+      }
+    }
+    
+    // Pre-fill References from BUCKET
+    const refSectionIdx = sectionsToUse.findIndex(s => s.id === 'references')
+    if (refSectionIdx >= 0 && profileData?.references?.length > 0) {
+      sectionsToUse[refSectionIdx] = {
+        ...sectionsToUse[refSectionIdx],
+        references: profileData.references.map(r => ({
+          ...r,
+          id: r.id || Date.now() + Math.random() // Ensure unique ID
+        }))
+      }
+    }
+    
+    setSections(sectionsToUse)
     setCurrentSectionIndex(0)
   }
 
@@ -1367,6 +1389,24 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               ) : currentSection.type === 'team' ? (
                 /* TEAM SECTION - Structured Input */
                 <div>
+                  {/* Auto-fill notice */}
+                  {(currentSection.teamMembers || []).length > 0 && profileData?.team_members?.length > 0 && (
+                    <div style={{
+                      backgroundColor: `${colors.primary}10`,
+                      padding: '12px 15px',
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <span style={{ fontSize: '16px' }}>🪣</span>
+                      <span style={{ color: colors.primary, fontSize: '13px' }}>
+                        Pre-filled from your BUCKET. Edit or add more team members below.
+                      </span>
+                    </div>
+                  )}
+                  
                   {/* Team Members List */}
                   {(currentSection.teamMembers || []).map((member, idx) => (
                     <div key={member.id} style={{
@@ -1546,6 +1586,24 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
               ) : currentSection.type === 'references' ? (
                 /* REFERENCES SECTION */
                 <div>
+                  {/* Auto-fill notice */}
+                  {(currentSection.references || []).length > 0 && profileData?.references?.length > 0 && (
+                    <div style={{
+                      backgroundColor: `${colors.primary}10`,
+                      padding: '12px 15px',
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <span style={{ fontSize: '16px' }}>🪣</span>
+                      <span style={{ color: colors.primary, fontSize: '13px' }}>
+                        Pre-filled from your BUCKET. Edit or add more references below.
+                      </span>
+                    </div>
+                  )}
+                  
                   {(currentSection.references || []).map((ref, idx) => (
                     <div key={ref.id} style={{
                       backgroundColor: '#1a1a1a',
@@ -2558,6 +2616,56 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             </div>
           </div>
 
+          {/* Required Documents Reminder */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '25px',
+            border: `1px solid ${colors.border}`,
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ color: colors.text, fontSize: '18px', margin: '0 0 8px 0' }}>
+              📋 Check Your RFP Requirements
+            </h3>
+            <p style={{ color: colors.muted, fontSize: '13px', margin: '0 0 20px 0', lineHeight: '1.5' }}>
+              Every contract/grant has different requirements. Review your RFP for what documents they need.
+            </p>
+            
+            <div style={{ backgroundColor: colors.background, borderRadius: '10px', padding: '15px' }}>
+              <p style={{ color: colors.muted, fontSize: '12px', margin: '0 0 12px 0', textTransform: 'uppercase' }}>
+                Common Requirements (check your RFP)
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ color: colors.text, fontSize: '13px' }}>• W-9 / Tax ID Form</span>
+                <span style={{ color: colors.text, fontSize: '13px' }}>• Business License</span>
+                <span style={{ color: colors.text, fontSize: '13px' }}>• Insurance certificates (if required)</span>
+                <span style={{ color: colors.text, fontSize: '13px' }}>• SAM.gov registration (federal only)</span>
+                <span style={{ color: colors.text, fontSize: '13px' }}>• Certifications (DBE, MBE, etc.)</span>
+              </div>
+            </div>
+            
+            {selectedSubmission.source_url && (
+              <a 
+                href={selectedSubmission.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  marginTop: '15px',
+                  padding: '12px',
+                  backgroundColor: `${colors.gold}15`,
+                  borderRadius: '8px',
+                  color: colors.gold,
+                  fontSize: '13px',
+                  textDecoration: 'none',
+                  textAlign: 'center'
+                }}
+              >
+                📄 View Original RFP for Full Requirements →
+              </a>
+            )}
+          </div>
+
           {/* Action Buttons */}
           <div style={{ display: 'flex', gap: '12px' }}>
             <button
@@ -2622,13 +2730,63 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           }
         }
         
+        // Save team members to BUCKET for future use
+        const teamSection = sections.find(s => s.id === 'team')
+        if (teamSection?.teamMembers?.length > 0) {
+          const existingProfile = await supabase
+            .from('profiles')
+            .select('team_members')
+            .eq('user_id', session.user.id)
+            .single()
+          
+          const existingTeam = existingProfile.data?.team_members || []
+          const newMembers = teamSection.teamMembers.filter(m => 
+            !existingTeam.some(e => e.role === m.role && e.name === m.name)
+          )
+          
+          if (newMembers.length > 0) {
+            await supabase
+              .from('profiles')
+              .update({ 
+                team_members: [...existingTeam, ...newMembers],
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', session.user.id)
+          }
+        }
+        
+        // Save references to BUCKET for future use
+        const refSection = sections.find(s => s.id === 'references')
+        if (refSection?.references?.length > 0) {
+          const existingProfile = await supabase
+            .from('profiles')
+            .select('references')
+            .eq('user_id', session.user.id)
+            .single()
+          
+          const existingRefs = existingProfile.data?.references || []
+          const newRefs = refSection.references.filter(r => 
+            !existingRefs.some(e => e.company === r.company && e.contactName === r.contactName)
+          )
+          
+          if (newRefs.length > 0) {
+            await supabase
+              .from('profiles')
+              .update({ 
+                references: [...existingRefs, ...newRefs],
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', session.user.id)
+          }
+        }
+        
         // Update submission status
         await supabase
           .from('submissions')
           .update({ status: 'submitted' })
           .eq('id', selectedSubmission.id)
         
-        alert('Saved to BUCKET! Your answers can be reused for similar opportunities.')
+        alert('Saved to BUCKET! Your answers, team members, and references are saved for future opportunities.')
       } catch (err) {
         console.error('Save error:', err)
         alert('Error saving. Please try again.')
@@ -2975,49 +3133,7 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             </div>
           </div>
 
-          {/* Match Score Bar */}
-          <div style={{
-            backgroundColor: colors.card,
-            borderRadius: '16px',
-            padding: '25px',
-            border: `1px solid ${colors.border}`,
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <div>
-              <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '4px' }}>
-                Your BUCKET Match
-              </p>
-              <p style={{ 
-                color: colors.primary, 
-                fontSize: '42px', 
-                fontWeight: '700', 
-                margin: 0 
-              }}>
-                {currentScore}%
-              </p>
-            </div>
-            
-            <div style={{ color: colors.muted, fontSize: '28px' }}>→</div>
-            
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '4px' }}>
-                With RCA
-              </p>
-              <p style={{ 
-                color: colors.gold, 
-                fontSize: '42px', 
-                fontWeight: '700', 
-                margin: 0 
-              }}>
-                {potentialScore}%
-              </p>
-            </div>
-          </div>
-
-          {/* RFP INFO SECTION */}
+          {/* Your Match Score */}
           <div style={{
             backgroundColor: colors.card,
             borderRadius: '16px',
@@ -3025,39 +3141,75 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             border: `1px solid ${colors.border}`,
             marginBottom: '20px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-              <span style={{ fontSize: '24px' }}>📋</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <p style={{ color: colors.text, fontSize: '16px', fontWeight: '600', margin: 0 }}>
-                  What We Know
+                <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '4px' }}>
+                  Your BUCKET Match
                 </p>
-                <p style={{ color: colors.muted, fontSize: '12px', margin: 0 }}>
-                  From {selectedSubmission.source === 'grants_gov' ? 'Grants.gov' : 'the source listing'}
+                <p style={{ 
+                  color: currentScore >= 70 ? colors.primary : currentScore >= 50 ? colors.gold : colors.muted, 
+                  fontSize: '42px', 
+                  fontWeight: '700', 
+                  margin: 0 
+                }}>
+                  {currentScore}%
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '4px' }}>
+                  {currentScore >= 70 ? 'Strong Match' : currentScore >= 50 ? 'Good Match' : 'Potential Match'}
+                </p>
+                <p style={{ color: colors.muted, fontSize: '13px' }}>
+                  {currentScore >= 70 ? 'Your BUCKET aligns well' : 'RCA can help strengthen your response'}
                 </p>
               </div>
             </div>
+          </div>
 
-            {/* Show the description we have */}
-            {/* Description - we always have this now */}
-            <div style={{ marginBottom: '15px' }}>
-              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '5px' }}>DESCRIPTION</p>
-              <p style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>
-                {selectedSubmission.description}
-              </p>
+          {/* Why You're Competitive */}
+          <div style={{
+            backgroundColor: colors.card,
+            borderRadius: '16px',
+            padding: '25px',
+            border: `1px solid ${colors.border}`,
+            marginBottom: '20px'
+          }}>
+            <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '15px', textTransform: 'uppercase' }}>
+              💪 Why You're Competitive
+            </p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {profileData?.naics_codes?.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ color: colors.primary }}>✓</span>
+                  <span style={{ color: colors.text, fontSize: '14px' }}>Your NAICS codes match this opportunity</span>
+                </div>
+              )}
+              {profileData?.certifications?.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ color: colors.primary }}>✓</span>
+                  <span style={{ color: colors.text, fontSize: '14px' }}>Your certifications give you an advantage</span>
+                </div>
+              )}
+              {profileData?.services_description && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ color: colors.primary }}>✓</span>
+                  <span style={{ color: colors.text, fontSize: '14px' }}>Your services align with what they need</span>
+                </div>
+              )}
+              {profileData?.past_performance && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ color: colors.primary }}>✓</span>
+                  <span style={{ color: colors.text, fontSize: '14px' }}>You have relevant past performance</span>
+                </div>
+              )}
             </div>
-
+            
             {/* Loading state */}
             {loadingRfp && (
               <div style={{ textAlign: 'center', padding: '15px' }}>
-                <p style={{ color: colors.gold, fontSize: '14px' }}>🔄 Loading...</p>
+                <p style={{ color: colors.gold, fontSize: '14px' }}>🔄 Loading opportunity details...</p>
               </div>
-            )}
-
-            {/* Error - but don't block them */}
-            {rfpError && (
-              <p style={{ color: colors.muted, fontSize: '12px', marginTop: '10px' }}>
-                Note: {rfpError}
-              </p>
             )}
           </div>
 
