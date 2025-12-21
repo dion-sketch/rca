@@ -2722,10 +2722,36 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             )}
           </div>
           
-          {/* Progress indicator */}
-          <p style={{ color: colors.muted, fontSize: '12px', textAlign: 'center', marginTop: '15px' }}>
-            {completedCount}/{sections.length} sections complete • {isSaving ? 'Saving...' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Auto-save enabled'}
-          </p>
+          {/* Progress indicator with SAVE button */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            gap: '15px',
+            marginTop: '15px' 
+          }}>
+            <p style={{ color: colors.muted, fontSize: '12px', margin: 0 }}>
+              {completedCount}/{sections.length} sections complete • {isSaving ? '💾 Saving...' : lastSaved ? `✓ Saved ${lastSaved.toLocaleTimeString()}` : 'Auto-save enabled'}
+            </p>
+            <button
+              onClick={async () => {
+                await saveProgress()
+                alert('✓ Progress saved!')
+              }}
+              disabled={isSaving}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: 'transparent',
+                border: `1px solid ${colors.border}`,
+                borderRadius: '6px',
+                color: colors.muted,
+                fontSize: '12px',
+                cursor: isSaving ? 'wait' : 'pointer'
+              }}
+            >
+              {isSaving ? '💾 Saving...' : '💾 Save Now'}
+            </button>
+          </div>
 
         </div>
       </div>
