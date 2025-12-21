@@ -69,7 +69,25 @@ WRITING RULES - CRITICAL:
 BAD EXAMPLE: "Located in Playa Del Rey, Rambo House is a company that will provide services..."
 GOOD EXAMPLE: "Trauma-informed mentorship services combining clinical expertise with evidence-based approaches will deliver measurable improvements in youth permanency outcomes..."`
 
-    const userPrompt = `Write a response for this section:
+    // Special handling for budget section
+    const isBudget = section.id === 'budget' || section.title.toLowerCase().includes('budget')
+    
+    const userPrompt = isBudget 
+      ? `Create a budget breakdown for this opportunity:
+
+OPPORTUNITY: ${opportunity.title}
+ESTIMATED VALUE: ${opportunity.estimated_value || 'Not specified'}
+
+Create a realistic budget breakdown with these categories:
+1. Personnel (salaries, benefits) - typically 60-70% of total
+2. Supplies & Materials
+3. Travel (if applicable)
+4. Equipment (if applicable)
+5. Indirect Costs / Overhead (typically 10-15%)
+6. TOTAL
+
+Format as a clear line-item budget. Use realistic numbers that add up to approximately the estimated value if provided. Include brief justification for major line items.`
+      : `Write a response for this section:
 
 SECTION: ${section.title}
 QUESTION/PROMPT: ${section.prompt}
