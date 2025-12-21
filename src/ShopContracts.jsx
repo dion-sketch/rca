@@ -2,9 +2,20 @@
 // ShopContracts.jsx - V5
 // REAL VARIED SCORING - Actual differentiation
 // ============================================
+// 
+// CORE DNA RULE:
+// If we don't have the content to help answer, we don't show it.
+// - Description must be >= 100 characters
+// - No title-only listings
+// - No "Coming Soon" - either we can help or we don't show
+//
+// ============================================
 
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+
+// Minimum description length to show opportunity
+const MIN_DESCRIPTION_LENGTH = 100
 
 // ============================================
 // PHRASE TIERS - Different base scores
@@ -231,6 +242,13 @@ export default function ShopContracts({ session, onNavigate }) {
 
   const getFilteredOpportunities = () => {
     let filtered = [...opportunities]
+
+    // CORE DNA RULE: Only show opportunities we can actually help with
+    // If we don't have enough content to answer questions, don't show it
+    filtered = filtered.filter(opp => {
+      const desc = opp.description || opp.commodity_description || ''
+      return desc.length >= MIN_DESCRIPTION_LENGTH
+    })
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
@@ -569,39 +587,80 @@ export default function ShopContracts({ session, onNavigate }) {
               {(selectedOpp.bid_type?.toLowerCase().includes('grant') || selectedOpp.source === 'grants_gov') ? '📋 GRANT' : '📄 CONTRACT'}
             </span>
 
-            <h2 style={{ color: colors.text, margin: '0 0 20px 0' }}>
+            <h2 style={{ color: colors.text, margin: '0 0 15px 0', fontSize: '18px', lineHeight: '1.4' }}>
               {selectedOpp.title || selectedOpp.commodity_description}
             </h2>
 
+            {/* Quick Stats Row */}
             <div style={{ 
-              backgroundColor: `${getScoreColor(selectedOpp.matchScore.current)}15`, 
-              padding: '20px', 
+              display: 'flex', 
+              gap: '15px', 
+              marginBottom: '20px',
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Due</p>
+                <p style={{ color: colors.text, fontSize: '14px', margin: 0, fontWeight: '600' }}>{formatDate(selectedOpp.close_date)}</p>
+              </div>
+              {selectedOpp.estimated_value && (
+                <div>
+                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Value</p>
+                  <p style={{ color: colors.gold, fontSize: '14px', margin: 0, fontWeight: '600' }}>{selectedOpp.estimated_value}</p>
+                </div>
+              )}
+              <div>
+                <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Sections</p>
+                <p style={{ color: colors.text, fontSize: '14px', margin: 0, fontWeight: '600' }}>~4-6 to complete</p>
+              </div>
+            </div>
+
+            {/* OVERVIEW - 2-3 sentences max */}
+            <div style={{ marginBottom: '20px' }}>
+              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>OVERVIEW</p>
+              <p style={{ color: colors.text, fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
+                {(() => {
+                  const desc = selectedOpp.description || selectedOpp.commodity_description || ''
+                  // Get first 2-3 sentences (up to 300 chars, end at period)
+                  const truncated = desc.substring(0, 300)
+                  const lastPeriod = truncated.lastIndexOf('.')
+                  return lastPeriod > 100 ? truncated.substring(0, lastPeriod + 1) : truncated + '...'
+                })()}
+              </p>
+            </div>
+
+            {/* WHY YOU FIT - Clear connection */}
+            <div style={{ 
+              backgroundColor: `${getScoreColor(selectedOpp.matchScore.current)}10`, 
+              padding: '15px', 
               borderRadius: '10px', 
               marginBottom: '20px',
-              border: `1px solid ${getScoreColor(selectedOpp.matchScore.current)}`
+              border: `1px solid ${getScoreColor(selectedOpp.matchScore.current)}30`
             }}>
-              <p style={{ color: getScoreColor(selectedOpp.matchScore.current), margin: 0, fontWeight: '700', fontSize: '24px' }}>
-                {selectedOpp.matchScore.current}% Match
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <p style={{ color: colors.muted, fontSize: '11px', margin: 0 }}>WHY YOU FIT</p>
+                <p style={{ color: getScoreColor(selectedOpp.matchScore.current), margin: 0, fontWeight: '700', fontSize: '18px' }}>
+                  {selectedOpp.matchScore.current}%
+                </p>
+              </div>
+              
               {selectedOpp.matchScore.matchedPhrase && (
-                <p style={{ color: colors.text, margin: '8px 0 0 0', fontSize: '14px' }}>
-                  Matched: "{selectedOpp.matchScore.matchedPhrase}"
-                  {selectedOpp.matchScore.inTitle && ' (found in title)'}
+                <p style={{ color: colors.text, margin: '0 0 8px 0', fontSize: '13px' }}>
+                  ✓ Your "<strong>{selectedOpp.matchScore.matchedPhrase}</strong>" experience matches their needs
+                </p>
+              )}
+              
+              {profile?.naics_codes?.length > 0 && (
+                <p style={{ color: colors.text, margin: '0 0 8px 0', fontSize: '13px' }}>
+                  ✓ NAICS codes align with this {selectedOpp.source === 'grants_gov' ? 'grant' : 'contract'} type
+                </p>
+              )}
+              
+              {profile?.certifications?.length > 0 && (
+                <p style={{ color: colors.text, margin: 0, fontSize: '13px' }}>
+                  ✓ Your certifications add competitive advantage
                 </p>
               )}
             </div>
-
-            <p style={{ color: colors.muted, marginBottom: '5px', fontSize: '12px' }}>Due Date</p>
-            <p style={{ color: colors.text, marginBottom: '15px' }}>{formatDate(selectedOpp.close_date)}</p>
-
-            {(selectedOpp.description || selectedOpp.commodity_description) && (
-              <>
-                <p style={{ color: colors.muted, marginBottom: '5px', fontSize: '12px' }}>Description</p>
-                <p style={{ color: colors.text, marginBottom: '20px', lineHeight: '1.6', maxHeight: '150px', overflow: 'auto' }}>
-                  {selectedOpp.description || selectedOpp.commodity_description}
-                </p>
-              </>
-            )}
 
             <button
               onClick={() => startResponse(selectedOpp)}
