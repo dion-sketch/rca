@@ -18,6 +18,54 @@ import { supabase } from './supabaseClient'
 const MIN_DESCRIPTION_LENGTH = 100
 
 // ============================================
+// HELPER FUNCTIONS - Format & Clean Data
+// ============================================
+
+// Strip HTML tags from text
+const stripHtml = (html) => {
+  if (!html) return ''
+  return html
+    .replace(/<[^>]*>/g, ' ')  // Remove HTML tags
+    .replace(/&amp;/g, '&')     // Decode &amp;
+    .replace(/&lt;/g, '<')      // Decode &lt;
+    .replace(/&gt;/g, '>')      // Decode &gt;
+    .replace(/&nbsp;/g, ' ')    // Decode &nbsp;
+    .replace(/&quot;/g, '"')    // Decode &quot;
+    .replace(/&#39;/g, "'")     // Decode &#39;
+    .replace(/\s+/g, ' ')       // Collapse whitespace
+    .trim()
+}
+
+// Format currency from number or string
+const formatCurrency = (value) => {
+  if (!value) return null
+  // Extract number from string like "$500,000" or "7500000.0"
+  const num = typeof value === 'string' 
+    ? parseFloat(value.replace(/[^0-9.]/g, ''))
+    : value
+  if (isNaN(num)) return null
+  return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+// Parse agency name (handle emails like "IBHModel@cms.hhs.gov")
+const parseAgencyName = (agency) => {
+  if (!agency) return null
+  // If it's an email, extract domain parts
+  if (agency.includes('@')) {
+    const domain = agency.split('@')[1]
+    if (domain) {
+      const parts = domain.split('.')
+      if (parts.length >= 2) {
+        return parts.slice(0, -1).map(p => p.toUpperCase()).join(' / ')
+      }
+    }
+    return agency
+  }
+  return agency
+}
+const MIN_DESCRIPTION_LENGTH = 100
+
+// ============================================
 // PHRASE TIERS - Different base scores
 // ============================================
 const TIER1_PHRASES = ['mental health', 'behavioral health', 'foster care', 'child welfare']  // Most specific
@@ -604,26 +652,42 @@ export default function ShopContracts({ session, onNavigate }) {
               </div>
               {selectedOpp.estimated_value && (
                 <div>
-                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Value</p>
-                  <p style={{ color: colors.gold, fontSize: '14px', margin: 0, fontWeight: '600' }}>{selectedOpp.estimated_value}</p>
+                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Funding</p>
+                  <p style={{ color: colors.gold, fontSize: '14px', margin: 0, fontWeight: '600' }}>
+                    {(() => {
+                      const val = selectedOpp.estimated_value
+                      // If it's already formatted with $ just show it
+                      if (typeof val === 'string' && val.includes('$')) return val
+                      // If it's a number, format it
+                      const num = parseFloat(val)
+                      if (!isNaN(num)) {
+                        if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
+                        if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`
+                        return `$${num.toLocaleString()}`
+                      }
+                      return val
+                    })()}
+                  </p>
                 </div>
               )}
-              <div>
-                <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Sections</p>
-                <p style={{ color: colors.text, fontSize: '14px', margin: 0, fontWeight: '600' }}>~4-6 to complete</p>
-              </div>
             </div>
 
-            {/* OVERVIEW - 2-3 sentences max */}
+            {/* OVERVIEW - Clean sentences */}
             <div style={{ marginBottom: '20px' }}>
               <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>OVERVIEW</p>
               <p style={{ color: colors.text, fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
                 {(() => {
-                  const desc = selectedOpp.description || selectedOpp.commodity_description || ''
-                  // Get first 2-3 sentences (up to 300 chars, end at period)
-                  const truncated = desc.substring(0, 300)
+                  let desc = stripHtml(selectedOpp.description || selectedOpp.commodity_description || '')
+                  // Get first 2-3 sentences (up to 350 chars, end at period)
+                  if (desc.length <= 350) return desc
+                  const truncated = desc.substring(0, 350)
                   const lastPeriod = truncated.lastIndexOf('.')
-                  return lastPeriod > 100 ? truncated.substring(0, lastPeriod + 1) : truncated + '...'
+                  if (lastPeriod > 150) {
+                    return truncated.substring(0, lastPeriod + 1)
+                  }
+                  // No good period, cut at word boundary
+                  const lastSpace = truncated.lastIndexOf(' ')
+                  return truncated.substring(0, lastSpace) + '...'
                 })()}
               </p>
             </div>
