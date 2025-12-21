@@ -57,11 +57,14 @@ OUTPUT FORMAT - Keep it tight:
 3. FROM YOUR BUCKET - USE THESE: List 3-4 specific things from their profile to highlight
 4. KEY POINTS TO HIT: 3-4 bullet points of what to emphasize in the response
 
-RULES:
-- Be SPECIFIC - use their actual company name, certs, location
+CRITICAL RULES:
+- DO NOT start sentences with the company name
+- Lead with the VALUE, the ANSWER, the SOLUTION - not "Company X will..."
+- Bad: "Rambo House will provide mentorship services..."
+- Good: "Experienced mentorship services tailored to foster youth..."
+- Be SPECIFIC - reference their certs, location, experience
 - Keep it SHORT - this is a game plan, not the actual response
-- Focus on what makes them UNIQUELY qualified
-- Reference actual RFP requirements if available`
+- Focus on what makes them UNIQUELY qualified`
 
     const userPrompt = `Create a winning game plan for this opportunity:
 
