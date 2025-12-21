@@ -1420,48 +1420,111 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
             <span>5. Submit</span>
           </div>
 
-          {/* Title and Auto-save */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
+          {/* Title and SAVE BUTTON */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
             <h2 style={{ color: colors.text, fontSize: '20px', margin: 0 }}>
               {selectedSubmission.title}
             </h2>
-            <span style={{ color: colors.muted, fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              {isSaving ? '💾 Saving...' : lastSaved ? `✓ Saved ${lastSaved.toLocaleTimeString()}` : ''}
-            </span>
+            <button
+              onClick={async () => {
+                await saveProgress()
+                alert('✓ Progress saved!')
+              }}
+              disabled={isSaving}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: colors.gold,
+                border: 'none',
+                borderRadius: '8px',
+                color: colors.background,
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: isSaving ? 'wait' : 'pointer'
+              }}
+            >
+              {isSaving ? '💾 Saving...' : '💾 SAVE'}
+            </button>
           </div>
-          <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '30px' }}>
+          <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '20px' }}>
             {completedCount} of {sections.length} sections complete ({getCompletionPercent()}%)
+            {lastSaved && <span style={{ marginLeft: '10px' }}>• ✓ Saved {lastSaved.toLocaleTimeString()}</span>}
           </p>
 
-          {/* Section Navigation */}
+          {/* Section Navigation with LEFT/RIGHT ARROWS */}
           <div style={{ 
             display: 'flex', 
-            gap: '8px', 
-            marginBottom: '25px',
-            overflowX: 'auto',
-            paddingBottom: '10px'
+            alignItems: 'center',
+            gap: '10px', 
+            marginBottom: '25px'
           }}>
-            {sections.map((section, i) => (
-              <button
-                key={section.id}
-                onClick={() => setCurrentSectionIndex(i)}
-                style={{
-                  padding: '10px 16px',
-                  backgroundColor: i === currentSectionIndex ? colors.card : 'transparent',
-                  border: `1px solid ${i === currentSectionIndex ? colors.primary : colors.border}`,
-                  borderRadius: '8px',
-                  color: section.status === 'complete' ? colors.primary : (i === currentSectionIndex ? colors.text : colors.muted),
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                {section.status === 'complete' && '✓'} {section.title}
-              </button>
-            ))}
+            {/* LEFT ARROW */}
+            <button
+              onClick={() => setCurrentSectionIndex(Math.max(0, currentSectionIndex - 1))}
+              disabled={currentSectionIndex === 0}
+              style={{
+                padding: '10px 15px',
+                backgroundColor: currentSectionIndex === 0 ? colors.card : colors.primary,
+                border: 'none',
+                borderRadius: '8px',
+                color: currentSectionIndex === 0 ? colors.muted : colors.background,
+                fontSize: '18px',
+                fontWeight: '700',
+                cursor: currentSectionIndex === 0 ? 'not-allowed' : 'pointer',
+                opacity: currentSectionIndex === 0 ? 0.5 : 1
+              }}
+            >
+              ←
+            </button>
+            
+            {/* Section tabs */}
+            <div style={{ 
+              display: 'flex', 
+              gap: '8px', 
+              flex: 1,
+              overflowX: 'auto',
+              paddingBottom: '5px'
+            }}>
+              {sections.map((section, i) => (
+                <button
+                  key={section.id}
+                  onClick={() => setCurrentSectionIndex(i)}
+                  style={{
+                    padding: '10px 16px',
+                    backgroundColor: i === currentSectionIndex ? colors.card : 'transparent',
+                    border: `1px solid ${i === currentSectionIndex ? colors.primary : colors.border}`,
+                    borderRadius: '8px',
+                    color: section.status === 'complete' ? colors.primary : (i === currentSectionIndex ? colors.text : colors.muted),
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {section.status === 'complete' && '✓'} {section.title}
+                </button>
+              ))}
+            </div>
+            
+            {/* RIGHT ARROW */}
+            <button
+              onClick={() => setCurrentSectionIndex(Math.min(sections.length - 1, currentSectionIndex + 1))}
+              disabled={currentSectionIndex === sections.length - 1}
+              style={{
+                padding: '10px 15px',
+                backgroundColor: currentSectionIndex === sections.length - 1 ? colors.card : colors.primary,
+                border: 'none',
+                borderRadius: '8px',
+                color: currentSectionIndex === sections.length - 1 ? colors.muted : colors.background,
+                fontSize: '18px',
+                fontWeight: '700',
+                cursor: currentSectionIndex === sections.length - 1 ? 'not-allowed' : 'pointer',
+                opacity: currentSectionIndex === sections.length - 1 ? 0.5 : 1
+              }}
+            >
+              →
+            </button>
           </div>
 
           {/* Current Section */}
