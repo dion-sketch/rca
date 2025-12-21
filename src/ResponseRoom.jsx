@@ -646,6 +646,35 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           ) : (
             // INPUT FORM
             <>
+              {/* WHAT THIS CONTRACT/GRANT IS ABOUT - Show first! */}
+              <div style={{
+                backgroundColor: colors.card,
+                borderRadius: '16px',
+                padding: '25px',
+                marginBottom: '20px',
+                border: `1px solid ${colors.border}`
+              }}>
+                <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '10px', textTransform: 'uppercase' }}>
+                  📋 What They're Looking For
+                </p>
+                <p style={{ color: colors.text, fontSize: '14px', lineHeight: '1.7', marginBottom: '15px' }}>
+                  {selectedSubmission.description && selectedSubmission.description.length > 50 
+                    ? selectedSubmission.description 
+                    : `This ${selectedSubmission.title?.toLowerCase().includes('grant') ? 'grant' : 'contract'} is seeking qualified providers. Review the full RFP for specific requirements.`}
+                </p>
+                {selectedSubmission.agency && (
+                  <p style={{ color: colors.muted, fontSize: '12px' }}>
+                    <strong>Agency:</strong> {selectedSubmission.agency}
+                  </p>
+                )}
+                {selectedSubmission.estimated_value && (
+                  <p style={{ color: colors.gold, fontSize: '12px', marginTop: '5px' }}>
+                    <strong>Value:</strong> {selectedSubmission.estimated_value}
+                  </p>
+                )}
+              </div>
+
+              {/* NOW ask for direction */}
               <div style={{
                 backgroundColor: colors.card,
                 border: `2px solid ${colors.gold}`,
@@ -654,14 +683,41 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                 textAlign: 'center',
                 marginBottom: '25px'
               }}>
-                <p style={{ color: colors.gold, fontSize: '20px', marginBottom: '25px' }}>
-                  What's your angle for this one?
+                <p style={{ color: colors.gold, fontSize: '20px', marginBottom: '10px' }}>
+                  Choose Your Approach
+                </p>
+                <p style={{ color: colors.muted, fontSize: '13px', marginBottom: '25px' }}>
+                  How do you want to position your response to their needs?
+                </p>
+                
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center', marginBottom: '25px' }}>
+                  {['🎯 Experience-focused', '🤝 Community partnerships', '📊 Data-driven', '💰 Cost-effective'].map(pick => (
+                    <button 
+                      key={pick} 
+                      onClick={() => generateStrategy(pick)}
+                      style={{
+                        backgroundColor: '#1a1a1a',
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '20px',
+                        padding: '12px 20px',
+                        color: '#ccc',
+                        fontSize: '14px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {pick}
+                    </button>
+                  ))}
+                </div>
+
+                <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '15px' }}>
+                  Or describe your own angle:
                 </p>
                 
                 <textarea
                   value={userAngle}
                   onChange={(e) => setUserAngle(e.target.value)}
-                  placeholder="Example: Focus on our 10 years of experience and community partnerships..."
+                  placeholder="Example: Focus on our track record delivering similar programs..."
                   style={{
                     width: '100%',
                     backgroundColor: '#1a1a1a',
@@ -671,34 +727,10 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                     color: colors.text,
                     fontSize: '14px',
                     resize: 'none',
-                    minHeight: '80px',
+                    minHeight: '60px',
                     marginBottom: '20px'
                   }}
                 />
-                
-                <p style={{ color: colors.muted, fontSize: '12px', marginBottom: '15px' }}>
-                  Or pick a quick approach:
-                </p>
-                
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
-                  {['🎯 Experience-focused', '🤝 Community partnerships', '📊 Data-driven', '💰 Cost-effective'].map(pick => (
-                    <button 
-                      key={pick} 
-                      onClick={() => generateStrategy(pick)}
-                      style={{
-                        backgroundColor: '#1a1a1a',
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: '20px',
-                        padding: '8px 16px',
-                        color: '#ccc',
-                        fontSize: '13px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {pick}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Generate Button */}
