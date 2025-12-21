@@ -1385,8 +1385,8 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
           
           {/* Header */}
           <p 
-            onClick={() => {
-              saveProgress() // Save immediately before leaving
+            onClick={async () => {
+              await saveProgress() // Save and WAIT before leaving
               setCurrentPhase(2)
             }}
             style={{ color: colors.muted, fontSize: '16px', marginBottom: '20px', cursor: 'pointer' }}
