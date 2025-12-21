@@ -54,17 +54,19 @@ ${rfpContext}
 OUTPUT FORMAT - Keep it tight:
 1. SUGGESTED TITLE: A compelling 5-8 word program name
 2. YOUR ANGLE: One sentence - the main positioning strategy
-3. FROM YOUR BUCKET - USE THESE: List 3-4 specific things from their profile to highlight
+3. FROM YOUR BUCKET - USE THESE: List 3-4 specific capabilities/experiences to highlight
 4. KEY POINTS TO HIT: 3-4 bullet points of what to emphasize in the response
 
 CRITICAL RULES:
 - DO NOT start sentences with the company name
-- Lead with the VALUE, the ANSWER, the SOLUTION - not "Company X will..."
-- Bad: "Rambo House will provide mentorship services..."
-- Good: "Experienced mentorship services tailored to foster youth..."
-- Be SPECIFIC - reference their certs, location, experience
-- Keep it SHORT - this is a game plan, not the actual response
-- Focus on what makes them UNIQUELY qualified`
+- DO NOT focus on physical location/address - location is rarely the selling point
+- FOCUS ON THE MISSION - what the agency needs accomplished
+- Lead with HOW you solve their problem, not WHO you are
+- Match their requirements to your capabilities
+- Bad: "Located in Playa Del Rey, we serve LA County..."
+- Good: "Trauma-informed mentorship services proven to improve youth outcomes..."
+- Be SPECIFIC - reference their certs, past performance, relevant experience
+- Keep it SHORT - this is a game plan, not the actual response`
 
     const userPrompt = `Create a winning game plan for this opportunity:
 
