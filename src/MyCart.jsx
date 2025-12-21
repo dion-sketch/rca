@@ -12,6 +12,48 @@ const colors = {
   danger: '#ff4444'
 }
 
+// Strip HTML tags from text
+const stripHtml = (html) => {
+  if (!html) return ''
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Format currency
+const formatCurrency = (value) => {
+  if (!value) return null
+  const num = typeof value === 'string' 
+    ? parseFloat(value.replace(/[^0-9.]/g, ''))
+    : value
+  if (isNaN(num)) return null
+  if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `$${Math.round(num / 1000)}K`
+  return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+// Parse agency name (handle emails)
+const parseAgencyName = (agency) => {
+  if (!agency) return null
+  if (agency.includes('@')) {
+    const domain = agency.split('@')[1]
+    if (domain) {
+      const parts = domain.split('.')
+      if (parts.length >= 2) {
+        return parts.slice(0, -1).map(p => p.toUpperCase()).join(' / ')
+      }
+    }
+  }
+  return agency
+}
+
 export default function MyCart({ session, onNavigate, profileData }) {
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -209,14 +251,14 @@ export default function MyCart({ session, onNavigate, profileData }) {
                       </h3>
                       
                       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                        {sub.agency && (
+                        {parseAgencyName(sub.agency) && (
                           <span style={{ color: colors.muted, fontSize: '13px' }}>
-                            {sub.agency}
+                            {parseAgencyName(sub.agency)}
                           </span>
                         )}
-                        {sub.estimated_value && (
+                        {formatCurrency(sub.estimated_value) && (
                           <span style={{ color: colors.primary, fontSize: '13px' }}>
-                            {sub.estimated_value}
+                            {formatCurrency(sub.estimated_value)}
                           </span>
                         )}
                         <span style={{ 
