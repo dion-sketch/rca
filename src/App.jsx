@@ -384,9 +384,15 @@ function App() {
       ) : currentPage === 'my-cart' ? (
         <MyCart 
           session={session} 
-          onBack={() => setCurrentPage('dashboard')}
-          onStartResponse={(item) => {
-            setCurrentPage('response-room')
+          onNavigate={(page, data) => {
+            if (page === 'dashboard') {
+              setCurrentPage('dashboard')
+            } else if (page === 'shop') {
+              setCurrentPage('shop')
+            } else if (page === 'response-room') {
+              // Store selected submission for ResponseRoom
+              setCurrentPage('response-room')
+            }
           }}
           profileData={profileData}
         />
