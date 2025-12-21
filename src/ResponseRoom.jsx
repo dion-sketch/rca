@@ -1579,7 +1579,47 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                           minHeight: '150px'
                         }}
                       />
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                        <button
+                          onClick={() => generateTeamNarrative(currentSectionIndex)}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            backgroundColor: 'transparent',
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '8px',
+                            color: colors.muted,
+                            fontSize: '13px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🔄 Regenerate
+                        </button>
+                        <button
+                          onClick={() => polishAnswer(currentSectionIndex)}
+                          style={{
+                            flex: 1,
+                            padding: '10px',
+                            backgroundColor: colors.gold,
+                            border: 'none',
+                            borderRadius: '8px',
+                            color: colors.background,
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✨ Polish
+                        </button>
+                      </div>
                     </div>
+                  )}
+                  
+                  {/* Mark Complete - shows when has team members but no narrative yet */}
+                  {(currentSection.teamMembers || []).length > 0 && !currentSection.answer && (
+                    <p style={{ color: colors.gold, fontSize: '12px', marginTop: '15px', textAlign: 'center' }}>
+                      👆 Click "Generate Team Narrative" to complete this section
+                    </p>
                   )}
                 </div>
 
@@ -1753,6 +1793,57 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                   <p style={{ color: colors.muted, fontSize: '12px', marginTop: '15px', textAlign: 'center' }}>
                     ⚠️ Contact your references BEFORE submitting to get their permission
                   </p>
+                  
+                  {/* Generate Narrative Button */}
+                  {(currentSection.references || []).length > 0 && (
+                    <button
+                      onClick={() => {
+                        // Generate reference narrative from structured data
+                        const refs = currentSection.references || []
+                        const narrative = refs.map((r, i) => 
+                          `Reference ${i + 1}: ${r.company || 'Organization'}\nContact: ${r.contactName || 'Name'}, ${r.contactPhone || 'Phone'}, ${r.contactEmail || 'Email'}\n${r.contractValue ? `Contract Value: ${r.contractValue}\n` : ''}${r.description || 'Past project work'}`
+                        ).join('\n\n')
+                        updateAnswer(currentSectionIndex, narrative)
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '14px',
+                        backgroundColor: colors.gold,
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: colors.background,
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        marginTop: '15px'
+                      }}
+                    >
+                      ✓ Save References
+                    </button>
+                  )}
+                  
+                  {/* Show generated narrative */}
+                  {currentSection.answer && (
+                    <div style={{ marginTop: '15px' }}>
+                      <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '8px' }}>Reference Summary (editable)</label>
+                      <textarea
+                        value={currentSection.answer}
+                        onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#1a1a1a',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '8px',
+                          padding: '15px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          lineHeight: '1.7',
+                          resize: 'vertical',
+                          minHeight: '120px'
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
 
               ) : currentSection.type === 'budget' ? (
@@ -2233,28 +2324,74 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                     })()}
                   </div>
                   
-                  {/* Mark as Complete */}
-                  <button
-                    onClick={() => {
-                      const budget = calculateFullBudget(currentSection)
-                      const narrative = generateBudgetNarrative(budget)
-                      updateAnswer(currentSectionIndex, narrative)
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '16px',
-                      backgroundColor: colors.gold,
-                      border: 'none',
-                      borderRadius: '10px',
-                      color: colors.background,
-                      fontSize: '15px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      marginTop: '20px'
-                    }}
-                  >
-                    ✓ Save Budget & Generate Narrative
-                  </button>
+                  {/* Save / Regenerate Buttons */}
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    {currentSection.answer && (
+                      <button
+                        onClick={() => {
+                          const budget = calculateFullBudget(currentSection)
+                          const narrative = generateBudgetNarrative(budget)
+                          updateAnswer(currentSectionIndex, narrative)
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '14px',
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '10px',
+                          color: colors.muted,
+                          fontSize: '14px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🔄 Regenerate Narrative
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const budget = calculateFullBudget(currentSection)
+                        const narrative = generateBudgetNarrative(budget)
+                        updateAnswer(currentSectionIndex, narrative)
+                      }}
+                      style={{
+                        flex: currentSection.answer ? 1 : 'auto',
+                        width: currentSection.answer ? 'auto' : '100%',
+                        padding: '16px',
+                        backgroundColor: colors.gold,
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: colors.background,
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✓ {currentSection.answer ? 'Update Budget' : 'Save Budget & Generate Narrative'}
+                    </button>
+                  </div>
+                  
+                  {/* Show generated narrative */}
+                  {currentSection.answer && (
+                    <div style={{ marginTop: '20px' }}>
+                      <label style={{ color: colors.muted, fontSize: '11px', display: 'block', marginBottom: '8px' }}>Budget Justification (editable)</label>
+                      <textarea
+                        value={currentSection.answer}
+                        onChange={(e) => updateAnswer(currentSectionIndex, e.target.value)}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#1a1a1a',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '8px',
+                          padding: '15px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          lineHeight: '1.7',
+                          resize: 'vertical',
+                          minHeight: '200px'
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
 
               ) : (
@@ -2324,36 +2461,40 @@ export default function ResponseRoom({ session, profileData, onBack, autoSelectL
                       >
                         🤖 {currentSection.answer ? 'Regenerate from scratch' : 'Generate with RCA'}
                       </button>
-                      </button>
                       
                       {/* Divider with OR */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
-                        <span style={{ color: colors.muted, fontSize: '12px' }}>OR</span>
-                        <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
-                      </div>
+                      {currentSection.answer && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
+                          <span style={{ color: colors.muted, fontSize: '12px' }}>OR</span>
+                          <div style={{ flex: 1, height: '1px', backgroundColor: colors.border }}></div>
+                        </div>
+                      )}
                       
-                      {/* Polish option */}
-                      <button
-                        onClick={() => polishAnswer(currentSectionIndex)}
-                        disabled={!currentSection.answer || currentSection.answer.length < 20}
-                        style={{
-                          width: '100%',
-                          padding: '14px',
-                          backgroundColor: currentSection.answer ? colors.gold : colors.card,
-                          border: 'none',
-                          borderRadius: '10px',
-                          color: currentSection.answer ? colors.background : colors.muted,
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          cursor: currentSection.answer ? 'pointer' : 'not-allowed',
-                          opacity: currentSection.answer ? 1 : 0.5
-                        }}
-                      >
-                        ✨ Polish My Draft
-                      </button>
+                      {/* Polish option - only show when there's content */}
+                      {currentSection.answer && currentSection.answer.length >= 20 && (
+                        <button
+                          onClick={() => polishAnswer(currentSectionIndex)}
+                          style={{
+                            width: '100%',
+                            padding: '14px',
+                            backgroundColor: colors.gold,
+                            border: 'none',
+                            borderRadius: '10px',
+                            color: colors.background,
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✨ Polish My Draft
+                        </button>
+                      )}
+                      
                       <p style={{ color: colors.muted, fontSize: '11px', textAlign: 'center', margin: 0, lineHeight: '1.5' }}>
-                        Type your rough ideas above → RCA will clean up grammar, spelling, and make it professional
+                        {currentSection.answer 
+                          ? 'Polish cleans up grammar and makes it professional' 
+                          : 'Type your rough ideas above, or let RCA generate a draft'}
                       </p>
                     </div>
                   </div>
