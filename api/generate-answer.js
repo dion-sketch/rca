@@ -18,15 +18,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Build profile context
+    // Build profile context - including team and references
     const profileContext = profile ? `
 COMPANY: ${profile.company_name || 'Not specified'}
 LOCATION: ${profile.city ? `${profile.city}, ${profile.state}` : 'Not specified'}
 NAICS CODES: ${profile.naics_codes?.map(n => n.code || n).join(', ') || 'None listed'}
 CERTIFICATIONS: ${profile.certifications?.map(c => c.name || c).join(', ') || 'None listed'}
-SERVICES: ${profile.services?.join(', ') || 'Not specified'}
+SERVICES: ${profile.services?.join(', ') || profile.services_description || 'Not specified'}
 PAST PERFORMANCE: ${profile.past_performance || 'Not specified'}
 MISSION: ${profile.mission_statement || 'Not specified'}
+
+TEAM MEMBERS IN BUCKET:
+${profile.team_members?.length > 0 
+  ? profile.team_members.map(m => `- ${m.role}: ${m.name || 'TBD'} (${m.hoursPerWeek}hrs/wk @ $${m.hourlyRate}/hr) - ${m.description || ''}`).join('\n')
+  : 'No team members saved yet'}
+
+REFERENCES IN BUCKET:
+${profile.references?.length > 0 
+  ? profile.references.map(r => `- ${r.company}: ${r.contactName}, ${r.contractValue || ''} - ${r.description || ''}`).join('\n')
+  : 'No references saved yet'}
 ` : 'No company profile available.'
 
     // Build strategy context
@@ -77,31 +87,137 @@ WRITING RULES - CRITICAL:
 BAD EXAMPLE: "Located in Playa Del Rey, Rambo House is a company that will provide services..."
 GOOD EXAMPLE: "Trauma-informed mentorship services combining clinical expertise with evidence-based approaches will deliver measurable improvements in youth permanency outcomes. Our integrated model pairs licensed clinicians with trained mentors to provide wrap-around support. Over the past 5 years, this approach has achieved 85% positive outcomes across 200+ youth served. This directly aligns with the County's goal of reducing foster care re-entry rates."`
 
-    // Special handling for budget section
-    const isBudget = section.id === 'budget' || section.title.toLowerCase().includes('budget')
+    // Determine section type
+    const sectionType = section.type || 'text'
+    const sectionId = section.id?.toLowerCase() || ''
+    const sectionTitle = section.title?.toLowerCase() || ''
     
-    const userPrompt = isBudget 
-      ? `Create a budget breakdown for this opportunity:
+    const isBudget = sectionType === 'budget' || sectionId === 'budget' || sectionTitle.includes('budget')
+    const isTeam = sectionType === 'team' || sectionId === 'team' || sectionTitle.includes('personnel') || sectionTitle.includes('team')
+    const isReferences = sectionType === 'references' || sectionId === 'references' || sectionTitle.includes('reference')
+    const isUnderstanding = sectionId === 'understanding' || sectionTitle.includes('understanding')
+    const isNarrative = sectionId === 'narrative' || sectionTitle.includes('technical') || sectionTitle.includes('approach')
+    const isQualifications = sectionId === 'qualifications' || sectionTitle.includes('experience') || sectionTitle.includes('performance')
+    
+    let userPrompt
+    
+    if (isBudget) {
+      // Budget section - handled by UI, but generate narrative if called
+      const budgetData = section.budgetData || {}
+      userPrompt = `Create a budget justification narrative for this opportunity:
 
 OPPORTUNITY: ${opportunity.title}
 ESTIMATED VALUE: ${opportunity.estimated_value || 'Not specified'}
 
-Create a realistic budget breakdown with these categories:
-1. Personnel (salaries, benefits) - typically 60-70% of total
-2. Supplies & Materials
-3. Travel (if applicable)
-4. Equipment (if applicable)
-5. Indirect Costs / Overhead (typically 10-15%)
-6. TOTAL
+${budgetData.total ? `BUDGET BREAKDOWN:
+- Personnel: $${budgetData.personnel?.toLocaleString() || 0}
+- Fringe Benefits: $${budgetData.fringe?.toLocaleString() || 0}
+- Travel: $${budgetData.travel?.toLocaleString() || 0}
+- Equipment: $${budgetData.equipment?.toLocaleString() || 0}
+- Supplies: $${budgetData.supplies?.toLocaleString() || 0}
+- Contractual: $${budgetData.contractual?.toLocaleString() || 0}
+- Other: $${budgetData.other?.toLocaleString() || 0}
+- Indirect: $${budgetData.indirect?.toLocaleString() || 0}
+- TOTAL: $${budgetData.total?.toLocaleString() || 0}
+` : 'Create a realistic budget breakdown.'}
 
-Format as a clear line-item budget. Use realistic numbers that add up to approximately the estimated value if provided. Include brief justification for major line items.`
-      : `Write a response for this section:
+Write a professional budget justification explaining each cost category and why it's necessary for the project. No markdown formatting.`
+
+    } else if (isTeam) {
+      // Team/Personnel section
+      const teamMembers = section.teamMembers || profile?.team_members || []
+      userPrompt = `Write a Key Personnel section for this opportunity:
+
+OPPORTUNITY: ${opportunity.title}
+
+${teamMembers.length > 0 ? `TEAM MEMBERS:
+${teamMembers.map(m => `- ${m.role}: ${m.name || 'TBD'} - ${m.description || 'Key team member'} (${m.hoursPerWeek} hours/week)`).join('\n')}` 
+: 'Describe the key personnel who will work on this project based on what this opportunity needs.'}
+
+Write a compelling narrative about the team's qualifications and how they'll work together. Include roles, relevant experience, and why this team is qualified for THIS specific opportunity. Do not start with the company name. No markdown formatting.
+
+CHARACTER LIMIT: ${charLimit || 1500}`
+
+    } else if (isReferences) {
+      // References section
+      const refs = section.references || profile?.references || []
+      userPrompt = `Write a References/Past Performance section for this opportunity:
+
+OPPORTUNITY: ${opportunity.title}
+
+${refs.length > 0 ? `REFERENCES:
+${refs.map(r => `- ${r.company}: ${r.contactName} (${r.contactPhone || r.contactEmail || 'Contact info available'})
+  Contract Value: ${r.contractValue || 'N/A'}
+  Work: ${r.description || 'Similar services'}`).join('\n\n')}`
+: 'Describe relevant past performance that demonstrates capability for this work.'}
+
+Write a professional narrative highlighting relevant past performance and references. Focus on outcomes and how the experience relates to THIS opportunity. No markdown formatting.
+
+CHARACTER LIMIT: ${charLimit || 1000}`
+
+    } else if (isUnderstanding) {
+      userPrompt = `Write an "Understanding of Need" section that shows we clearly understand what the agency needs.
+
+OPPORTUNITY: ${opportunity.title}
+DESCRIPTION: ${opportunity.description || 'Not provided'}
+AGENCY: ${opportunity.agency || 'Not specified'}
+
+Structure:
+1. Restate the problem/need the agency is trying to address (2-3 sentences)
+2. Acknowledge why this is important/urgent (1-2 sentences)
+3. Identify key challenges they face (2-3 sentences)
+4. Briefly connect to how we're positioned to help (1 sentence)
+
+CHARACTER LIMIT: ${charLimit || 1000}
+
+Write in a way that shows we READ and UNDERSTOOD their RFP. Do not start with the company name. No markdown formatting.`
+
+    } else if (isNarrative) {
+      userPrompt = `Write the Technical Approach / Project Narrative section:
+
+OPPORTUNITY: ${opportunity.title}
+DESCRIPTION: ${opportunity.description || 'Not provided'}
+
+This is the MOST IMPORTANT section (typically 30-40% of evaluation score).
+
+Write a detailed technical approach that includes:
+1. Your methodology and how you'll deliver the services
+2. Specific activities and key tasks
+3. How your approach meets their stated requirements
+4. What makes your approach effective
+5. Quality control and performance measures
+
+Be specific about HOW you will do the work. Do not start with the company name. No markdown formatting.
+
+CHARACTER LIMIT: ${charLimit || 2000}`
+
+    } else if (isQualifications) {
+      userPrompt = `Write the Past Performance / Qualifications section:
+
+OPPORTUNITY: ${opportunity.title}
+
+This section is about 20-30% of evaluation score.
+
+Include:
+1. Relevant contracts/grants (names, values, dates)
+2. Measurable outcomes (percentages, numbers)
+3. How past experience relates to THIS opportunity
+4. Why your experience makes you the right choice
+
+Use specific numbers and results. Do not start with the company name. No markdown formatting.
+
+CHARACTER LIMIT: ${charLimit || 1500}`
+
+    } else {
+      // Default text section
+      userPrompt = `Write a response for this section:
 
 SECTION: ${section.title}
 QUESTION/PROMPT: ${section.prompt}
 CHARACTER LIMIT: ${charLimit || 1500}
 
-Write a direct, compelling response. Start with the answer, not the company name.`
+Write a direct, compelling response following the Winning Answer Formula. Start with the answer, not the company name. No markdown formatting.`
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -127,9 +243,18 @@ Write a direct, compelling response. Start with the answer, not the company name
     const data = await response.json()
     let answer = data.content[0].text
 
+    // Strip any markdown that slipped through
+    answer = answer
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/\_\_/g, '')
+      .replace(/\_/g, '')
+      .replace(/\#\#\#/g, '')
+      .replace(/\#\#/g, '')
+      .replace(/\#/g, '')
+
     // Trim to character limit if needed
     if (answer.length > (charLimit || 1500)) {
-      // Find last sentence within limit
       const trimmed = answer.substring(0, charLimit || 1500)
       const lastPeriod = trimmed.lastIndexOf('.')
       if (lastPeriod > (charLimit * 0.7)) {
