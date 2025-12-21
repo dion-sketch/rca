@@ -60,13 +60,15 @@ OUTPUT FORMAT - Keep it tight:
 CRITICAL RULES:
 - DO NOT start sentences with the company name
 - DO NOT focus on physical location/address - location is rarely the selling point
+- DO NOT use markdown formatting (no asterisks, no bold, no headers)
 - FOCUS ON THE MISSION - what the agency needs accomplished
 - Lead with HOW you solve their problem, not WHO you are
 - Match their requirements to your capabilities
 - Bad: "Located in Playa Del Rey, we serve LA County..."
 - Good: "Trauma-informed mentorship services proven to improve youth outcomes..."
 - Be SPECIFIC - reference their certs, past performance, relevant experience
-- Keep it SHORT - this is a game plan, not the actual response`
+- Keep it SHORT - this is a game plan, not the actual response
+- Output plain text in JSON values - no special formatting`
 
     const userPrompt = `Create a winning game plan for this opportunity:
 
