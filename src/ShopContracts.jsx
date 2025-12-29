@@ -1,6 +1,6 @@
-// ShopContracts.jsx - Professional Voice
+// ShopContracts.jsx - With Solicitation Type Detection
+// Handles RFSQ, RFQ, IFB differently than RFP/Grant
 // Date: December 28, 2025
-// Fixes: Agency field, match score calculation, NAICS pills
 
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
@@ -27,7 +27,7 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
     estimated_value: '',
     naics_codes: '',
     source_url: '',
-    rfp_type: 'rfp'
+    bid_type: 'rfp'
   });
 
   useEffect(() => {
@@ -52,7 +52,8 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
       
       const scored = (data || []).map(opp => ({
         ...opp,
-        calculatedMatch: calculateMatchScore(opp, businessProfile)
+        calculatedMatch: calculateMatchScore(opp, businessProfile),
+        detectedType: detectSolicitationType(opp)
       }));
       
       scored.sort((a, b) => b.calculatedMatch - a.calculatedMatch);
@@ -62,6 +63,89 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
     } finally {
       setLoading(false);
     }
+  };
+
+  // ============================================
+  // DETECT SOLICITATION TYPE
+  // ============================================
+  const detectSolicitationType = (opp) => {
+    const title = (opp.title || '').toLowerCase();
+    const desc = (opp.description || '').toLowerCase();
+    const bidType = (opp.bid_type || '').toLowerCase();
+    
+    // Check bid_type field first
+    if (bidType) {
+      if (bidType.includes('rfsq') || bidType === 'statement of qualifications') return 'rfsq';
+      if (bidType.includes('rfq') || bidType === 'request for quote') return 'rfq';
+      if (bidType.includes('ifb') || bidType === 'invitation for bid') return 'ifb';
+      if (bidType.includes('grant')) return 'grant';
+      if (bidType.includes('rfp')) return 'rfp';
+    }
+    
+    // Check title
+    if (title.includes('rfsq') || title.includes('statement of qualifications')) return 'rfsq';
+    if (title.includes('rfq') || title.includes('request for quote')) return 'rfq';
+    if (title.includes('ifb') || title.includes('invitation for bid')) return 'ifb';
+    if (title.includes('grant')) return 'grant';
+    
+    // Check description
+    if (desc.includes('statement of qualifications')) return 'rfsq';
+    if (desc.includes('seek a pool of qualified contractors')) return 'rfsq';
+    
+    // Default to RFP
+    return 'rfp';
+  };
+
+  // Get type info for display
+  const getTypeInfo = (type) => {
+    const types = {
+      rfsq: {
+        label: 'RFSQ',
+        name: 'Statement of Qualifications',
+        color: 'bg-purple-500/20 text-purple-400',
+        requiresNarrative: false,
+        description: 'This requires forms and documents - not written proposals.',
+        action: 'Complete qualification forms from the source link.',
+        icon: '📋'
+      },
+      rfq: {
+        label: 'RFQ',
+        name: 'Request for Quote',
+        color: 'bg-blue-500/20 text-blue-400',
+        requiresNarrative: false,
+        description: 'They need your pricing - not a written proposal.',
+        action: 'Submit your pricing/quote.',
+        icon: '💰'
+      },
+      ifb: {
+        label: 'IFB',
+        name: 'Invitation for Bid',
+        color: 'bg-orange-500/20 text-orange-400',
+        requiresNarrative: false,
+        description: 'Lowest price that meets specs wins.',
+        action: 'Submit your bid price.',
+        icon: '🏷️'
+      },
+      rfp: {
+        label: 'RFP',
+        name: 'Request for Proposal',
+        color: 'bg-emerald-500/20 text-emerald-400',
+        requiresNarrative: true,
+        description: 'Requires written narrative responses.',
+        action: 'Use Response Room to craft your proposal.',
+        icon: '📝'
+      },
+      grant: {
+        label: 'Grant',
+        name: 'Grant Application',
+        color: 'bg-amber-500/20 text-amber-400',
+        requiresNarrative: true,
+        description: 'Requires narrative about outcomes and impact.',
+        action: 'Use Response Room to write your application.',
+        icon: '🎁'
+      }
+    };
+    return types[type] || types.rfp;
   };
 
   const calculateMatchScore = (opportunity, profile) => {
@@ -96,21 +180,13 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
     // Past Performance (20 points)
     maxPossible += 20;
     if (profile.past_performance && profile.past_performance.length > 0) {
-      const oppText = (opportunity.title + ' ' + opportunity.description).toLowerCase();
-      const relevantPP = profile.past_performance.filter(pp => {
-        const ppText = ((pp.project_name || '') + ' ' + (pp.description || '')).toLowerCase();
-        const oppWords = oppText.split(/\s+/).filter(w => w.length > 4);
-        const matches = oppWords.filter(w => ppText.includes(w));
-        return matches.length > 2;
-      });
-      score += Math.min(20, relevantPP.length * 10);
+      score += Math.min(20, profile.past_performance.length * 5);
     }
 
     // Service Area (10 points)
     maxPossible += 10;
     if (profile.service_areas) {
       const serviceAreas = (profile.service_areas || '').toLowerCase();
-      const location = (opportunity.location || opportunity.agency || '').toLowerCase();
       if (
         serviceAreas.includes('los angeles') || 
         serviceAreas.includes('california') ||
@@ -155,7 +231,7 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
           naics_codes: opportunity.naics_codes,
           source_url: opportunity.source_url,
           cr_match_score: opportunity.calculatedMatch,
-          rfp_type: opportunity.rfp_type || 'rfp',
+          rfp_type: opportunity.detectedType || 'rfp',
           status: 'in_progress',
           created_at: new Date().toISOString()
         })
@@ -167,6 +243,24 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
     } catch (err) {
       console.error('Error:', err);
       alert('Failed to start response. Please try again.');
+    }
+  };
+
+  const trackOpportunity = async (opportunity) => {
+    // Save to user_opportunities for tracking without starting response
+    try {
+      await supabase
+        .from('user_opportunities')
+        .insert({
+          user_id: businessProfile?.id,
+          opportunity_id: opportunity.id,
+          status: 'tracking',
+          notes: '',
+          created_at: new Date().toISOString()
+        });
+      alert('Opportunity saved to your tracking list.');
+    } catch (err) {
+      console.error('Error:', err);
     }
   };
 
@@ -189,7 +283,7 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
           estimated_value: newOpp.estimated_value ? parseInt(newOpp.estimated_value) : null,
           naics_codes: newOpp.naics_codes,
           source_url: newOpp.source_url,
-          rfp_type: newOpp.rfp_type,
+          bid_type: newOpp.bid_type,
           created_by: businessProfile?.id,
           created_at: new Date().toISOString()
         })
@@ -203,12 +297,9 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
       setNewOpp({
         title: '', agency: '', contact_name: '', contact_email: '',
         description: '', due_date: '', estimated_value: '',
-        naics_codes: '', source_url: '', rfp_type: 'rfp'
+        naics_codes: '', source_url: '', bid_type: 'rfp'
       });
 
-      if (window.confirm('Start response now?')) {
-        startResponse({ ...data, calculatedMatch: calculateMatchScore(data, businessProfile) });
-      }
     } catch (err) {
       console.error('Error:', err);
       alert('Failed to add opportunity.');
@@ -233,6 +324,168 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
   const getDaysUntil = (dateStr) => {
     if (!dateStr) return null;
     return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
+  };
+
+  // ============================================
+  // RFSQ/RFQ/IFB DETAIL VIEW (No Response Room)
+  // ============================================
+  const renderNonNarrativeDetail = (opp) => {
+    const typeInfo = getTypeInfo(opp.detectedType);
+    
+    // Check what's in their Bucket for forms
+    const bucketChecklist = [
+      { label: 'Company Name & Address', done: !!businessProfile?.company_name },
+      { label: 'EIN / Tax ID', done: !!businessProfile?.ein },
+      { label: 'DUNS Number', done: !!businessProfile?.duns },
+      { label: 'SAM.gov UEI', done: !!businessProfile?.sam_uei },
+      { label: 'Business Licenses', done: businessProfile?.licenses?.length > 0 },
+      { label: 'Insurance Certificates', done: businessProfile?.insurance?.length > 0 },
+      { label: 'References (3+)', done: (businessProfile?.references?.length || 0) >= 3 },
+      { label: 'Past Performance', done: (businessProfile?.past_performance?.length || 0) > 0 },
+      { label: 'Key Personnel', done: (businessProfile?.key_personnel?.length || 0) > 0 },
+      { label: 'Certifications (MBE, SBE, etc.)', done: businessProfile?.certifications?.length > 0 }
+    ];
+    
+    const bucketComplete = bucketChecklist.filter(i => i.done).length;
+    const bucketTotal = bucketChecklist.length;
+    
+    return (
+      <div className="mt-4 pt-4 border-t border-slate-700">
+        {/* Type Alert */}
+        <div className={`${typeInfo.color} rounded-lg p-4 mb-4`}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">{typeInfo.icon}</span>
+            <div>
+              <p className="font-semibold text-white">
+                This is a {typeInfo.name} ({typeInfo.label})
+              </p>
+              <p className="text-sm mt-1 opacity-90">{typeInfo.description}</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* What to do */}
+        <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
+          <p className="text-white font-medium mb-2">What you need to do:</p>
+          <p className="text-slate-300 text-sm">{typeInfo.action}</p>
+          
+          {opp.source_url && (
+            <a
+              href={opp.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-block mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors"
+            >
+              Download Forms from Source →
+            </a>
+          )}
+        </div>
+        
+        {/* Bucket Checklist for RFSQ */}
+        {opp.detectedType === 'rfsq' && (
+          <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
+            <p className="text-white font-medium mb-2">
+              Your Bucket can help ({bucketComplete}/{bucketTotal} ready)
+            </p>
+            <p className="text-slate-400 text-sm mb-3">
+              This info from your Bucket goes on their forms:
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {bucketChecklist.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2 text-sm">
+                  <span className={item.done ? 'text-emerald-400' : 'text-slate-500'}>
+                    {item.done ? '✓' : '○'}
+                  </span>
+                  <span className={item.done ? 'text-slate-300' : 'text-slate-500'}>
+                    {item.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {bucketComplete < bucketTotal && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Navigate to bucket
+                  window.location.hash = '#bucket';
+                }}
+                className="mt-3 text-emerald-400 hover:text-emerald-300 text-sm"
+              >
+                Complete your Bucket →
+              </button>
+            )}
+          </div>
+        )}
+        
+        {/* Action Buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              trackOpportunity(opp);
+            }}
+            className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+          >
+            Track This Opportunity
+          </button>
+          {opp.source_url && (
+            <a
+              href={opp.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-center rounded-lg transition-colors"
+            >
+              Go to Source
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================
+  // RFP/GRANT DETAIL VIEW (Response Room)
+  // ============================================
+  const renderNarrativeDetail = (opp) => {
+    const typeInfo = getTypeInfo(opp.detectedType);
+    
+    return (
+      <div className="mt-4 pt-4 border-t border-slate-700">
+        {opp.description && (
+          <p className="text-slate-300 text-sm mb-4">{opp.description}</p>
+        )}
+        
+        {opp.contact_name && (
+          <p className="text-slate-500 text-sm mb-2">
+            Contact: {opp.contact_name} {opp.contact_email && `(${opp.contact_email})`}
+          </p>
+        )}
+        
+        {opp.source_url && (
+          <a
+            href={opp.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-emerald-400 hover:text-emerald-300 text-sm inline-block mb-4"
+          >
+            View Original Posting →
+          </a>
+        )}
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            startResponse(opp);
+          }}
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 rounded-lg transition-colors"
+        >
+          Start Response
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -307,6 +560,7 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
           {filteredOpportunities.map(opp => {
             const daysUntil = getDaysUntil(opp.due_date);
             const isUrgent = daysUntil !== null && daysUntil <= 7 && daysUntil >= 0;
+            const typeInfo = getTypeInfo(opp.detectedType);
             
             return (
               <div
@@ -330,15 +584,24 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
                   
                   {/* Content */}
                   <div className="flex-1">
-                    <div className="flex items-start gap-2 mb-1">
+                    <div className="flex items-start gap-2 mb-1 flex-wrap">
+                      {/* Type Badge */}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeInfo.color}`}>
+                        {typeInfo.label}
+                      </span>
+                      
                       {isUrgent && (
                         <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded">
                           {daysUntil} days left
                         </span>
                       )}
-                      <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded uppercase">
-                        {opp.rfp_type || 'RFP'}
-                      </span>
+                      
+                      {/* Show if NOT narrative-based */}
+                      {!typeInfo.requiresNarrative && (
+                        <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded">
+                          Forms Required
+                        </span>
+                      )}
                     </div>
                     
                     <h3 className="text-lg font-semibold text-white mb-1">{opp.title}</h3>
@@ -353,7 +616,7 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
                       {/* NAICS as pills */}
                       {opp.naics_codes && (
                         <div className="flex gap-1">
-                          {opp.naics_codes.split(',').slice(0, 3).map((code, i) => (
+                          {opp.naics_codes.split(',').slice(0, 2).map((code, i) => (
                             <span key={i} className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded">
                               {code.trim()}
                             </span>
@@ -364,40 +627,11 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
                   </div>
                 </div>
                 
+                {/* Expanded Detail */}
                 {selectedOpp?.id === opp.id && (
-                  <div className="mt-4 pt-4 border-t border-slate-700">
-                    {opp.description && (
-                      <p className="text-slate-300 text-sm mb-4">{opp.description}</p>
-                    )}
-                    
-                    {opp.contact_name && (
-                      <p className="text-slate-500 text-sm mb-2">
-                        Contact: {opp.contact_name} {opp.contact_email && `(${opp.contact_email})`}
-                      </p>
-                    )}
-                    
-                    {opp.source_url && (
-                      <a
-                        href={opp.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-emerald-400 hover:text-emerald-300 text-sm inline-block mb-4"
-                      >
-                        View Original →
-                      </a>
-                    )}
-                    
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startResponse(opp);
-                      }}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 rounded-lg transition-colors"
-                    >
-                      Start Response
-                    </button>
-                  </div>
+                  typeInfo.requiresNarrative 
+                    ? renderNarrativeDetail(opp)
+                    : renderNonNarrativeDetail(opp)
                 )}
               </div>
             );
@@ -436,17 +670,17 @@ export default function ShopContracts({ businessProfile, onSelectOpportunity }) 
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-300 mb-1">Type</label>
+                  <label className="block text-sm text-slate-300 mb-1">Solicitation Type</label>
                   <select
-                    value={newOpp.rfp_type}
-                    onChange={(e) => setNewOpp({...newOpp, rfp_type: e.target.value})}
+                    value={newOpp.bid_type}
+                    onChange={(e) => setNewOpp({...newOpp, bid_type: e.target.value})}
                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
                   >
-                    <option value="rfp">RFP</option>
-                    <option value="rfsq">RFSQ</option>
-                    <option value="rfq">RFQ</option>
-                    <option value="ifb">IFB</option>
-                    <option value="grant">Grant</option>
+                    <option value="rfp">RFP - Request for Proposal</option>
+                    <option value="rfsq">RFSQ - Statement of Qualifications</option>
+                    <option value="rfq">RFQ - Request for Quote</option>
+                    <option value="ifb">IFB - Invitation for Bid</option>
+                    <option value="grant">Grant Application</option>
                   </select>
                 </div>
               </div>
