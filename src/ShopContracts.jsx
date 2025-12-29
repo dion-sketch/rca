@@ -1,753 +1,660 @@
-// ============================================
-// ShopContracts.jsx - V5
-// REAL VARIED SCORING - Actual differentiation
-// ============================================
-// 
-// CORE DNA RULE:
-// If we don't have the content to help answer, we don't show it.
-// - Description must be >= 100 characters
-// - No title-only listings
-// - No "Coming Soon" - either we can help or we don't show
-//
-// ============================================
+// ShopContracts.jsx - FIXED with correct field mappings & PhD voice
+// Date: December 28, 2025
+// Fixes: Agency field, match score calculation, NAICS pills, encouraging messages
 
-import { useState, useEffect } from 'react'
-import { supabase } from './supabaseClient'
+import { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
 
-// Minimum description length to show opportunity
-const MIN_DESCRIPTION_LENGTH = 100
+export default function ShopContracts({ businessProfile, onSelectOpportunity }) {
+  const [opportunities, setOpportunities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState({
+    naics: '',
+    agency: '',
+    hideExpired: true,
+    minMatch: 0
+  });
+  const [selectedOpp, setSelectedOpp] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
-// ============================================
-// HELPER FUNCTIONS - Format & Clean Data
-// ============================================
-
-// Strip HTML tags from text
-const stripHtml = (html) => {
-  if (!html) return ''
-  return html
-    .replace(/<[^>]*>/g, ' ')  // Remove HTML tags
-    .replace(/&amp;/g, '&')     // Decode &amp;
-    .replace(/&lt;/g, '<')      // Decode &lt;
-    .replace(/&gt;/g, '>')      // Decode &gt;
-    .replace(/&nbsp;/g, ' ')    // Decode &nbsp;
-    .replace(/&quot;/g, '"')    // Decode &quot;
-    .replace(/&#39;/g, "'")     // Decode &#39;
-    .replace(/\s+/g, ' ')       // Collapse whitespace
-    .trim()
-}
-
-// Format currency from number or string
-const formatCurrency = (value) => {
-  if (!value) return null
-  // Extract number from string like "$500,000" or "7500000.0"
-  const num = typeof value === 'string' 
-    ? parseFloat(value.replace(/[^0-9.]/g, ''))
-    : value
-  if (isNaN(num)) return null
-  return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 0 })
-}
-
-// Parse agency name (handle emails like "IBHModel@cms.hhs.gov")
-const parseAgencyName = (agency) => {
-  if (!agency) return null
-  // If it's an email, extract domain parts
-  if (agency.includes('@')) {
-    const domain = agency.split('@')[1]
-    if (domain) {
-      const parts = domain.split('.')
-      if (parts.length >= 2) {
-        return parts.slice(0, -1).map(p => p.toUpperCase()).join(' / ')
-      }
-    }
-    return agency
-  }
-  return agency
-}
-const MIN_DESCRIPTION_LENGTH = 100
-
-// ============================================
-// PHRASE TIERS - Different base scores
-// ============================================
-const TIER1_PHRASES = ['mental health', 'behavioral health', 'foster care', 'child welfare']  // Most specific
-const TIER2_PHRASES = ['youth services', 'youth program', 'permanency', 'psychiatric', 'family preservation']
-const TIER3_PHRASES = ['counseling', 'therapy', 'at-risk youth', 'juvenile', 'adoption']
-const TIER4_PHRASES = ['therapist', 'psychologist', 'substance abuse', 'crisis intervention']
-
-// All valid phrases by NAICS
-const NAICS_PHRASES = {
-  '6213': ['mental health', 'behavioral health', 'psychiatric', 'psychologist', 'counseling', 'therapist', 'therapy', 'substance abuse', 'crisis intervention'],
-  '6214': ['mental health center', 'behavioral health center', 'outpatient mental health'],
-  '6241': ['youth program', 'youth services', 'child welfare', 'foster care', 'family preservation', 'permanency', 'at-risk youth', 'juvenile', 'adoption'],
-  '5418': ['public relations', 'advertising', 'marketing campaign', 'PR services'],
-  '5416': ['marketing consulting', 'management consulting'],
-  '7113': ['concert', 'music festival', 'performing arts', 'entertainment event', 'cultural event'],
-  '7111': ['performing arts', 'theater', 'theatre', 'symphony', 'ballet', 'opera']
-}
-
-export default function ShopContracts({ session, onNavigate }) {
-  const [profile, setProfile] = useState(null)
-  const [opportunities, setOpportunities] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [stateFilter, setStateFilter] = useState('')
-  const [showLowMatches, setShowLowMatches] = useState(false)
-  const [displayCount, setDisplayCount] = useState(20)
-  const [selectedOpp, setSelectedOpp] = useState(null)
-  const [addingToCart, setAddingToCart] = useState(false)
-
-  const colors = {
-    primary: '#00FF00',
-    gold: '#FFD700',
-    background: '#000000',
-    card: '#111111',
-    text: '#FFFFFF',
-    muted: '#888888',
-    border: '#333333'
-  }
+  // New opportunity form - FIXED field names
+  const [newOpp, setNewOpp] = useState({
+    title: '',
+    agency: '',           // CORRECT: Agency name (e.g., "LA County DCFS")
+    contact_name: '',     // SEPARATE: Contact person name
+    contact_email: '',
+    description: '',
+    due_date: '',
+    estimated_value: '',  // CORRECT: Use estimated_value not funding
+    naics_codes: '',
+    source_url: '',
+    rfp_type: 'rfp'
+  });
 
   useEffect(() => {
-    if (session?.user?.id) loadProfile()
-  }, [session])
+    loadOpportunities();
+  }, [filters.hideExpired]);
 
-  const loadProfile = async () => {
+  const loadOpportunities = async () => {
+    setLoading(true);
     try {
-      const { data } = await supabase
-        .from('business_profiles')
+      let query = supabase
+        .from('opportunities')
         .select('*')
-        .eq('user_id', session.user.id)
-        .single()
-      
-      setProfile(data)
-      loadOpportunities(data)
-    } catch (err) {
-      loadOpportunities(null)
-    }
-  }
+        .order('due_date', { ascending: true });
 
-  const loadOpportunities = async (userProfile) => {
-    setLoading(true)
+      // Filter expired
+      if (filters.hideExpired) {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.gte('due_date', today);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      // Calculate match scores
+      const scored = (data || []).map(opp => ({
+        ...opp,
+        calculatedMatch: calculateMatchScore(opp, businessProfile)
+      }));
+      
+      // Sort by match score (highest first)
+      scored.sort((a, b) => b.calculatedMatch - a.calculatedMatch);
+      
+      setOpportunities(scored);
+    } catch (err) {
+      console.error('Error loading opportunities:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // MATCH SCORE CALCULATION - REAL ALGORITHM
+  // ============================================
+  const calculateMatchScore = (opportunity, profile) => {
+    if (!profile) return 50;
     
+    let score = 0;
+    let maxPossible = 0;
+
+    // 1. NAICS Code Match (40 points max)
+    maxPossible += 40;
+    if (opportunity.naics_codes && profile.naics_codes) {
+      const oppNaics = (opportunity.naics_codes || '').split(',').map(n => n.trim()).filter(Boolean);
+      const profileNaics = Array.isArray(profile.naics_codes) ? profile.naics_codes : [];
+      
+      if (oppNaics.length > 0 && profileNaics.length > 0) {
+        const matches = oppNaics.filter(n => 
+          profileNaics.some(pn => pn.startsWith(n.substring(0, 4)) || n.startsWith(pn.substring(0, 4)))
+        );
+        score += Math.min(40, (matches.length / oppNaics.length) * 40);
+      }
+    }
+
+    // 2. Keyword/Capability Match (30 points max)
+    maxPossible += 30;
+    if (opportunity.description && profile.capabilities) {
+      const desc = (opportunity.description + ' ' + opportunity.title).toLowerCase();
+      const caps = Array.isArray(profile.capabilities) ? profile.capabilities : [];
+      const matchingCaps = caps.filter(cap => 
+        desc.includes(cap.toLowerCase())
+      );
+      score += Math.min(30, (matchingCaps.length / Math.max(1, caps.length)) * 60);
+    }
+
+    // 3. Past Performance Relevance (20 points max)
+    maxPossible += 20;
+    if (profile.past_performance && profile.past_performance.length > 0) {
+      const oppText = (opportunity.title + ' ' + opportunity.description).toLowerCase();
+      const relevantPP = profile.past_performance.filter(pp => {
+        const ppText = ((pp.project_name || '') + ' ' + (pp.description || '')).toLowerCase();
+        // Check for keyword overlap
+        const oppWords = oppText.split(/\s+/).filter(w => w.length > 4);
+        const matches = oppWords.filter(w => ppText.includes(w));
+        return matches.length > 2;
+      });
+      score += Math.min(20, relevantPP.length * 10);
+    }
+
+    // 4. Service Area Match (10 points max)
+    maxPossible += 10;
+    if (profile.service_areas) {
+      const serviceAreas = (profile.service_areas || '').toLowerCase();
+      const location = (opportunity.location || opportunity.agency || '').toLowerCase();
+      if (
+        serviceAreas.includes('los angeles') || 
+        serviceAreas.includes('la county') ||
+        location.includes('los angeles') ||
+        serviceAreas.includes('california') ||
+        serviceAreas.includes('nationwide')
+      ) {
+        score += 10;
+      }
+    }
+
+    // Ensure minimum score of 25% and max of 98%
+    const percentage = Math.round((score / maxPossible) * 100);
+    return Math.min(98, Math.max(25, percentage));
+  };
+
+  // Filter opportunities
+  const filteredOpportunities = opportunities.filter(opp => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matches = 
+        opp.title?.toLowerCase().includes(q) ||
+        opp.agency?.toLowerCase().includes(q) ||
+        opp.description?.toLowerCase().includes(q) ||
+        opp.naics_codes?.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+
+    if (filters.naics && !opp.naics_codes?.includes(filters.naics)) {
+      return false;
+    }
+
+    if (filters.minMatch && opp.calculatedMatch < filters.minMatch) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Start response - FIXED field mappings
+  const startResponse = async (opportunity) => {
+    try {
+      const { data, error } = await supabase
+        .from('submissions')
+        .insert({
+          user_id: businessProfile?.id,
+          opportunity_id: opportunity.id,
+          title: opportunity.title,
+          contract_title: opportunity.title,
+          // FIXED: Use correct field names
+          agency: opportunity.agency,                    // Agency name, NOT contact
+          contact_name: opportunity.contact_name || '',  // Contact person (separate)
+          contact_email: opportunity.contact_email || '',
+          description: opportunity.description || '',
+          due_date: opportunity.due_date,
+          estimated_value: opportunity.estimated_value,  // FIXED: Use estimated_value
+          naics_codes: opportunity.naics_codes,
+          source_url: opportunity.source_url,
+          // FIXED: Use cr_match_score
+          cr_match_score: opportunity.calculatedMatch,
+          rfp_type: opportunity.rfp_type || 'rfp',
+          status: 'in_progress',
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      onSelectOpportunity(data);
+    } catch (err) {
+      console.error('Error starting response:', err);
+      alert('Something went wrong. Let\'s try that again.');
+    }
+  };
+
+  // Add new opportunity - FIXED field mappings
+  const handleAddOpportunity = async () => {
+    if (!newOpp.title || !newOpp.agency) {
+      alert('Please add at least a title and agency name.');
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('opportunities')
-        .select('*')
-        .eq('is_active', true)
-        .gte('close_date', new Date().toISOString())
-        .order('close_date', { ascending: true })
-        .limit(1000)
+        .insert({
+          title: newOpp.title,
+          agency: newOpp.agency,                    // CORRECT field
+          contact_name: newOpp.contact_name,        // SEPARATE field
+          contact_email: newOpp.contact_email,
+          description: newOpp.description,
+          due_date: newOpp.due_date || null,
+          estimated_value: newOpp.estimated_value ? parseInt(newOpp.estimated_value) : null,
+          naics_codes: newOpp.naics_codes,
+          source_url: newOpp.source_url,
+          rfp_type: newOpp.rfp_type,
+          created_by: businessProfile?.id,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
 
-      if (error) throw error
-      if (!data || data.length === 0) {
-        setOpportunities([])
-        setLoading(false)
-        return
+      if (error) throw error;
+
+      loadOpportunities();
+      setShowAddModal(false);
+      setNewOpp({
+        title: '', agency: '', contact_name: '', contact_email: '',
+        description: '', due_date: '', estimated_value: '',
+        naics_codes: '', source_url: '', rfp_type: 'rfp'
+      });
+
+      if (window.confirm('Great! Want to start your response now?')) {
+        startResponse({ ...data, calculatedMatch: calculateMatchScore(data, businessProfile) });
       }
-
-      // Score each opportunity
-      const scored = data.map(opp => ({
-        ...opp,
-        matchScore: calculateRealScore(opp, userProfile)
-      }))
-
-      // Sort: matches first, then by score
-      scored.sort((a, b) => {
-        if (a.matchScore.isMatch && !b.matchScore.isMatch) return -1
-        if (!a.matchScore.isMatch && b.matchScore.isMatch) return 1
-        return b.matchScore.current - a.matchScore.current
-      })
-      
-      setOpportunities(scored)
     } catch (err) {
-      setError('Failed to load')
-    } finally {
-      setLoading(false)
+      console.error('Error adding opportunity:', err);
+      alert('Something went wrong. Let\'s try that again.');
     }
-  }
+  };
 
-  // ============================================
-  // REAL SCORING WITH ACTUAL VARIANCE
-  // ============================================
-  const calculateRealScore = (opp, userProfile) => {
-    if (!userProfile) {
-      return { current: 0, potential: 15, isMatch: false }
-    }
-
-    const title = (opp.title || '').toLowerCase()
-    const description = (opp.commodity_description || '').toLowerCase()
-    const userNaics = userProfile.naics_codes || []
-    const userState = userProfile.state
-    const oppState = opp.state
-
-    let bestMatch = null
-    let inTitle = false
-    let tier = 0
-    let matchCount = 0
-
-    // Find all matching phrases
-    for (const naicsItem of userNaics) {
-      const code = (naicsItem.code || naicsItem || '').toString()
-      const prefix = code.substring(0, 4)
-      const phrases = NAICS_PHRASES[prefix] || []
-
-      for (const phrase of phrases) {
-        const phraseLower = phrase.toLowerCase()
-        
-        if (title.includes(phraseLower)) {
-          matchCount++
-          if (!bestMatch || getTier(phrase) < tier) {
-            bestMatch = phrase
-            inTitle = true
-            tier = getTier(phrase)
-          }
-        } else if (description.includes(phraseLower)) {
-          matchCount++
-          if (!bestMatch) {
-            bestMatch = phrase
-            inTitle = false
-            tier = getTier(phrase)
-          }
-        }
-      }
-    }
-
-    // No match found
-    if (!bestMatch) {
-      let locationOnly = 0
-      if (userState && oppState && userState === oppState) {
-        locationOnly = 12
-      }
-      return { 
-        current: locationOnly, 
-        potential: locationOnly + 10, 
-        isMatch: false,
-        matchedPhrase: null
-      }
-    }
-
-    // ============================================
-    // BUILD SCORE WITH REAL VARIANCE
-    // ============================================
-    let score = 0
-
-    // Base score by tier (LOWER starting points)
-    if (tier === 1) score = 52        // Tier 1: start at 52
-    else if (tier === 2) score = 45   // Tier 2: start at 45
-    else if (tier === 3) score = 38   // Tier 3: start at 38
-    else score = 32                   // Tier 4: start at 32
-
-    // In title bonus (+12-18)
-    if (inTitle) {
-      score += 12 + Math.floor(Math.random() * 7)
-    }
-
-    // Multiple matches bonus (+3-8)
-    if (matchCount > 1) {
-      score += Math.min(3 + matchCount * 2, 8)
-    }
-
-    // State match (+8-12)
-    if (userState && oppState && userState === oppState) {
-      score += 8 + Math.floor(Math.random() * 5)
-    } else if (userState && oppState && userState !== oppState) {
-      score -= 5  // Penalty for wrong state
-    }
-
-    // Small random variance (-3 to +3)
-    score += Math.floor(Math.random() * 7) - 3
-
-    // Clamp to reasonable range (35-92)
-    score = Math.max(35, Math.min(92, score))
-
-    // Potential with variance
-    const potentialBoost = 6 + Math.floor(Math.random() * 8)
-    const potential = Math.min(score + potentialBoost, 97)
-
-    // Determine match strength
-    let strength = 'partial'
-    if (score >= 75) strength = 'strong'
-    else if (score >= 55) strength = 'good'
-
-    return {
-      current: score,
-      potential: potential,
-      isMatch: true,
-      matchedPhrase: bestMatch,
-      inTitle: inTitle,
-      matchCount: matchCount,
-      strength: strength
-    }
-  }
-
-  // Get tier for phrase (lower = better)
-  const getTier = (phrase) => {
-    const p = phrase.toLowerCase()
-    if (TIER1_PHRASES.includes(p)) return 1
-    if (TIER2_PHRASES.includes(p)) return 2
-    if (TIER3_PHRASES.includes(p)) return 3
-    return 4
-  }
-
-  const getFilteredOpportunities = () => {
-    let filtered = [...opportunities]
-
-    // CORE DNA RULE: Only show opportunities we can actually help with
-    // If we don't have enough content to answer questions, don't show it
-    filtered = filtered.filter(opp => {
-      const desc = opp.description || opp.commodity_description || ''
-      return desc.length >= MIN_DESCRIPTION_LENGTH
-    })
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(opp => 
-        (opp.title || '').toLowerCase().includes(term) ||
-        (opp.commodity_description || '').toLowerCase().includes(term) ||
-        (opp.description || '').toLowerCase().includes(term) ||
-        (opp.bid_type || '').toLowerCase().includes(term) ||
-        (opp.agency || '').toLowerCase().includes(term)
-      )
-    }
-
-    if (stateFilter) {
-      filtered = filtered.filter(opp => opp.state === stateFilter)
-    }
-
-    if (!showLowMatches) {
-      filtered = filtered.filter(opp => opp.matchScore.isMatch === true)
-    }
-
-    return filtered
-  }
+  // Helpers
+  const formatCurrency = (val) => {
+    if (!val) return 'Not specified';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: 'USD',
+      minimumFractionDigits: 0, maximumFractionDigits: 0
+    }).format(val);
+  };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return 'No date'
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
+    if (!dateStr) return 'No date';
+    return new Date(dateStr).toLocaleDateString('en-US', { 
+      month: 'short', day: 'numeric', year: 'numeric' 
+    });
+  };
 
-  const getDaysLeft = (dateStr) => {
-    if (!dateStr) return null
-    return Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24))
-  }
+  const getDaysUntil = (dateStr) => {
+    if (!dateStr) return null;
+    const diff = Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
+    return diff;
+  };
 
-  const getScoreColor = (score) => {
-    if (score >= 75) return '#00FF00'
-    if (score >= 55) return '#FFD700'
-    if (score >= 40) return '#FFA500'
-    return '#888888'
-  }
+  const getMatchColor = (score) => {
+    if (score >= 80) return 'text-emerald-400';
+    if (score >= 60) return 'text-lime-400';
+    if (score >= 40) return 'text-amber-400';
+    return 'text-slate-400';
+  };
 
-  const getStrengthBadge = (strength, score) => {
-    if (strength === 'strong') return `🎯 STRONG MATCH`
-    if (strength === 'good') return `✅ GOOD MATCH`
-    return `📋 POTENTIAL`
-  }
-
-  const availableStates = [...new Set(opportunities.map(o => o.state).filter(Boolean))].sort()
-
-  const startResponse = async (opportunity) => {
-    if (!session?.user?.id) return
-    setAddingToCart(true)
-    
-    try {
-      const { data: existing } = await supabase
-        .from('submissions')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .eq('title', opportunity.title || opportunity.commodity_description)
-        .single()
-      
-      if (existing) {
-        // Already in Response Room - just navigate there
-        setAddingToCart(false)
-        setSelectedOpp(null)
-        if (onNavigate) {
-          onNavigate('response-room')
-        }
-        return
-      }
-      
-      await supabase.from('submissions').insert({
-        user_id: session.user.id,
-        title: opportunity.title || opportunity.commodity_description || 'Untitled',
-        agency: opportunity.agency || opportunity.department || '',
-        due_date: opportunity.close_date,
-        status: 'in_progress',
-        description: opportunity.description || opportunity.commodity_description || '',
-        estimated_value: opportunity.estimated_value || '',
-        cr_match_score: opportunity.matchScore?.current || 50,
-        source_url: opportunity.source_url || '',
-        source: opportunity.source || '',
-        created_at: new Date().toISOString()
-      })
-      
-      // Go straight to Response Room
-      setSelectedOpp(null)
-      if (onNavigate) {
-        onNavigate('response-room')
-      }
-    } catch (err) {
-      alert('Failed to add.')
-    } finally {
-      setAddingToCart(false)
-    }
-  }
-
-  const filtered = getFilteredOpportunities()
-  const displayed = filtered.slice(0, displayCount)
-  const hasMore = filtered.length > displayCount
-  const matchCount = opportunities.filter(o => o.matchScore.isMatch).length
+  const getMatchLabel = (score) => {
+    if (score >= 80) return 'Strong Match';
+    if (score >= 60) return 'Good Match';
+    if (score >= 40) return 'Moderate Match';
+    return 'Low Match';
+  };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: colors.background, paddingBottom: '100px' }}>
-      {/* Header */}
-      <div style={{ padding: '30px', borderBottom: `1px solid ${colors.border}` }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h1 style={{ color: colors.text, margin: '0 0 15px 0', fontSize: '28px' }}>
-            🛍️ Go Shopping
-          </h1>
-          
-          {profile && (
-            <div style={{ 
-              backgroundColor: colors.card,
-              padding: '15px 20px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.primary}30`,
-              marginBottom: '15px'
-            }}>
-              <p style={{ color: colors.primary, margin: 0, fontSize: '14px', fontWeight: '600' }}>
-                🪣 BUCKET: {profile.naics_codes?.length || 0} NAICS • {profile.state || 'No state'}
-              </p>
-            </div>
-          )}
+    <div className="min-h-screen bg-slate-900 text-white p-6">
+      {/* Header with PhD voice */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">🛒 Go Shopping</h1>
+          <p className="text-slate-400">
+            I've matched these opportunities to your Bucket. Higher percentages = better fit.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+        >
+          + Add One I Found
+        </button>
+      </div>
 
-          {!loading && (
-            <div style={{ 
-              backgroundColor: matchCount > 0 ? `${colors.primary}15` : colors.card,
-              padding: '15px 20px',
-              borderRadius: '10px',
-              border: `1px solid ${matchCount > 0 ? colors.primary : colors.border}`,
-              marginBottom: '15px'
-            }}>
-              <p style={{ color: matchCount > 0 ? colors.primary : colors.muted, margin: 0, fontSize: '16px', fontWeight: '600' }}>
-                {matchCount > 0 
-                  ? `🎯 ${matchCount} opportunities match your BUCKET` 
-                  : '📋 No matches - check "Show all" to browse'}
-              </p>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* Search & Filters */}
+      <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-[200px]">
             <input
               type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                flex: '1', minWidth: '200px', padding: '12px 16px', borderRadius: '8px',
-                border: `1px solid ${colors.border}`, backgroundColor: colors.card, color: colors.text
-              }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by title, agency, NAICS, or keywords..."
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white placeholder-slate-500"
             />
-            <select
-              value={stateFilter}
-              onChange={(e) => setStateFilter(e.target.value)}
-              style={{
-                padding: '12px 16px', borderRadius: '8px',
-                border: `1px solid ${colors.border}`, backgroundColor: colors.card, color: colors.text
-              }}
-            >
-              <option value="">All States</option>
-              {availableStates.map(st => <option key={st} value={st}>{st}</option>)}
-            </select>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: colors.muted, cursor: 'pointer' }}>
-              <input type="checkbox" checked={showLowMatches} onChange={(e) => setShowLowMatches(e.target.checked)} />
-              Show all opportunities
-            </label>
           </div>
+          <select
+            value={filters.naics}
+            onChange={(e) => setFilters({...filters, naics: e.target.value})}
+            className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+          >
+            <option value="">All NAICS</option>
+            {businessProfile?.naics_codes?.map(code => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+          <select
+            value={filters.minMatch}
+            onChange={(e) => setFilters({...filters, minMatch: parseInt(e.target.value) || 0})}
+            className="bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+          >
+            <option value="0">Any match %</option>
+            <option value="40">40%+ match</option>
+            <option value="60">60%+ match</option>
+            <option value="80">80%+ match</option>
+          </select>
+          <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={filters.hideExpired}
+              onChange={(e) => setFilters({...filters, hideExpired: e.target.checked})}
+              className="rounded border-slate-600 bg-slate-900 text-emerald-500"
+            />
+            Hide past due dates
+          </label>
         </div>
       </div>
 
       {/* Results */}
-      <div style={{ padding: '30px', maxWidth: '1200px', margin: '0 auto' }}>
-        {loading ? (
-          <p style={{ color: colors.primary, textAlign: 'center', padding: '60px' }}>Loading...</p>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px', backgroundColor: colors.card, borderRadius: '16px' }}>
-            <p style={{ color: colors.text, fontSize: '18px' }}>
-              {showLowMatches ? 'No opportunities found' : 'No BUCKET matches found'}
-            </p>
-            {!showLowMatches && (
-              <button
-                onClick={() => setShowLowMatches(true)}
-                style={{
-                  marginTop: '20px', padding: '10px 20px', backgroundColor: colors.card,
-                  border: `1px solid ${colors.primary}`, borderRadius: '8px', color: colors.primary, cursor: 'pointer'
-                }}
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="text-4xl mb-4 animate-pulse">🔍</div>
+          <p className="text-slate-400">Finding opportunities that match your Bucket...</p>
+        </div>
+      ) : filteredOpportunities.length === 0 ? (
+        <div className="text-center py-12 bg-slate-800/30 rounded-xl">
+          <div className="text-4xl mb-4">🎯</div>
+          <p className="text-slate-300 mb-2">No opportunities match your current filters.</p>
+          <p className="text-slate-500 text-sm mb-4">
+            Try adjusting your search, or add an opportunity you've found.
+          </p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+          >
+            + Add One I Found
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Results count */}
+          <p className="text-slate-400 text-sm">
+            {filteredOpportunities.length} opportunit{filteredOpportunities.length === 1 ? 'y' : 'ies'} found
+          </p>
+          
+          {filteredOpportunities.map(opp => {
+            const daysUntil = getDaysUntil(opp.due_date);
+            const isUrgent = daysUntil !== null && daysUntil <= 7 && daysUntil >= 0;
+            const isPast = daysUntil !== null && daysUntil < 0;
+            
+            return (
+              <div
+                key={opp.id}
+                onClick={() => setSelectedOpp(selectedOpp?.id === opp.id ? null : opp)}
+                className={`bg-slate-800/50 rounded-xl p-6 border-2 transition-all cursor-pointer ${
+                  selectedOpp?.id === opp.id 
+                    ? 'border-emerald-500' 
+                    : isUrgent 
+                      ? 'border-amber-500/50 hover:border-amber-500' 
+                      : 'border-transparent hover:border-slate-600'
+                }`}
               >
-                Show All
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <p style={{ color: colors.muted, marginBottom: '20px' }}>
-              {filtered.length} {showLowMatches ? 'total' : 'matching'} opportunities
-            </p>
-
-            <div style={{ display: 'grid', gap: '15px' }}>
-              {displayed.map((opp, i) => {
-                const score = opp.matchScore
-                const daysLeft = getDaysLeft(opp.close_date)
-                
-                return (
-                  <div
-                    key={opp.id || i}
-                    onClick={() => setSelectedOpp(opp)}
-                    style={{
-                      backgroundColor: colors.card,
-                      borderRadius: '12px',
-                      padding: '20px',
-                      border: `2px solid ${score.isMatch ? getScoreColor(score.current) : colors.border}`,
-                      cursor: 'pointer',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto',
-                      gap: '20px'
-                    }}
-                  >
-                    <div>
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                        {/* Contract or Grant badge */}
-                        <span style={{
-                          backgroundColor: (opp.bid_type?.toLowerCase().includes('grant') || opp.source === 'grants_gov') ? '#9B59B6' : '#3498DB',
-                          color: '#fff',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '10px',
-                          fontWeight: '700'
-                        }}>
-                          {(opp.bid_type?.toLowerCase().includes('grant') || opp.source === 'grants_gov') ? 'GRANT' : 'CONTRACT'}
-                        </span>
-                        {score.isMatch && (
-                          <span style={{
-                            backgroundColor: getScoreColor(score.current),
-                            color: '#000',
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: '700'
-                          }}>
-                            {getStrengthBadge(score.strength, score.current)}
+                <div className="flex items-start gap-4">
+                  {/* Match Score */}
+                  <div className="text-center min-w-[80px]">
+                    <div className={`text-3xl font-bold ${getMatchColor(opp.calculatedMatch)}`}>
+                      {opp.calculatedMatch}%
+                    </div>
+                    <div className="text-xs text-slate-500">{getMatchLabel(opp.calculatedMatch)}</div>
+                  </div>
+                  
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        {/* Tags */}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {isUrgent && (
+                            <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full">
+                              ⚡ {daysUntil} day{daysUntil !== 1 ? 's' : ''} left
+                            </span>
+                          )}
+                          {isPast && (
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full">
+                              Past due
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full uppercase">
+                            {opp.rfp_type || 'RFP'}
                           </span>
-                        )}
-                        {daysLeft !== null && daysLeft <= 7 && (
-                          <span style={{
-                            backgroundColor: daysLeft <= 3 ? '#FF6B6B' : colors.gold,
-                            color: '#000',
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: '600'
-                          }}>
-                            {daysLeft} days left
-                          </span>
-                        )}
-                      </div>
-
-                      <h3 style={{ color: colors.text, margin: '0 0 8px 0', fontSize: '16px' }}>
-                        {opp.title || opp.commodity_description}
-                      </h3>
-                      <p style={{ color: colors.muted, margin: 0, fontSize: '13px' }}>
-                        {opp.contact_name || 'Agency'} • {opp.state || 'N/A'} • Due: {formatDate(opp.close_date)}
-                      </p>
-                      
-                      {score.matchedPhrase && (
-                        <p style={{ color: colors.primary, margin: '8px 0 0 0', fontSize: '12px' }}>
-                          ✓ Matched: "{score.matchedPhrase}" {score.inTitle ? '(in title)' : ''}
+                        </div>
+                        
+                        {/* Title */}
+                        <h3 className="text-lg font-semibold text-white mb-1 line-clamp-2">
+                          {opp.title}
+                        </h3>
+                        
+                        {/* FIXED: Agency - shows actual agency, not contact name */}
+                        <p className="text-slate-400 text-sm">
+                          🏛️ {opp.agency || 'Agency not specified'}
                         </p>
+                      </div>
+                    </div>
+                    
+                    {/* Meta info */}
+                    <div className="flex flex-wrap gap-4 mt-3 text-sm text-slate-500">
+                      <span>📅 {formatDate(opp.due_date)}</span>
+                      <span>💰 {formatCurrency(opp.estimated_value)}</span>
+                      
+                      {/* NAICS as pills - FIXED formatting */}
+                      {opp.naics_codes && (
+                        <div className="flex gap-1">
+                          {opp.naics_codes.split(',').slice(0, 3).map((code, i) => (
+                            <span 
+                              key={i}
+                              className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded"
+                            >
+                              {code.trim()}
+                            </span>
+                          ))}
+                          {opp.naics_codes.split(',').length > 3 && (
+                            <span className="text-slate-500 text-xs">+{opp.naics_codes.split(',').length - 3}</span>
+                          )}
+                        </div>
                       )}
                     </div>
-
-                    <div style={{ textAlign: 'right', minWidth: '80px' }}>
-                      <p style={{ color: colors.muted, margin: '0 0 4px 0', fontSize: '10px' }}>SCORE</p>
-                      <p style={{ 
-                        color: getScoreColor(score.current),
-                        fontSize: '28px',
-                        fontWeight: '700',
-                        margin: 0
-                      }}>
-                        {score.current}%
-                      </p>
-                      <p style={{ color: colors.muted, margin: '4px 0 0 0', fontSize: '11px' }}>
-                        → {score.potential}%
-                      </p>
-                    </div>
                   </div>
-                )
-              })}
-            </div>
+                </div>
+                
+                {/* Expanded content */}
+                {selectedOpp?.id === opp.id && (
+                  <div className="mt-4 pt-4 border-t border-slate-700">
+                    {opp.description && (
+                      <p className="text-slate-300 text-sm mb-4 line-clamp-4">
+                        {opp.description}
+                      </p>
+                    )}
+                    
+                    {opp.contact_name && (
+                      <p className="text-slate-500 text-sm mb-2">
+                        📧 Contact: {opp.contact_name} 
+                        {opp.contact_email && ` (${opp.contact_email})`}
+                      </p>
+                    )}
+                    
+                    {opp.source_url && (
+                      <a
+                        href={opp.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-emerald-400 hover:text-emerald-300 text-sm inline-block mb-4"
+                      >
+                        🔗 View Original Posting →
+                      </a>
+                    )}
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startResponse(opp);
+                      }}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-lg transition-colors"
+                    >
+                      🚀 Start My Response
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-            {hasMore && (
-              <div style={{ textAlign: 'center', marginTop: '30px' }}>
+      {/* Add Opportunity Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Add an Opportunity</h2>
+                <p className="text-slate-400 text-sm">Found something good? Let's add it to your list.</p>
+              </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">
+                  Opportunity Title <span className="text-emerald-400">REQUIRED</span>
+                </label>
+                <input
+                  type="text"
+                  value={newOpp.title}
+                  onChange={(e) => setNewOpp({...newOpp, title: e.target.value})}
+                  placeholder="e.g., Foster Care Placement Services RFP"
+                  className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">
+                    Agency/Organization <span className="text-emerald-400">REQUIRED</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newOpp.agency}
+                    onChange={(e) => setNewOpp({...newOpp, agency: e.target.value})}
+                    placeholder="e.g., LA County DCFS"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Solicitation Type</label>
+                  <select
+                    value={newOpp.rfp_type}
+                    onChange={(e) => setNewOpp({...newOpp, rfp_type: e.target.value})}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  >
+                    <option value="rfp">RFP - Request for Proposal</option>
+                    <option value="rfsq">RFSQ - Statement of Qualifications</option>
+                    <option value="rfq">RFQ - Request for Quote</option>
+                    <option value="ifb">IFB - Invitation for Bid</option>
+                    <option value="grant">Grant Application</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Contact Person</label>
+                  <input
+                    type="text"
+                    value={newOpp.contact_name}
+                    onChange={(e) => setNewOpp({...newOpp, contact_name: e.target.value})}
+                    placeholder="e.g., Jose Ramos"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Contact Email</label>
+                  <input
+                    type="email"
+                    value={newOpp.contact_email}
+                    onChange={(e) => setNewOpp({...newOpp, contact_email: e.target.value})}
+                    placeholder="contact@agency.gov"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Description</label>
+                <textarea
+                  value={newOpp.description}
+                  onChange={(e) => setNewOpp({...newOpp, description: e.target.value})}
+                  placeholder="Brief description of what they're looking for..."
+                  className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white min-h-[100px]"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={newOpp.due_date}
+                    onChange={(e) => setNewOpp({...newOpp, due_date: e.target.value})}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Estimated Value ($)</label>
+                  <input
+                    type="number"
+                    value={newOpp.estimated_value}
+                    onChange={(e) => setNewOpp({...newOpp, estimated_value: e.target.value})}
+                    placeholder="e.g., 500000"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">NAICS Codes</label>
+                  <input
+                    type="text"
+                    value={newOpp.naics_codes}
+                    onChange={(e) => setNewOpp({...newOpp, naics_codes: e.target.value})}
+                    placeholder="e.g., 624110, 624221"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Source URL</label>
+                  <input
+                    type="url"
+                    value={newOpp.source_url}
+                    onChange={(e) => setNewOpp({...newOpp, source_url: e.target.value})}
+                    placeholder="https://..."
+                    className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-4 pt-4">
                 <button
-                  onClick={() => setDisplayCount(displayCount + 20)}
-                  style={{
-                    padding: '12px 30px', backgroundColor: colors.card,
-                    border: `1px solid ${colors.primary}`, borderRadius: '8px', color: colors.primary, cursor: 'pointer'
-                  }}
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
                 >
-                  Load More
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddOpportunity}
+                  disabled={!newOpp.title || !newOpp.agency}
+                  className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  Add Opportunity
                 </button>
               </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Modal */}
-      {selectedOpp && (
-        <div
-          onClick={() => setSelectedOpp(null)}
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.9)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '20px', zIndex: 1000
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: colors.card, borderRadius: '16px', padding: '30px',
-              maxWidth: '600px', width: '100%', maxHeight: '85vh', overflow: 'auto'
-            }}
-          >
-            {/* Contract or Grant badge */}
-            <span style={{
-              display: 'inline-block',
-              backgroundColor: (selectedOpp.bid_type?.toLowerCase().includes('grant') || selectedOpp.source === 'grants_gov') ? '#9B59B6' : '#3498DB',
-              color: '#fff',
-              padding: '6px 14px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: '700',
-              marginBottom: '15px'
-            }}>
-              {(selectedOpp.bid_type?.toLowerCase().includes('grant') || selectedOpp.source === 'grants_gov') ? '📋 GRANT' : '📄 CONTRACT'}
-            </span>
-
-            <h2 style={{ color: colors.text, margin: '0 0 15px 0', fontSize: '18px', lineHeight: '1.4' }}>
-              {selectedOpp.title || selectedOpp.commodity_description}
-            </h2>
-
-            {/* Quick Stats Row */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '15px', 
-              marginBottom: '20px',
-              flexWrap: 'wrap'
-            }}>
-              <div>
-                <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Due</p>
-                <p style={{ color: colors.text, fontSize: '14px', margin: 0, fontWeight: '600' }}>{formatDate(selectedOpp.close_date)}</p>
-              </div>
-              {selectedOpp.estimated_value && (
-                <div>
-                  <p style={{ color: colors.muted, fontSize: '11px', margin: '0 0 3px 0' }}>Funding</p>
-                  <p style={{ color: colors.gold, fontSize: '14px', margin: 0, fontWeight: '600' }}>
-                    {(() => {
-                      const val = selectedOpp.estimated_value
-                      // If it's already formatted with $ just show it
-                      if (typeof val === 'string' && val.includes('$')) return val
-                      // If it's a number, format it
-                      const num = parseFloat(val)
-                      if (!isNaN(num)) {
-                        if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
-                        if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`
-                        return `$${num.toLocaleString()}`
-                      }
-                      return val
-                    })()}
-                  </p>
-                </div>
-              )}
             </div>
-
-            {/* OVERVIEW - Clean sentences */}
-            <div style={{ marginBottom: '20px' }}>
-              <p style={{ color: colors.muted, fontSize: '11px', marginBottom: '8px' }}>OVERVIEW</p>
-              <p style={{ color: colors.text, fontSize: '14px', lineHeight: '1.6', margin: 0 }}>
-                {(() => {
-                  let desc = stripHtml(selectedOpp.description || selectedOpp.commodity_description || '')
-                  // Get first 2-3 sentences (up to 350 chars, end at period)
-                  if (desc.length <= 350) return desc
-                  const truncated = desc.substring(0, 350)
-                  const lastPeriod = truncated.lastIndexOf('.')
-                  if (lastPeriod > 150) {
-                    return truncated.substring(0, lastPeriod + 1)
-                  }
-                  // No good period, cut at word boundary
-                  const lastSpace = truncated.lastIndexOf(' ')
-                  return truncated.substring(0, lastSpace) + '...'
-                })()}
-              </p>
-            </div>
-
-            {/* WHY YOU FIT - Clear connection */}
-            <div style={{ 
-              backgroundColor: `${getScoreColor(selectedOpp.matchScore.current)}10`, 
-              padding: '15px', 
-              borderRadius: '10px', 
-              marginBottom: '20px',
-              border: `1px solid ${getScoreColor(selectedOpp.matchScore.current)}30`
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <p style={{ color: colors.muted, fontSize: '11px', margin: 0 }}>WHY YOU FIT</p>
-                <p style={{ color: getScoreColor(selectedOpp.matchScore.current), margin: 0, fontWeight: '700', fontSize: '18px' }}>
-                  {selectedOpp.matchScore.current}%
-                </p>
-              </div>
-              
-              {selectedOpp.matchScore.matchedPhrase && (
-                <p style={{ color: colors.text, margin: '0 0 8px 0', fontSize: '13px' }}>
-                  ✓ Your "<strong>{selectedOpp.matchScore.matchedPhrase}</strong>" experience matches their needs
-                </p>
-              )}
-              
-              {profile?.naics_codes?.length > 0 && (
-                <p style={{ color: colors.text, margin: '0 0 8px 0', fontSize: '13px' }}>
-                  ✓ NAICS codes align with this {selectedOpp.source === 'grants_gov' ? 'grant' : 'contract'} type
-                </p>
-              )}
-              
-              {profile?.certifications?.length > 0 && (
-                <p style={{ color: colors.text, margin: 0, fontSize: '13px' }}>
-                  ✓ Your certifications add competitive advantage
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={() => startResponse(selectedOpp)}
-              disabled={addingToCart}
-              style={{
-                width: '100%', padding: '14px', backgroundColor: colors.primary, border: 'none',
-                borderRadius: '8px', color: '#000', cursor: 'pointer', fontWeight: '700', marginBottom: '10px'
-              }}
-            >
-              {addingToCart ? 'Adding...' : '📝 Start Response'}
-            </button>
-            <button
-              onClick={() => setSelectedOpp(null)}
-              style={{
-                width: '100%', padding: '14px', backgroundColor: 'transparent',
-                border: `1px solid ${colors.border}`, borderRadius: '8px', color: colors.text, cursor: 'pointer'
-              }}
-            >
-              Close
-            </button>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }
